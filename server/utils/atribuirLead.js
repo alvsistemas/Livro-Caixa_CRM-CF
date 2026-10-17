@@ -8,6 +8,12 @@ const MensagemAgendada = require('../models/MensagemAgendada');
 const Task = require('../models/Task');
 const Contrato = require('../models/Contrato');
 const FluxoExecucao = require('../models/FluxoExecucao');
+const { isValidId } = require('../db/ids');
+const { comoSistema } = require('../db/contexto');
+
+// Estas funções mexem em dados de duas pessoas da equipe (o gestor e quem recebe o lead).
+// Só são chamadas depois de validarAtribuicao conferir que é o gestor da mesma equipe, e
+// por isso rodam como "sistema" no banco (fora da trava por usuário do Row-Level Security).
 
 // Só o gestor (supervisor) da equipe pode passar um lead pra outra pessoa, e só pra alguém da MESMA equipe.
 // Devolve { gestor, alvo } ou lança um erro com { status, mensagem }.
@@ -17,7 +23,7 @@ async function validarAtribuicao(gestorId, alvoId) {
   if (!gestor || !gestor.equipeId || gestor.papelEquipe !== 'supervisor') {
     throw erro(403, 'Só o gestor da equipe pode atribuir leads para outra pessoa.');
   }
-  if (!alvoId || !/^[a-f\d]{24}$/i.test(String(alvoId))) throw erro(400, 'Escolha para quem vai o lead.');
+  if (!alvoId || !isValidId(alvoId)) throw erro(400, 'Escolha para quem vai o lead.');
   const alvo = await User.findOne({ _id: alvoId, equipeId: gestor.equipeId });
   if (!alvo) throw erro(404, 'Essa pessoa não faz parte da sua equipe.');
   return { gestor, alvo };
@@ -25,21 +31,26 @@ async function validarAtribuicao(gestorId, alvoId) {
 
 // Acha a coluna equivalente na conta da outra pessoa: mesmo nome (e tipo); se não tiver, a primeira coluna "em aberto".
 async function colunaEquivalente(colunaOrigemId, alvoId) {
+  return comoSistema(async () => {
   const origem = colunaOrigemId ? await Column.findById(colunaOrigemId) : null;
   const colunasAlvo = await Column.find({ userId: alvoId }).sort({ ordem: 1 });
   const norm = (t) => String(t || '').trim().toLowerCase();
   let destino = origem ? colunasAlvo.find((c) => norm(c.nome) === norm(origem.nome) && c.tipo === origem.tipo) : null;
   if (!destino) destino = colunasAlvo.find((c) => c.tipo === 'aberto');
   return destino || null;
+  });
 }
 
 async function proximaOrdem(colunaId, userId) {
-  const ultimo = await Card.findOne({ columnId: colunaId, userId }).sort('-ordem');
-  return ultimo ? ultimo.ordem + 1000 : 1000;
+  return comoSistema(async () => {
+    const ultimo = await Card.findOne({ columnId: colunaId, userId }).sort('-ordem');
+    return ultimo ? ultimo.ordem + 1000 : 1000;
+  });
 }
 
 // Passa um card que já existe pra outra pessoa, levando junto conversas, anexos, histórico, tarefas, agendamentos e contrato.
 async function transferirCard(card, alvo, gestorId) {
+  return comoSistema(async () => {
   const destino = await colunaEquivalente(card.columnId, alvo._id);
   if (!destino) {
     throw Object.assign(new Error('A pessoa escolhida não tem uma coluna "em aberto" pra receber o lead.'), { status: 400, mensagem: 'A pessoa escolhida não tem uma coluna "em aberto" pra receber o lead.' });
@@ -61,6 +72,7 @@ async function transferirCard(card, alvo, gestorId) {
     Task.updateMany({ leadId: card._id, userId: antigoDono }, { userId: alvo._id }),
   ]);
   return card;
+  });
 }
 
 module.exports = { validarAtribuicao, colunaEquivalente, proximaOrdem, transferirCard };

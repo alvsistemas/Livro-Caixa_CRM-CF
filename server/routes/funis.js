@@ -1,5 +1,5 @@
 const express = require('express');
-const mongoose = require('mongoose');
+const { isValidId } = require('../db/ids');
 const auth = require('../middleware/auth');
 const Funil = require('../models/Funil');
 const Column = require('../models/Column');
@@ -43,7 +43,7 @@ router.post('/', async (req, res) => {
 // PUT /api/funis/:id -> renomeia o funil
 router.put('/:id', async (req, res) => {
   try {
-    if (!mongoose.isValidObjectId(req.params.id)) return res.status(400).json({ error: 'ID inválido.' });
+    if (!isValidId(req.params.id)) return res.status(400).json({ error: 'ID inválido.' });
     const updates = {};
     if (typeof req.body.nome === 'string') updates.nome = req.body.nome.trim();
 
@@ -58,7 +58,7 @@ router.put('/:id', async (req, res) => {
 // DELETE /api/funis/:id -> exclui o funil e, em cascata, as colunas e clientes dele
 router.delete('/:id', async (req, res) => {
   try {
-    if (!mongoose.isValidObjectId(req.params.id)) return res.status(400).json({ error: 'ID inválido.' });
+    if (!isValidId(req.params.id)) return res.status(400).json({ error: 'ID inválido.' });
 
     const totalFunis = await Funil.countDocuments({ userId: req.userId });
     if (totalFunis <= 1) {
@@ -83,7 +83,7 @@ router.delete('/:id', async (req, res) => {
 // (nome, tipo, ordem, probabilidade) do funil de origem — sem duplicar os clientes
 router.post('/:id/duplicar', async (req, res) => {
   try {
-    if (!mongoose.isValidObjectId(req.params.id)) return res.status(400).json({ error: 'ID inválido.' });
+    if (!isValidId(req.params.id)) return res.status(400).json({ error: 'ID inválido.' });
     const original = await Funil.findOne({ _id: req.params.id, userId: req.userId });
     if (!original) return res.status(404).json({ error: 'Funil não encontrado.' });
 

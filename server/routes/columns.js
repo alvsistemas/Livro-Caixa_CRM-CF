@@ -1,5 +1,5 @@
 const express = require('express');
-const mongoose = require('mongoose');
+const { isValidId } = require('../db/ids');
 const auth = require('../middleware/auth');
 const Column = require('../models/Column');
 const Card = require('../models/Card');
@@ -15,7 +15,7 @@ router.post('/', async (req, res) => {
     if (!nome || !nome.trim()) {
       return res.status(400).json({ error: 'Nome da coluna é obrigatório.' });
     }
-    if (!funilId || !mongoose.isValidObjectId(funilId)) {
+    if (!funilId || !isValidId(funilId)) {
       return res.status(400).json({ error: 'Funil inválido.' });
     }
     const funil = await Funil.findOne({ _id: funilId, userId: req.userId });
@@ -38,7 +38,7 @@ router.post('/', async (req, res) => {
 // PUT /api/columns/:id -> renomeia, muda o tipo e/ou a ordem (só se for do usuário logado)
 router.put('/:id', async (req, res) => {
   try {
-    if (!mongoose.isValidObjectId(req.params.id)) {
+    if (!isValidId(req.params.id)) {
       return res.status(400).json({ error: 'ID inválido.' });
     }
     const updates = {};
@@ -64,7 +64,7 @@ router.put('/:id', async (req, res) => {
 // DELETE /api/columns/:id -> remove a coluna e os cards dela (só se for do usuário logado)
 router.delete('/:id', async (req, res) => {
   try {
-    if (!mongoose.isValidObjectId(req.params.id)) {
+    if (!isValidId(req.params.id)) {
       return res.status(400).json({ error: 'ID inválido.' });
     }
     const coluna = await Column.findOneAndDelete({ _id: req.params.id, userId: req.userId });

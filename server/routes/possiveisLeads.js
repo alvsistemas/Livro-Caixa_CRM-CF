@@ -1,5 +1,5 @@
 const express = require('express');
-const mongoose = require('mongoose');
+const { isValidId } = require('../db/ids');
 const auth = require('../middleware/auth');
 const PossivelLead = require('../models/PossivelLead');
 const Card = require('../models/Card');
@@ -47,7 +47,7 @@ router.post('/importar', async (req, res) => {
 // POST /api/possiveis-leads/:id/promover -> completa os dados e vira um cliente de verdade
 router.post('/:id/promover', async (req, res) => {
   try {
-    if (!mongoose.isValidObjectId(req.params.id)) return res.status(400).json({ error: 'ID inválido.' });
+    if (!isValidId(req.params.id)) return res.status(400).json({ error: 'ID inválido.' });
     const possivel = await PossivelLead.findOne({ _id: req.params.id, userId: req.userId });
     if (!possivel) return res.status(404).json({ error: 'Possível lead não encontrado.' });
 
@@ -55,7 +55,7 @@ router.post('/:id/promover', async (req, res) => {
     const nomeFinal = (nome || possivel.nome || '').trim();
     const telefoneFinal = (telefone || possivel.telefone || '').trim();
     if (!nomeFinal) return res.status(400).json({ error: 'Informe o nome do cliente.' });
-    if (!columnId || !mongoose.isValidObjectId(columnId)) return res.status(400).json({ error: 'Escolha a coluna de destino.' });
+    if (!columnId || !isValidId(columnId)) return res.status(400).json({ error: 'Escolha a coluna de destino.' });
     const coluna = await Column.findOne({ _id: columnId, userId: req.userId });
     if (!coluna) return res.status(404).json({ error: 'Coluna não encontrada.' });
 
@@ -81,7 +81,7 @@ router.post('/:id/promover', async (req, res) => {
 // DELETE /api/possiveis-leads/:id -> descarta (duplicado, contato errado, etc.)
 router.delete('/:id', async (req, res) => {
   try {
-    if (!mongoose.isValidObjectId(req.params.id)) return res.status(400).json({ error: 'ID inválido.' });
+    if (!isValidId(req.params.id)) return res.status(400).json({ error: 'ID inválido.' });
     const possivel = await PossivelLead.findOneAndDelete({ _id: req.params.id, userId: req.userId });
     if (!possivel) return res.status(404).json({ error: 'Possível lead não encontrado.' });
     res.status(204).end();

@@ -1,12 +1,13 @@
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
+const { comoUsuario } = require('../db/contexto');
 
 const JWT_SECRET = process.env.JWT_SECRET || 'troque-este-segredo-no-env';
 
 // Protege rotas: exige um header "Authorization: Bearer <token>" válido.
 // Também confere se o token ainda é a versão mais recente do usuário — permite
 // "desconectar todos os dispositivos" sem precisar guardar sessão nenhuma.
-// Em caso de sucesso, disponibiliza req.userId para a rota usar.
+// Em caso de sucesso, disponibiliza req.userId para a rota usar e liga o contexto do banco.
 module.exports = async function auth(req, res, next) {
   const header = req.headers.authorization || '';
   const [tipo, token] = header.split(' ');
@@ -26,8 +27,10 @@ module.exports = async function auth(req, res, next) {
     if ((payload.tv || 0) !== (user.tokenVersion || 0)) {
       return res.status(401).json({ error: 'Sessão encerrada em outro dispositivo. Faça login novamente.' });
     }
-    req.userId = payload.sub;
-    next();
+    req.userId = String(user._id);
+    // daqui em diante, toda consulta ao banco nesta requisição roda como este usuário
+    // (o PostgreSQL só deixa ver e gravar as linhas dele — Row-Level Security)
+    comoUsuario(req.userId, () => next());
   } catch (err) {
     return res.status(401).json({ error: 'Sessão expirada ou inválida.' });
   }

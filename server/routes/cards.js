@@ -1,5 +1,6 @@
 const express = require('express');
-const mongoose = require('mongoose');
+const { isValidId } = require('../db/ids');
+const { comoSistema, comoUsuario } = require('../db/contexto');
 const auth = require('../middleware/auth');
 const Card = require('../models/Card');
 const Column = require('../models/Column');
@@ -90,7 +91,7 @@ router.post('/', async (req, res) => {
     if (!dados.cliente || !dados.cliente.trim()) {
       return res.status(400).json({ error: 'Nome do cliente é obrigatório.' });
     }
-    if (!dados.columnId || !mongoose.isValidObjectId(dados.columnId)) {
+    if (!dados.columnId || !isValidId(dados.columnId)) {
       return res.status(400).json({ error: 'Coluna inválida.' });
     }
     // garante que a coluna de destino pertence a este usuário
@@ -104,19 +105,24 @@ router.post('/', async (req, res) => {
       try { alvoInfo = await validarAtribuicao(req.userId, atribuirParaId); } catch (e) { return res.status(e.status || 400).json({ error: e.mensagem || e.message }); }
       const colunaAlvo = await colunaEquivalente(dados.columnId, alvoInfo.alvo._id);
       if (!colunaAlvo) return res.status(400).json({ error: 'A pessoa escolhida não tem uma coluna "em aberto" pra receber o lead.' });
-      const cardAtribuido = await Card.create({
+      const ordemAlvo = await proximaOrdem(colunaAlvo._id, alvoInfo.alvo._id);
+      // o lead nasce na conta de outra pessoa: grava como sistema (gestor já validado acima)
+      const cardAtribuido = await comoSistema(() => Card.create({
         ...dados,
         userId: alvoInfo.alvo._id,
         columnId: colunaAlvo._id,
-        ordem: await proximaOrdem(colunaAlvo._id, alvoInfo.alvo._id),
+        ordem: ordemAlvo,
         atribuidoPorId: req.userId,
-      });
+      }));
       res.status(201).json({ ...cardAtribuido.toJSON(), transferido: true, atribuidoParaNome: alvoInfo.alvo.nome || alvoInfo.alvo.email });
       enviarPush(alvoInfo.alvo._id, { titulo: 'Novo lead pra você', corpo: `${alvoInfo.gestor.nome || 'O gestor'} passou o lead "${cardAtribuido.cliente}" pra você.`, tag: `lead-${cardAtribuido._id}`, url: '/index.html', tipo: 'lead' });
-      executarAutomacoesDaColuna(alvoInfo.alvo._id, colunaAlvo._id, cardAtribuido);
-      iniciarFluxosDaColuna(alvoInfo.alvo._id, colunaAlvo._id, cardAtribuido);
-      gerarComissaoAutomaticaSeGanho(alvoInfo.alvo._id, cardAtribuido, colunaAlvo._id);
-      dispararWebhooks(alvoInfo.alvo._id, 'lead.criado', { id: cardAtribuido._id.toString(), cliente: cardAtribuido.cliente, telefone: cardAtribuido.telefone, valor: cardAtribuido.valor, columnId: cardAtribuido.columnId.toString() });
+      // o que acontece depois (automações, fluxos, comissão, webhooks) roda na conta de quem recebeu
+      comoUsuario(alvoInfo.alvo._id, () => {
+        executarAutomacoesDaColuna(alvoInfo.alvo._id, colunaAlvo._id, cardAtribuido);
+        iniciarFluxosDaColuna(alvoInfo.alvo._id, colunaAlvo._id, cardAtribuido);
+        gerarComissaoAutomaticaSeGanho(alvoInfo.alvo._id, cardAtribuido, colunaAlvo._id);
+      });
+      comoUsuario(alvoInfo.alvo._id, () => dispararWebhooks(alvoInfo.alvo._id, 'lead.criado', { id: cardAtribuido._id.toString(), cliente: cardAtribuido.cliente, telefone: cardAtribuido.telefone, valor: cardAtribuido.valor, columnId: cardAtribuido.columnId.toString() }));
       return;
     }
 
@@ -137,7 +143,7 @@ router.post('/', async (req, res) => {
 // PUT /api/cards/:id -> atualiza os dados do cliente (edição via modal)
 router.put('/:id', async (req, res) => {
   try {
-    if (!mongoose.isValidObjectId(req.params.id)) {
+    if (!isValidId(req.params.id)) {
       return res.status(400).json({ error: 'ID inválido.' });
     }
     const dados = filtrarCampos(req.body);
@@ -164,17 +170,28 @@ router.put('/:id', async (req, res) => {
     // nessa edição — usado depois pra saber se está passando de vazio pra
     // preenchido de verdade (não simplesmente sendo reenviado igual)
     let mesAntesDoUpdate = null;
-    if (dados.mes !== undefined) {
-      const cardAntes = await Card.findOne({ _id: req.params.id, userId: req.userId }).select('mes');
-      mesAntesDoUpdate = cardAntes ? cardAntes.mes : null;
+    let colunaAntesDoUpdate = null;
+    if (dados.mes !== undefined || dados.columnId !== undefined) {
+      const cardAntes = await Card.findOne({ _id: req.params.id, userId: req.userId }).select('mes columnId');
+      mesAntesDoUpdate = cardAntes && dados.mes !== undefined ? cardAntes.mes : null;
+      colunaAntesDoUpdate = cardAntes ? String(cardAntes.columnId) : null;
     }
 
-    const card = await Card.findOneAndUpdate(
+    let card = await Card.findOneAndUpdate(
       { _id: req.params.id, userId: req.userId },
       dados,
       { new: true, runValidators: true }
     );
     if (!card) return res.status(404).json({ error: 'Cliente não encontrado.' });
+
+    // trocar a coluna pela ficha do cliente tem o mesmo efeito de arrastar no Pipeline:
+    // entrar em "ganho" gera a comissão; ir pra "perdido" depois de ganho corta a comissão
+    if (dados.columnId && colunaAntesDoUpdate && String(dados.columnId) !== colunaAntesDoUpdate) {
+      await gerarComissaoAutomaticaSeGanho(req.userId, card, dados.columnId);
+      await cancelarComissaoSePerdidoAposGanho(req.userId, card, dados.columnId);
+      const recarregado = await Card.findOne({ _id: card._id, userId: req.userId }); // a comissão pode ter preenchido o mês de venda
+      if (recarregado) card = recarregado;
+    }
 
     // Mesmo mecanismo de sincronização de mês da rota de comissões, no sentido
     // contrário: editar o mês aqui no lead também atualiza o contrato vinculado —
@@ -216,7 +233,7 @@ router.put('/:id', async (req, res) => {
 // DELETE /api/cards/:id/sugestao-ia -> descarta a sugestão da IA proativa daquele card
 router.delete('/:id/sugestao-ia', async (req, res) => {
   try {
-    if (!mongoose.isValidObjectId(req.params.id)) {
+    if (!isValidId(req.params.id)) {
       return res.status(400).json({ error: 'ID inválido.' });
     }
     const card = await Card.findOneAndUpdate(
@@ -234,7 +251,7 @@ router.delete('/:id/sugestao-ia', async (req, res) => {
 // PUT /api/cards/:id/arquivar -> tira o cliente de vista sem excluir
 router.put('/:id/arquivar', async (req, res) => {
   try {
-    if (!mongoose.isValidObjectId(req.params.id)) return res.status(400).json({ error: 'ID inválido.' });
+    if (!isValidId(req.params.id)) return res.status(400).json({ error: 'ID inválido.' });
     const card = await Card.findOneAndUpdate(
       { _id: req.params.id, userId: req.userId },
       { arquivado: true },
@@ -250,7 +267,7 @@ router.put('/:id/arquivar', async (req, res) => {
 // PUT /api/cards/:id/desarquivar -> traz o cliente de volta pra vista normal
 router.put('/:id/desarquivar', async (req, res) => {
   try {
-    if (!mongoose.isValidObjectId(req.params.id)) return res.status(400).json({ error: 'ID inválido.' });
+    if (!isValidId(req.params.id)) return res.status(400).json({ error: 'ID inválido.' });
     const card = await Card.findOneAndUpdate(
       { _id: req.params.id, userId: req.userId },
       { arquivado: false },
@@ -266,11 +283,11 @@ router.put('/:id/desarquivar', async (req, res) => {
 // PUT /api/cards/:id/move -> usado no drag and drop entre colunas
 router.put('/:id/move', async (req, res) => {
   try {
-    if (!mongoose.isValidObjectId(req.params.id)) {
+    if (!isValidId(req.params.id)) {
       return res.status(400).json({ error: 'ID inválido.' });
     }
     const { columnId, ordem } = req.body;
-    if (!columnId || !mongoose.isValidObjectId(columnId)) {
+    if (!columnId || !isValidId(columnId)) {
       return res.status(400).json({ error: 'Coluna de destino inválida.' });
     }
     const coluna = await Column.findOne({ _id: columnId, userId: req.userId });
@@ -305,7 +322,7 @@ router.put('/:id/move', async (req, res) => {
 // DELETE /api/cards/:id -> remove o cliente (só se for do usuário logado)
 router.delete('/:id', async (req, res) => {
   try {
-    if (!mongoose.isValidObjectId(req.params.id)) {
+    if (!isValidId(req.params.id)) {
       return res.status(400).json({ error: 'ID inválido.' });
     }
     const card = await Card.findOneAndDelete({ _id: req.params.id, userId: req.userId });
@@ -320,7 +337,7 @@ router.delete('/:id', async (req, res) => {
 // GET /api/cards/:id/anexos -> lista os anexos de um cliente (com o arquivo já incluso — arquivos são pequenos)
 router.get('/:id/anexos', async (req, res) => {
   try {
-    if (!mongoose.isValidObjectId(req.params.id)) return res.status(400).json({ error: 'ID inválido.' });
+    if (!isValidId(req.params.id)) return res.status(400).json({ error: 'ID inválido.' });
     const card = await Card.findOne({ _id: req.params.id, userId: req.userId });
     if (!card) return res.status(404).json({ error: 'Cliente não encontrado.' });
     const anexos = await Anexo.find({ cardId: card._id, userId: req.userId }).sort({ createdAt: -1 });
@@ -333,7 +350,7 @@ router.get('/:id/anexos', async (req, res) => {
 // POST /api/cards/:id/anexos -> sobe um anexo novo (já em base64, gerado no navegador)
 router.post('/:id/anexos', async (req, res) => {
   try {
-    if (!mongoose.isValidObjectId(req.params.id)) return res.status(400).json({ error: 'ID inválido.' });
+    if (!isValidId(req.params.id)) return res.status(400).json({ error: 'ID inválido.' });
     const { nomeArquivo, tipoMime, dadosBase64 } = req.body;
     if (!nomeArquivo || !dadosBase64) return res.status(400).json({ error: 'Arquivo inválido.' });
     if (dadosBase64.length > 4 * 1024 * 1024) {
@@ -359,7 +376,7 @@ router.post('/:id/anexos', async (req, res) => {
 // DELETE /api/cards/:id/anexos/:anexoId -> remove um anexo
 router.delete('/:id/anexos/:anexoId', async (req, res) => {
   try {
-    if (!mongoose.isValidObjectId(req.params.anexoId)) return res.status(400).json({ error: 'ID inválido.' });
+    if (!isValidId(req.params.anexoId)) return res.status(400).json({ error: 'ID inválido.' });
     const anexo = await Anexo.findOneAndDelete({ _id: req.params.anexoId, cardId: req.params.id, userId: req.userId });
     if (!anexo) return res.status(404).json({ error: 'Anexo não encontrado.' });
     res.status(204).end();

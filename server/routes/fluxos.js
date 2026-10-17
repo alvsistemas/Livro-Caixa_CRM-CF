@@ -1,5 +1,6 @@
 const express = require('express');
-const mongoose = require('mongoose');
+const { isValidId } = require('../db/ids');
+const { query } = require('../db/pool');
 const auth = require('../middleware/auth');
 const Fluxo = require('../models/Fluxo');
 const FluxoExecucao = require('../models/FluxoExecucao');
@@ -29,11 +30,11 @@ function validarEtapas(etapas) {
 router.get('/', async (req, res) => {
   try {
     const fluxos = await Fluxo.find({ userId: req.userId }).sort({ createdAt: -1 });
-    const contagens = await FluxoExecucao.aggregate([
-      { $match: { userId: new mongoose.Types.ObjectId(req.userId), concluido: false } },
-      { $group: { _id: '$fluxoId', total: { $sum: 1 } } },
-    ]);
-    const mapaContagem = new Map(contagens.map((c) => [c._id.toString(), c.total]));
+    const { rows: contagens } = await query(
+      'SELECT fluxo_id, count(*)::int AS total FROM fluxo_execucoes WHERE user_id = $1::uuid AND concluido = false GROUP BY fluxo_id',
+      [req.userId]
+    );
+    const mapaContagem = new Map(contagens.map((c) => [String(c.fluxo_id), c.total]));
     res.json({
       fluxos: fluxos.map((f) => {
         const json = f.toJSON();
@@ -51,7 +52,7 @@ router.post('/', async (req, res) => {
   try {
     const { nome, colunaGatilhoId, etapas } = req.body;
     if (!nome || !nome.trim()) return res.status(400).json({ error: 'Nome do fluxo é obrigatório.' });
-    if (!colunaGatilhoId || !mongoose.isValidObjectId(colunaGatilhoId)) {
+    if (!colunaGatilhoId || !isValidId(colunaGatilhoId)) {
       return res.status(400).json({ error: 'Coluna de gatilho inválida.' });
     }
     const erroEtapas = validarEtapas(etapas);
@@ -75,7 +76,7 @@ router.post('/', async (req, res) => {
 // PUT /api/fluxos/:id -> edita nome, coluna de gatilho, etapas ou ativo/inativo
 router.put('/:id', async (req, res) => {
   try {
-    if (!mongoose.isValidObjectId(req.params.id)) return res.status(400).json({ error: 'ID inválido.' });
+    if (!isValidId(req.params.id)) return res.status(400).json({ error: 'ID inválido.' });
     const updates = {};
     if (typeof req.body.nome === 'string') updates.nome = req.body.nome.trim();
     if (typeof req.body.ativo === 'boolean') updates.ativo = req.body.ativo;
@@ -84,7 +85,7 @@ router.put('/:id', async (req, res) => {
       if (erroEtapas) return res.status(400).json({ error: erroEtapas });
       updates.etapas = req.body.etapas.map((e) => ({ diasAposInicio: e.diasAposInicio, tipo: e.tipo, params: e.params || {} }));
     }
-    if (req.body.colunaGatilhoId && mongoose.isValidObjectId(req.body.colunaGatilhoId)) {
+    if (req.body.colunaGatilhoId && isValidId(req.body.colunaGatilhoId)) {
       const coluna = await Column.findOne({ _id: req.body.colunaGatilhoId, userId: req.userId });
       if (!coluna) return res.status(404).json({ error: 'Coluna de gatilho não encontrada.' });
       updates.colunaGatilhoId = req.body.colunaGatilhoId;
@@ -101,7 +102,7 @@ router.put('/:id', async (req, res) => {
 // DELETE /api/fluxos/:id -> exclui o fluxo e as execuções em andamento dele
 router.delete('/:id', async (req, res) => {
   try {
-    if (!mongoose.isValidObjectId(req.params.id)) return res.status(400).json({ error: 'ID inválido.' });
+    if (!isValidId(req.params.id)) return res.status(400).json({ error: 'ID inválido.' });
     const fluxo = await Fluxo.findOneAndDelete({ _id: req.params.id, userId: req.userId });
     if (!fluxo) return res.status(404).json({ error: 'Fluxo não encontrado.' });
     await FluxoExecucao.deleteMany({ fluxoId: fluxo._id });

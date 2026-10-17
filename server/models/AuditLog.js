@@ -1,22 +1,13 @@
-const mongoose = require('mongoose');
-
-const auditLogSchema = new mongoose.Schema(
-  {
-    userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
-    acao: { type: String, required: true }, // código curto: login, card_excluido, membro_removido, etc.
-    detalhe: { type: String, default: '' }, // texto legível, ex: "Cliente João Silva excluído"
+const { definirModelo } = require('../db/modelo');
+const { jsonPadrao } = require('./_comum');
+module.exports = definirModelo('AuditLog', {
+  tabela: 'auditoria',
+  campos: {
+    userId: { type: 'id', ref: 'User', required: true },
+    acao: { type: 'string', required: true }, // código curto: login, card_excluido, membro_removido...
+    detalhe: { type: 'string', default: '' }, // texto legível
   },
-  {
-    timestamps: true,
-    toJSON: {
-      transform: (_doc, ret) => {
-        ret.id = ret._id.toString();
-        delete ret._id;
-        delete ret.__v;
-        delete ret.userId;
-      },
-    },
-  }
-);
-
-module.exports = mongoose.model('AuditLog', auditLogSchema);
+  transformJSON: jsonPadrao((ret) => {
+    delete ret.userId;
+  }),
+});

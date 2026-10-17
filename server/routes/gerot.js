@@ -1,5 +1,5 @@
 const express = require('express');
-const mongoose = require('mongoose');
+const { isValidId } = require('../db/ids');
 const auth = require('../middleware/auth');
 const GerotBloco = require('../models/GerotBloco');
 
@@ -39,7 +39,7 @@ router.put('/', async (req, res) => {
     if (!texto || !texto.trim()) {
       return res.status(400).json({ error: 'Escreva a atividade desse bloco.' });
     }
-    if (blocoId && !mongoose.isValidObjectId(blocoId)) {
+    if (blocoId && !isValidId(blocoId)) {
       return res.status(400).json({ error: 'Bloco inválido.' });
     }
 
@@ -73,7 +73,7 @@ router.put('/', async (req, res) => {
 // DELETE /api/gerot/:id -> apaga um bloco
 router.delete('/:id', async (req, res) => {
   try {
-    if (!mongoose.isValidObjectId(req.params.id)) return res.status(400).json({ error: 'Bloco inválido.' });
+    if (!isValidId(req.params.id)) return res.status(400).json({ error: 'Bloco inválido.' });
     await GerotBloco.deleteOne({ _id: req.params.id, userId: req.userId });
     res.status(204).end();
   } catch (err) {

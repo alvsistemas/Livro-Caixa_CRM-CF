@@ -1,3 +1,4 @@
+const { comoSistema } = require('../db/contexto');
 const PushSubscription = require('../models/PushSubscription');
 const { temHorarioMarcado } = require('./icsFeed');
 
@@ -82,7 +83,12 @@ function montarPayloadMensagem({ cliente, texto, canal, cardId }) {
 
 // Manda a notificação pra todos os aparelhos inscritos do usuário. Nunca lança erro pra fora
 // (uma notificação que falha não pode derrubar o recebimento de uma mensagem, por exemplo).
+// Pode avisar outra pessoa (ex.: gestor passou um lead pra ela), então lê as inscrições
+// dela como "sistema" no banco — só o próprio servidor dispara notificações.
 async function enviarPush(userId, payload) {
+  return comoSistema(() => enviarPushInterno(userId, payload));
+}
+async function enviarPushInterno(userId, payload) {
   try {
     const wp = obterWebPush();
     if (!wp) return { enviados: 0 };

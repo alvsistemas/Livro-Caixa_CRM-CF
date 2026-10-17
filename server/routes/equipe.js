@@ -1,5 +1,6 @@
 const express = require('express');
-const mongoose = require('mongoose');
+const { isValidId } = require('../db/ids');
+const { comoSistema } = require('../db/contexto');
 const auth = require('../middleware/auth');
 const User = require('../models/User');
 const Equipe = require('../models/Equipe');
@@ -148,7 +149,7 @@ router.post('/regenerar-codigo', async (req, res) => {
 // PUT /api/equipe/membro/:userId/papel -> promove ou rebaixa um membro (só supervisor)
 router.put('/membro/:userId/papel', async (req, res) => {
   try {
-    if (!mongoose.isValidObjectId(req.params.userId)) return res.status(400).json({ error: 'ID inválido.' });
+    if (!isValidId(req.params.userId)) return res.status(400).json({ error: 'ID inválido.' });
     const user = await User.findById(req.userId);
     if (!user.equipeId || user.papelEquipe !== 'supervisor') {
       return res.status(403).json({ error: 'Só supervisores podem alterar papéis.' });
@@ -171,7 +172,7 @@ router.put('/membro/:userId/papel', async (req, res) => {
 // monitoramento de erros (separado do papel de gestor da equipe; só gestor concede)
 router.put('/membro/:userId/supervisor-dados', async (req, res) => {
   try {
-    if (!mongoose.isValidObjectId(req.params.userId)) return res.status(400).json({ error: 'ID inválido.' });
+    if (!isValidId(req.params.userId)) return res.status(400).json({ error: 'ID inválido.' });
     const user = await User.findById(req.userId);
     if (!user.equipeId || user.papelEquipe !== 'supervisor') {
       return res.status(403).json({ error: 'Só o gestor da equipe pode conceder esse acesso.' });
@@ -191,7 +192,7 @@ router.put('/membro/:userId/supervisor-dados', async (req, res) => {
 // DELETE /api/equipe/membro/:userId -> remove um membro da equipe (só supervisor; o funil dele fica intacto)
 router.delete('/membro/:userId', async (req, res) => {
   try {
-    if (!mongoose.isValidObjectId(req.params.userId)) return res.status(400).json({ error: 'ID inválido.' });
+    if (!isValidId(req.params.userId)) return res.status(400).json({ error: 'ID inválido.' });
     const user = await User.findById(req.userId);
     if (!user.equipeId || user.papelEquipe !== 'supervisor') {
       return res.status(403).json({ error: 'Só supervisores podem remover membros.' });
@@ -306,10 +307,11 @@ router.get('/supervisao', async (req, res) => {
     const membros = await User.find({ equipeId: user.equipeId });
     const resultado = [];
     for (const m of membros) {
-      const [colunas, cards] = await Promise.all([
+      // dados de outra pessoa da equipe: leitura como sistema, depois de conferir que é o gestor
+      const [colunas, cards] = await comoSistema(() => Promise.all([
         Column.find({ userId: m._id }),
         Card.find({ userId: m._id }),
-      ]);
+      ]));
       let ganhoValor = 0;
       let perdidoValor = 0;
       let abertoValor = 0;
@@ -341,7 +343,7 @@ router.get('/supervisao', async (req, res) => {
 // só leitura, pro supervisor acompanhar sem poder alterar nada daquela pessoa.
 router.get('/supervisao/:userId/dashboard', async (req, res) => {
   try {
-    if (!mongoose.isValidObjectId(req.params.userId)) {
+    if (!isValidId(req.params.userId)) {
       return res.status(400).json({ error: 'ID inválido.' });
     }
     const user = await User.findById(req.userId);
@@ -352,12 +354,13 @@ router.get('/supervisao/:userId/dashboard', async (req, res) => {
     if (!membro) return res.status(404).json({ error: 'Membro não encontrado nessa equipe.' });
 
     const mesAtual = new Date().toISOString().slice(0, 7);
-    const [columns, cards, tasks, meta] = await Promise.all([
+    // só leitura dos dados do membro, como sistema (o gestor já foi conferido acima)
+    const [columns, cards, tasks, meta] = await comoSistema(() => Promise.all([
       Column.find({ userId: membro._id }),
       Card.find({ userId: membro._id, arquivado: { $ne: true } }),
       Task.find({ userId: membro._id }),
       MetaVendas.findOne({ userId: membro._id, mes: mesAtual }),
-    ]);
+    ]));
 
     res.json({
       nome: membro.nome || membro.email,
@@ -386,11 +389,12 @@ router.get('/meta-vendas/:mes', async (req, res) => {
 
     let vendidoNoMes = 0;
     for (const m of membros) {
-      const [colunas, cards] = await Promise.all([
+      // soma do time inteiro: lê como sistema (só o total sai daqui, nunca os clientes)
+      const [colunas, cards] = await comoSistema(() => Promise.all([
         Column.find({ userId: m._id }),
         // "mes" do card pode ser "YYYY-MM" (antigo) ou "YYYY-MM-DD" (atual)
         Card.find({ userId: m._id, mes: { $regex: `^${mes}` } }),
-      ]);
+      ]));
       cards.forEach((c) => {
         const col = colunas.find((k) => k._id.toString() === c.columnId.toString());
         if (col && col.tipo === 'ganho') vendidoNoMes += Number(c.valor) || 0;

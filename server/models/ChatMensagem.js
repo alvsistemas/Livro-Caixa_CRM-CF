@@ -1,27 +1,18 @@
-const mongoose = require('mongoose');
-
-const chatMensagemSchema = new mongoose.Schema(
-  {
-    equipeId: { type: mongoose.Schema.Types.ObjectId, ref: 'Equipe', required: true },
-    remetenteId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
-    remetenteNome: { type: String, default: '' }, // guardado aqui pra não precisar de populate a cada leitura
-    destinatarioId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null }, // null = chat da equipe inteira; preenchido = conversa privada entre 2 pessoas
-    texto: { type: String, required: true, trim: true },
-    timestamp: { type: Date, default: Date.now },
+const { definirModelo } = require('../db/modelo');
+const { jsonPadrao, str } = require('./_comum');
+module.exports = definirModelo('ChatMensagem', {
+  tabela: 'chat_mensagens',
+  campos: {
+    equipeId: { type: 'id', ref: 'Equipe', required: true },
+    remetenteId: { type: 'id', ref: 'User', required: true },
+    remetenteNome: { type: 'string', default: '' }, // guardado aqui pra não precisar buscar a cada leitura
+    destinatarioId: { type: 'id', ref: 'User', default: null }, // null = chat da equipe; preenchido = conversa privada
+    texto: { type: 'string', required: true, trim: true },
+    timestamp: { type: 'date', default: () => new Date() },
   },
-  {
-    timestamps: true,
-    toJSON: {
-      transform: (_doc, ret) => {
-        ret.id = ret._id.toString();
-        ret.equipeId = ret.equipeId.toString();
-        ret.remetenteId = ret.remetenteId.toString();
-        ret.destinatarioId = ret.destinatarioId ? ret.destinatarioId.toString() : null;
-        delete ret._id;
-        delete ret.__v;
-      },
-    },
-  }
-);
-
-module.exports = mongoose.model('ChatMensagem', chatMensagemSchema);
+  transformJSON: jsonPadrao((ret) => {
+    ret.equipeId = str(ret.equipeId);
+    ret.remetenteId = str(ret.remetenteId);
+    ret.destinatarioId = str(ret.destinatarioId);
+  }),
+});

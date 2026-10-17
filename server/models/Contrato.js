@@ -1,48 +1,27 @@
-const mongoose = require('mongoose');
-
-const contratoSchema = new mongoose.Schema(
-  {
-    userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
-    cardId: { type: mongoose.Schema.Types.ObjectId, ref: 'Card', default: null }, // preenchido só quando gerado automaticamente pelo Pipeline
-    geradoAutomaticamente: { type: Boolean, default: false },
-    desc: { type: String, required: true, trim: true },
-    scope: { type: String, enum: ['Pessoal', 'Empresa'], default: 'Pessoal' },
-    date: { type: Date, required: true }, // mês da 1ª parcela (dia 1)
-    valorVenda: { type: Number, required: true }, // valor da venda
-    // chave da Regra de Comissão usada (ver server/models/RegraComissao.js) — deixou de ser um
-    // enum fixo pra permitir regras criadas/editadas pelo usuário na engrenagem de Comissões
-    tipoProduto: { type: String, default: 'padrao', trim: true },
-    regraNome: { type: String, default: '' }, // nome da regra no momento em que essa comissão foi calculada (sobrevive mesmo se a regra for renomeada/excluída depois)
-
-    // calculados uma vez, na criação/edição, e guardados — assim o histórico
-    // não muda retroativamente se a regra de cálculo mudar no futuro
-    parcelas: { type: Number, required: true },
-    parcelas1: { type: Number, required: true },
-    value: { type: Number, required: true },
-    value2: { type: Number, required: true },
-    // detalhe completo (N blocos) da regra usada — os 4 campos acima continuam existindo
-    // (resumo dos 2 primeiros blocos) pra manter compatibilidade com contratos antigos e
-    // com qualquer lugar do sistema que ainda lê só parcelas/value/value2
-    blocos: {
-      type: [{ parcelas: Number, percentual: Number, value: Number, _id: false }],
-      default: undefined,
-    },
-
-    // a partir desse mês (incluindo ele), o contrato para de contar comissão —
-    // usado quando o cliente cancela o contrato no meio do caminho
-    canceladoNoMes: { type: String, default: null }, // formato "YYYY-MM"
+const { definirModelo } = require('../db/modelo');
+const { jsonPadrao, str } = require('./_comum');
+module.exports = definirModelo('Contrato', {
+  tabela: 'contratos_comissao',
+  campos: {
+    userId: { type: 'id', ref: 'User', required: true },
+    cardId: { type: 'id', ref: 'Card', default: null }, // preenchido quando gerado automaticamente pelo Pipeline
+    geradoAutomaticamente: { type: 'boolean', default: false },
+    desc: { type: 'string', required: true, trim: true },
+    scope: { type: 'string', enum: ['Pessoal', 'Empresa'], default: 'Pessoal' },
+    date: { type: 'date', required: true }, // mês da 1ª parcela (dia 1)
+    valorVenda: { type: 'money', required: true }, // valor da venda
+    tipoProduto: { type: 'string', default: 'padrao', trim: true }, // chave da regra de comissão usada
+    regraNome: { type: 'string', default: '' }, // nome da regra quando a comissão foi calculada
+    // calculados na criação/edição e guardados — o histórico não muda se a regra mudar depois
+    parcelas: { type: 'int', required: true },
+    parcelas1: { type: 'int', required: true },
+    value: { type: 'money', required: true },
+    value2: { type: 'money', required: true },
+    blocos: { type: 'json', default: null }, // detalhe completo (N blocos) da regra usada
+    canceladoNoMes: { type: 'string', default: null }, // "YYYY-MM": a partir desse mês para de contar
   },
-  {
-    timestamps: true,
-    toJSON: {
-      transform: (_doc, ret) => {
-        ret.id = ret._id.toString();
-        ret.cardId = ret.cardId ? ret.cardId.toString() : null;
-        delete ret._id;
-        delete ret.__v;
-      },
-    },
-  }
-);
-
-module.exports = mongoose.model('Contrato', contratoSchema);
+  transformJSON: jsonPadrao((ret) => {
+    ret.cardId = str(ret.cardId);
+    if (ret.blocos === null) delete ret.blocos;
+  }),
+});

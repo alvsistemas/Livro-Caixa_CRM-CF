@@ -1,25 +1,16 @@
-const mongoose = require('mongoose');
-
-const mensagemAgendadaSchema = new mongoose.Schema(
-  {
-    userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
-    cardId: { type: mongoose.Schema.Types.ObjectId, ref: 'Card', required: true },
-    texto: { type: String, required: true, trim: true },
-    agendadoPara: { type: Date, required: true },
-    status: { type: String, enum: ['pendente', 'enviada', 'cancelada', 'falhou'], default: 'pendente' },
-    erro: { type: String, default: null },
+const { definirModelo } = require('../db/modelo');
+const { jsonPadrao, str } = require('./_comum');
+module.exports = definirModelo('MensagemAgendada', {
+  tabela: 'mensagens_agendadas',
+  campos: {
+    userId: { type: 'id', ref: 'User', required: true },
+    cardId: { type: 'id', ref: 'Card', required: true },
+    texto: { type: 'string', required: true, trim: true },
+    agendadoPara: { type: 'date', required: true },
+    status: { type: 'string', enum: ['pendente', 'enviada', 'cancelada', 'falhou'], default: 'pendente' },
+    erro: { type: 'string', default: null },
   },
-  {
-    timestamps: true,
-    toJSON: {
-      transform: (_doc, ret) => {
-        ret.id = ret._id.toString();
-        ret.cardId = ret.cardId.toString();
-        delete ret._id;
-        delete ret.__v;
-      },
-    },
-  }
-);
-
-module.exports = mongoose.model('MensagemAgendada', mensagemAgendadaSchema);
+  transformJSON: jsonPadrao((ret) => {
+    ret.cardId = str(ret.cardId);
+  }),
+});

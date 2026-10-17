@@ -1,6 +1,6 @@
-# Livro-Caixa — como publicar do zero (GitHub → MongoDB Atlas → Render)
+# Livro-Caixa — como publicar do zero (GitHub → Neon → Render)
 
-Passo a passo para colocar o Livro-Caixa no ar usando um **e-mail novo**. Siga na ordem: cada etapa usa algo da anterior.
+Passo a passo para colocar o Livro-Caixa no ar usando um **e-mail novo**. Siga na ordem: cada etapa usa algo da anterior. O banco de dados é PostgreSQL, no Neon.
 
 Tempo estimado: 40 a 60 minutos na primeira vez.
 
@@ -54,30 +54,32 @@ No `git push`, vai abrir uma janela pedindo login no GitHub: entre com a **conta
 
 Atualize a página do repositório no GitHub: as pastas `public`, `server` etc. devem aparecer. Confira que **não** existe nenhum arquivo `.env` na lista, só o `.env.example`.
 
-## 3. MongoDB Atlas — o banco de dados
+## 3. Neon — o banco de dados (PostgreSQL)
 
-1. Acesse https://www.mongodb.com/cloud/atlas/register e crie a conta com o e-mail novo.
-2. Crie o cluster gratuito:
-   - Escolha **M0 (Free)**.
-   - **Provider:** AWS. **Region:** São Paulo (`sa-east-1`) se aparecer; senão, *N. Virginia* (`us-east-1`).
-   - **Name:** `livro-caixa`. Clique em **Create Deployment**.
-3. Na janela que abrir, crie o **usuário do banco**:
-   - **Username:** `livrocaixa`
-   - **Password:** clique em *Autogenerate* e **copie a senha** para o bloco de notas. Prefira uma senha só com letras e números: símbolos como `@`, `#` ou `/` quebram o endereço de conexão.
-   - Clique em **Create Database User**.
-4. Libere o acesso do Render: menu lateral **Network Access** → **Add IP Address** → **Allow access from anywhere** (`0.0.0.0/0`) → **Confirm**. O plano grátis do Render não tem IP fixo, por isso precisa ser assim. Quem protege os dados é o usuário e a senha.
-5. Pegue o endereço de conexão: **Database** → botão **Connect** → **Drivers** → copie o texto que começa com `mongodb+srv://`.
-6. Monte o endereço final no bloco de notas:
-   - Troque `<db_password>` pela senha do passo 3.
-   - Coloque o nome do banco, `livro_caixa`, logo depois de `.mongodb.net/`.
+O resultado desta etapa é o endereço de conexão do banco, o **DATABASE_URL**. As tabelas não precisam ser criadas à mão: o servidor cria tudo sozinho na primeira vez que sobe.
 
-   Fica assim (exemplo):
+1. Acesse https://console.neon.tech/signup e crie a conta com o e-mail novo (dá pra entrar com a conta nova do GitHub).
+2. Crie o projeto:
+   - **Project name:** `livro-caixa`
+   - **Postgres version:** a mais nova oferecida (17)
+   - **Region:** **AWS US East 1 (N. Virginia)** — a mesma região do servidor no Render. Banco e servidor perto um do outro deixam o sistema bem mais rápido do que um banco em São Paulo com o servidor nos EUA.
+   - **Database name:** pode deixar `neondb`.
+   - Clique em **Create project**.
+3. No painel do projeto, clique em **Connect**. Na janela:
+   - **Branch:** `production` (ou `main`), **Database:** `neondb`, **Role:** `neondb_owner`;
+   - deixe **Connection pooling** ligado;
+   - clique em **Show password** e copie o texto que começa com `postgresql://`.
+4. Guarde no bloco de notas. Fica parecido com:
 
    ```
-   mongodb+srv://livrocaixa:SuaSenha123@livro-caixa.ab1cd.mongodb.net/livro_caixa?retryWrites=true&w=majority&appName=livro-caixa
+   postgresql://neondb_owner:AbC123xyz@ep-nome-123456-pooler.us-east-1.aws.neon.tech/neondb?sslmode=require
    ```
 
-   Esse é o seu **MONGODB_URI**.
+   Esse é o seu **DATABASE_URL**.
+
+Não precisa liberar IP nem criar usuário: o Neon já aceita conexões com SSL de qualquer lugar, protegidas pela senha. No plano grátis, o banco "dorme" depois de 5 minutos sem uso e acorda sozinho na próxima consulta (leva menos de 1 segundo).
+
+**Se quiser testar a conexão antes do Render** (opcional, precisa do Node instalado): na pasta `server`, crie um arquivo `.env` com a linha `DATABASE_URL=...` e rode `npm install` e depois `node db/migrar.js`. Deve aparecer `Migração aplicada: 001_inicial.sql`, `002_papel_da_aplicacao.sql` e `Banco atualizado.`.
 
 ## 4. Render — o servidor
 
@@ -101,10 +103,10 @@ Atualize a página do repositório no GitHub: as pastas `public`, `server` etc. 
 
    | Nome | Valor |
    |---|---|
-   | `MONGODB_URI` | o endereço montado no passo 3.6 |
+   | `DATABASE_URL` | o endereço copiado na etapa 3 |
    | `JWT_SECRET` | clique em **Generate** (o Render cria um texto aleatório) |
 
-6. Clique em **Deploy Web Service**. Acompanhe os *Logs*: em 2 a 5 minutos devem aparecer as linhas `Conectado ao MongoDB.` e `Servidor rodando…`.
+6. Clique em **Deploy Web Service**. Acompanhe os *Logs*: em 2 a 5 minutos devem aparecer as linhas `Migração aplicada: ...`, `Conectado ao PostgreSQL.` e `Servidor rodando…`.
 7. Copie o endereço que aparece no topo da página (ex.: `https://livro-caixa.onrender.com`). Vá em **Environment** → **Add Environment Variable** e crie:
 
    | Nome | Valor |
@@ -185,8 +187,8 @@ O Render percebe o `git push` e publica sozinho em poucos minutos (acompanhe em 
 ## Checklist final
 
 - [ ] Repositório `livro-caixa` privado no GitHub, sem arquivo `.env`
-- [ ] Cluster M0 no Atlas, com usuário do banco e acesso `0.0.0.0/0`
-- [ ] Web Service no Render com `MONGODB_URI`, `JWT_SECRET` e `APP_URL`
+- [ ] Projeto no Neon na região US East 1, com o `DATABASE_URL` copiado
+- [ ] Web Service no Render com `DATABASE_URL`, `JWT_SECRET` e `APP_URL`
 - [ ] Conta criada no site e os dois aplicativos abrindo
 - [ ] (Opcional) Google, Gemini, Resend, push e Telegram configurados
 - [ ] Endereço novo trocado na página de divulgação e e-mail nos Termos e na Privacidade

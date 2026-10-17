@@ -1,5 +1,5 @@
 const express = require('express');
-const mongoose = require('mongoose');
+const { isValidId } = require('../db/ids');
 const auth = require('../middleware/auth');
 const RegraComissao = require('../models/RegraComissao');
 const { obterRegrasDoUsuario, gerarChaveUnica } = require('../utils/regrasComissao');
@@ -69,7 +69,7 @@ router.post('/', async (req, res) => {
 // pra contratos e leads que já apontam pra ela continuarem funcionando)
 router.put('/:id', async (req, res) => {
   try {
-    if (!mongoose.isValidObjectId(req.params.id)) {
+    if (!isValidId(req.params.id)) {
       return res.status(400).json({ error: 'ID inválido.' });
     }
     const updates = {};
@@ -101,7 +101,7 @@ router.put('/:id', async (req, res) => {
 // cálculo salvo e não são afetados; só passa a não aparecer mais como opção nova)
 router.delete('/:id', async (req, res) => {
   try {
-    if (!mongoose.isValidObjectId(req.params.id)) {
+    if (!isValidId(req.params.id)) {
       return res.status(400).json({ error: 'ID inválido.' });
     }
     const regra = await RegraComissao.findOneAndDelete({ _id: req.params.id, userId: req.userId });

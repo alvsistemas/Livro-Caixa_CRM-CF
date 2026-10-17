@@ -21,8 +21,8 @@ const MetaVendas = require('../models/MetaVendas');
 const PossivelLead = require('../models/PossivelLead');
 const Anexo = require('../models/Anexo');
 
-const Financeiro = require('../models/Financeiro');
-const { SECOES, validarSecao } = require('../utils/financeiro');
+const { SECOES, validarSecao, salvarSecaoFinanceiro } = require('../utils/financeiro');
+const { normalizarId } = require('../db/ids');
 
 const router = express.Router();
 router.use(auth);
@@ -97,15 +97,27 @@ async function restaurarColecao(Model, itens, userId) {
   let erro = 0;
   for (const item of itens || []) {
     try {
-      const { id, ...dados } = item;
-      if (!id) { erro++; continue; }
+      const { id, ...resto } = item;
+      if (!id || !normalizarId(id)) { erro++; continue; }
+      // só os campos que este modelo conhece (backups antigos podem ter campos a mais)
+      const dados = {};
+      for (const [k, v] of Object.entries(resto)) if (Model.temCampo(k)) dados[k] = v;
       delete dados.userId;
       dados.userId = userId;
-      await Model.findOneAndUpdate(
+      const gravar = () => Model.findOneAndUpdate(
         { _id: id },
         { $set: dados },
         { upsert: true, setDefaultsOnInsert: true, runValidators: true }
       );
+      try {
+        await gravar();
+      } catch (e) {
+        // ligação com algo que não existe mais (ex.: tarefa de um cliente já apagado):
+        // limpa os vínculos opcionais e tenta de novo
+        if (e.code !== '23503' || !Model.idsOpcionais.length) throw e;
+        Model.idsOpcionais.forEach((campo) => { if (campo in dados) dados[campo] = null; });
+        await gravar();
+      }
       ok++;
     } catch (e) {
       erro++;
@@ -128,6 +140,24 @@ function converterBackupAntigo(backup) {
     renomear(c, 'tipoCarta', 'tipoProduto');
     renomear(c, 'creditoValor', 'valorVenda');
   });
+  // IDs do MongoDB (24 caracteres hexadecimais) guardados DENTRO de configurações, como
+  // a coluna de destino de uma automação ou de um fluxo, viram o UUID equivalente — os IDs
+  // dos próprios registros já são convertidos na gravação.
+  const converterIds = (v) => {
+    if (typeof v === 'string') return /^[0-9a-f]{24}$/i.test(v) ? normalizarId(v) : v;
+    if (Array.isArray(v)) return v.map(converterIds);
+    if (v && typeof v === 'object') {
+      for (const k of Object.keys(v)) v[k] = converterIds(v[k]);
+      return v;
+    }
+    return v;
+  };
+  ['automacoes', 'fluxos'].forEach((chave) => {
+    (Array.isArray(backup[chave]) ? backup[chave] : []).forEach((item) => {
+      if (item && item.acaoParams) item.acaoParams = converterIds(item.acaoParams);
+      if (item && item.etapas) item.etapas = converterIds(item.etapas);
+    });
+  });
   return backup;
 }
 
@@ -142,10 +172,12 @@ router.post('/importar-tudo', async (req, res) => {
     }
     const userId = req.userId;
 
+    // ordem importa: cada coleção vem depois das que ela referencia (funil -> coluna -> cliente...)
     const mapaColecoes = [
-      ['colunas', Column],
       ['funis', Funil],
+      ['colunas', Column],
       ['clientes', Card],
+      ['anexos', Anexo],
       ['tarefas', Task],
       ['comissoes', Contrato],
       ['regrasDeComissao', RegraComissao],
@@ -157,7 +189,6 @@ router.post('/importar-tudo', async (req, res) => {
       ['mensagensAgendadas', MensagemAgendada],
       ['metasDeVendas', MetaVendas],
       ['possiveisLeads', PossivelLead],
-      ['anexos', Anexo],
     ];
 
     // Backups do CRM de consórcio (versão antiga) usam outros nomes de campo — converte
@@ -169,8 +200,7 @@ router.post('/importar-tudo', async (req, res) => {
       resultado[chave] = await restaurarColecao(Model, backup[chave], userId);
     }
 
-    // Controle financeiro: é um documento só por usuário, então substitui as seções que
-    // vieram no arquivo (em vez de criar outro documento com o _id antigo).
+    // Controle financeiro: substitui as seções que vieram no arquivo.
     if (backup.controleFinanceiro && typeof backup.controleFinanceiro === 'object') {
       const atualizacao = {};
       let erro = 0;
@@ -180,9 +210,7 @@ router.post('/importar-tudo', async (req, res) => {
         if (r.ok) atualizacao[secao] = r.valor; else erro++;
       }
       try {
-        if (Object.keys(atualizacao).length) {
-          await Financeiro.findOneAndUpdate({ userId }, { $set: atualizacao }, { upsert: true, setDefaultsOnInsert: true });
-        }
+        for (const [secao, valor] of Object.entries(atualizacao)) await salvarSecaoFinanceiro(userId, secao, valor);
         resultado.controleFinanceiro = { ok: Object.keys(atualizacao).length, erro };
       } catch (e) {
         resultado.controleFinanceiro = { ok: 0, erro: erro + 1 };

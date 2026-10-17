@@ -1,5 +1,6 @@
 const express = require('express');
-const mongoose = require('mongoose');
+const { isValidId } = require('../db/ids');
+const { query } = require('../db/pool');
 const auth = require('../middleware/auth');
 const User = require('../models/User');
 const Card = require('../models/Card');
@@ -563,7 +564,7 @@ router.put('/menu-triagem', auth, async (req, res) => {
         return res.status(400).json({ error: 'Adicione ao menos uma opção.' });
       }
       for (const op of opcoes) {
-        if (!op.numero || !op.colunaDestinoId || !mongoose.isValidObjectId(op.colunaDestinoId)) {
+        if (!op.numero || !op.colunaDestinoId || !isValidId(op.colunaDestinoId)) {
           return res.status(400).json({ error: 'Cada opção precisa de um número e uma coluna de destino válida.' });
         }
       }
@@ -701,20 +702,16 @@ router.post('/desconectar', auth, async (req, res) => {
 // (rota mais específica antes da /conversas/:cardId, senão o Express tentaria casar "conversas" como :cardId)
 router.get('/conversas', auth, async (req, res) => {
   try {
-    const userObjectId = new mongoose.Types.ObjectId(req.userId);
-    const agregadas = await Message.aggregate([
-      { $match: { userId: userObjectId } },
-      { $sort: { timestamp: -1 } },
-      {
-        $group: {
-          _id: '$cardId',
-          ultimaMensagem: { $first: '$texto' },
-          ultimaMensagemEm: { $first: '$timestamp' },
-          direcaoUltima: { $first: '$direction' },
-          canalUltima: { $first: '$canal' },
-        },
-      },
-    ]);
+    // última mensagem de cada cliente (uma linha por conversa)
+    const { rows } = await query(
+      `SELECT DISTINCT ON (card_id) card_id, texto, timestamp, direction, canal
+         FROM mensagens_whatsapp WHERE user_id = $1::uuid
+        ORDER BY card_id, timestamp DESC`,
+      [req.userId]
+    );
+    const agregadas = rows.map((r) => ({
+      _id: r.card_id, ultimaMensagem: r.texto, ultimaMensagemEm: r.timestamp, direcaoUltima: r.direction, canalUltima: r.canal,
+    }));
 
     const cardIds = agregadas.map((a) => a._id);
     const cards = await Card.find({ _id: { $in: cardIds }, userId: req.userId });

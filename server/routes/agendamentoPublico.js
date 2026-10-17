@@ -1,5 +1,5 @@
 const express = require('express');
-const mongoose = require('mongoose');
+const { isValidId } = require('../db/ids');
 const User = require('../models/User');
 const Task = require('../models/Task');
 const Card = require('../models/Card');
@@ -37,7 +37,7 @@ function gerarSlotsDoDia(config, dataISO) {
 // GET /api/agendamento-publico/:userId/config -> dados públicos (nome, se está ativo)
 router.get('/:userId/config', async (req, res) => {
   try {
-    if (!mongoose.isValidObjectId(req.params.userId)) return res.status(404).json({ error: 'Link inválido.' });
+    if (!isValidId(req.params.userId)) return res.status(404).json({ error: 'Link inválido.' });
     const user = await User.findById(req.params.userId).select('nome agendamentoPublico');
     if (!user || !user.agendamentoPublico || !user.agendamentoPublico.ativo) {
       return res.status(404).json({ error: 'Esse link de agendamento não está disponível no momento.' });
@@ -51,7 +51,7 @@ router.get('/:userId/config', async (req, res) => {
 // GET /api/agendamento-publico/:userId/disponibilidade?data=YYYY-MM-DD -> horários livres naquele dia
 router.get('/:userId/disponibilidade', async (req, res) => {
   try {
-    if (!mongoose.isValidObjectId(req.params.userId)) return res.status(404).json({ error: 'Link inválido.' });
+    if (!isValidId(req.params.userId)) return res.status(404).json({ error: 'Link inválido.' });
     const { data } = req.query;
     if (!data || !/^\d{4}-\d{2}-\d{2}$/.test(data)) return res.status(400).json({ error: 'Data inválida.' });
 
@@ -106,7 +106,7 @@ router.get('/:userId/disponibilidade', async (req, res) => {
 // POST /api/agendamento-publico/:userId/reservar -> confirma o agendamento
 router.post('/:userId/reservar', async (req, res) => {
   try {
-    if (!mongoose.isValidObjectId(req.params.userId)) return res.status(404).json({ error: 'Link inválido.' });
+    if (!isValidId(req.params.userId)) return res.status(404).json({ error: 'Link inválido.' });
     const { data, hora, nome, telefone, motivo } = req.body;
     if (!data || !hora || !nome || !nome.trim()) {
       return res.status(400).json({ error: 'Preencha nome, data e horário.' });

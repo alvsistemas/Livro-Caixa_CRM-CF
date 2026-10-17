@@ -1,6 +1,6 @@
-# Livro-Caixa — CRM e Controle financeiro para qualquer negócio (MongoDB + login)
+# Livro-Caixa — CRM e Controle financeiro para qualquer negócio (PostgreSQL + login)
 
-> **Publicar do zero (GitHub → MongoDB Atlas → Render):** veja o arquivo
+> **Publicar do zero (GitHub → Neon → Render):** veja o arquivo
 > [`GUIA-DE-PUBLICACAO.md`](GUIA-DE-PUBLICACAO.md).
 
 ## Dois aplicativos, um login
@@ -26,13 +26,40 @@ escolhe como o CRM entra:
   no mês da parcela (respeitando cancelamentos).
 - **Não usar o CRM.**
 
-**Onde os dados ficam:** coleção `financeiros` (modelo `server/models/Financeiro.js`),
-um documento por usuário com as seções `transacoes`, `cartoes`, `investimentos`,
-`objetivos`, `perfil` e `config`. Rotas: `GET /api/financeiro` e
-`PUT /api/financeiro/:secao` (corpo `{ "valor": ... }`, validado em
-`server/utils/financeiro.js`). O front-end salva sozinho, meio segundo depois de cada
-alteração, e mostra "Tudo salvo na sua conta" no rodapé da barra lateral. O backup
-(Configurações → Manutenção) inclui o Controle financeiro (`controleFinanceiro`).
+**Onde os dados ficam:** tabelas `financeiro_lancamentos`, `financeiro_cartoes`,
+`financeiro_investimentos`, `financeiro_objetivos` e `financeiro_perfis` (perfil e
+config). Rotas: `GET /api/financeiro` e `PUT /api/financeiro/:secao` (corpo
+`{ "valor": ... }`, validado e gravado por `server/utils/financeiro.js`). O front-end
+salva sozinho, meio segundo depois de cada alteração, e mostra "Tudo salvo na sua conta"
+no rodapé da barra lateral. O backup (Configurações → Manutenção) inclui o Controle
+financeiro (`controleFinanceiro`).
+
+## Banco de dados: PostgreSQL (Neon) com segurança por linha
+
+- **Tabelas de verdade**, com tipos: IDs em UUID, dinheiro em `numeric(14,2)` (centavos
+  exatos), datas em `timestamptz`, chaves estrangeiras (apagar uma conta apaga os dados
+  dela) e índices. O esquema está em `server/db/migracoes/*.sql`.
+- **Migrações automáticas:** toda vez que o servidor sobe, `server/db/migrar.js` aplica os
+  arquivos de `db/migracoes/` que ainda não rodaram (registro na tabela `schema_migracoes`).
+  Pra mudar o banco no futuro, crie um arquivo novo (`003_....sql`) — nunca edite um que já
+  foi aplicado. Pra testar a conexão sem subir o servidor: `cd server && node db/migrar.js`.
+- **Row-Level Security (RLS):** toda tabela com `user_id` tem a política `so_o_dono`. Em cada
+  transação o servidor diz quem está consultando (`app.user_id`, ou `app.bypass = 'on'` para
+  tarefas do sistema) e troca para o papel `livro_app` (sem BYPASSRLS). Assim, numa
+  requisição de um usuário logado, o próprio banco recusa linhas de outra pessoa — mesmo
+  que alguma rota esqueça o filtro. Quem liga isso é o `middleware/auth.js`
+  (`comoUsuario`); trechos que precisam ler dados de outra pessoa da equipe, depois de
+  conferir a permissão, usam `comoSistema` (`server/db/contexto.js`).
+- **Camada de dados:** `server/db/modelo.js` dá aos modelos (`server/models/`) os mesmos
+  métodos de antes (`find`, `findOne`, `findOneAndUpdate`, `save`, `populate`...), traduzindo
+  pra SQL. Consultas especiais usam SQL direto (`require('../db/pool').query`).
+- **Ver os dados no painel do Neon (SQL Editor):** como o RLS vale também pro dono das
+  tabelas, rode antes `SET app.bypass = 'on';` na mesma sessão.
+- **Backups antigos** (da época do MongoDB) podem ser importados: os IDs de 24 caracteres
+  viram UUID sempre do mesmo jeito, então as ligações entre os dados continuam certas.
+- **Testes com banco:** `TEST_DATABASE_URL=postgres://... npm test` roda também
+  `test/integracao.test.js` (cadastro, isolamento entre contas, RLS, comissões, equipe,
+  financeiro, backup, webhooks, agendadores). O banco de teste é apagado a cada execução.
 
 O plano Premium do Controle financeiro (Investimentos, Empresa e Assistente) ainda é
 **simulado**: a própria pessoa ativa em "Meu perfil". Falta ligar com a cobrança real.
@@ -49,11 +76,11 @@ Pra rodar tudo de uma vez (sintaxe, CSS, HTML e testes), use `bash scripts/verif
 
 ⚠️ **Monitoramento de erros:** todo erro registrado com `console.error` (é o
 que toda rota já faz antes de responder com erro 500) também é guardado no
-banco (coleção `ErrorLog`, expira sozinho em 30 dias) e aparece pra quem tem
+banco (tabela `erros`, limpa sozinha depois de 30 dias) e aparece pra quem tem
 acesso de **supervisor de dados** — uma permissão separada do "Gestor" da
 equipe, concedida em Equipe → Gestão → Membros → "Tornar supervisor de dados".
 Falhas graves do servidor (`uncaughtException`/`unhandledRejection`/queda do
-MongoDB) também disparam um **alerta no Telegram**, se configurado (veja
+banco de dados) também disparam um **alerta no Telegram**, se configurado (veja
 `TELEGRAM_BOT_TOKEN` e `TELEGRAM_CHAT_ID` no `.env.example` — o passo a passo
 completo de como criar o bot está em `server/utils/telegramAlerta.js`). Não
 depende da API do WhatsApp Business nem de verificação de empresa na Meta.
@@ -142,7 +169,7 @@ e sem nenhum `.env` com senha de verdade.
    cp .env.example .env
    ```
    Edite `.env`:
-   - `MONGODB_URI` com a sua string de conexão (local ou Atlas)
+   - `DATABASE_URL` com a string de conexão do PostgreSQL (local ou Neon)
    - `JWT_SECRET` com qualquer texto longo e aleatório (usado para assinar os tokens de login)
 
 3. Rode o servidor:
@@ -582,7 +609,7 @@ falha de segurança conhecida) — trata .csv e .xlsx da mesma forma no navegado
   modal de todos os clientes. Excluir um campo não apaga os valores
   já preenchidos nos clientes, só para de mostrar
 - **Anexos** — no modal do cliente, suba arquivos (imagem ou PDF, até
-  ~3 MB cada). Ficam guardados como base64 direto no MongoDB — não
+  ~3 MB cada). Ficam guardados como base64 direto no banco (tabela `anexos`) — não
   precisa de nenhum serviço de armazenamento externo, mas por isso o
   limite de tamanho é mais apertado que um serviço de arquivos de
   verdade ofereceria

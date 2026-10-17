@@ -1,5 +1,5 @@
 const express = require('express');
-const mongoose = require('mongoose');
+const { isValidId } = require('../db/ids');
 const auth = require('../middleware/auth');
 const HistoricoContato = require('../models/HistoricoContato');
 const Card = require('../models/Card');
@@ -10,7 +10,7 @@ router.use(auth);
 // GET /api/historico-contato/:cardId -> lista o histórico daquele lead, mais recente primeiro
 router.get('/:cardId', async (req, res) => {
   try {
-    if (!mongoose.isValidObjectId(req.params.cardId)) return res.status(400).json({ error: 'Lead inválido.' });
+    if (!isValidId(req.params.cardId)) return res.status(400).json({ error: 'Lead inválido.' });
     const itens = await HistoricoContato.find({ userId: req.userId, cardId: req.params.cardId }).sort('-createdAt');
     res.json({ itens: itens.map((i) => i.toJSON()) });
   } catch (err) {
@@ -22,7 +22,7 @@ router.get('/:cardId', async (req, res) => {
 router.post('/', async (req, res) => {
   try {
     const { cardId, texto } = req.body;
-    if (!cardId || !mongoose.isValidObjectId(cardId)) return res.status(400).json({ error: 'Lead inválido.' });
+    if (!cardId || !isValidId(cardId)) return res.status(400).json({ error: 'Lead inválido.' });
     if (!texto || !texto.trim()) return res.status(400).json({ error: 'Escreva o que aconteceu.' });
     const lead = await Card.findOne({ _id: cardId, userId: req.userId });
     if (!lead) return res.status(404).json({ error: 'Lead não encontrado.' });

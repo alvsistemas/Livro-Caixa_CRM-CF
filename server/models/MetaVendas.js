@@ -1,22 +1,11 @@
-const mongoose = require('mongoose');
-
-const metaVendasSchema = new mongoose.Schema(
-  {
-    userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
-    mes: { type: String, required: true }, // formato "YYYY-MM"
-    valorMeta: { type: Number, default: 0 },
+const { definirModelo } = require('../db/modelo');
+const { jsonPadrao } = require('./_comum');
+module.exports = definirModelo('MetaVendas', {
+  tabela: 'metas_vendas',
+  campos: {
+    userId: { type: 'id', ref: 'User', required: true },
+    mes: { type: 'string', required: true }, // "YYYY-MM"
+    valorMeta: { type: 'money', default: 0 },
   },
-  {
-    timestamps: true,
-    toJSON: {
-      transform: (_doc, ret) => {
-        ret.id = ret._id.toString();
-        delete ret._id;
-        delete ret.__v;
-      },
-    },
-  }
-);
-metaVendasSchema.index({ userId: 1, mes: 1 }, { unique: true });
-
-module.exports = mongoose.model('MetaVendas', metaVendasSchema);
+  transformJSON: jsonPadrao(),
+});

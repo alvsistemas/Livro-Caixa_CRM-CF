@@ -1,5 +1,5 @@
 const express = require('express');
-const mongoose = require('mongoose');
+const { isValidId } = require('../db/ids');
 const auth = require('../middleware/auth');
 const Card = require('../models/Card');
 const Column = require('../models/Column');
@@ -41,7 +41,7 @@ router.post('/insights', async (req, res) => {
   try {
     const { funilId } = req.body;
     const filtroColuna = { userId: req.userId };
-    if (funilId && mongoose.isValidObjectId(funilId)) filtroColuna.funilId = funilId;
+    if (funilId && isValidId(funilId)) filtroColuna.funilId = funilId;
 
     const columns = await Column.find(filtroColuna);
     const columnIds = columns.map((c) => c._id.toString());

@@ -1,5 +1,5 @@
 const express = require('express');
-const mongoose = require('mongoose');
+const { isValidId } = require('../db/ids');
 const auth = require('../middleware/auth');
 const CampoPersonalizado = require('../models/CampoPersonalizado');
 
@@ -34,7 +34,7 @@ router.post('/', async (req, res) => {
 // (os valores já preenchidos nos clientes ficam órfãos, sem aparecer em lugar nenhum — não é apagado dos cards por simplicidade)
 router.delete('/:id', async (req, res) => {
   try {
-    if (!mongoose.isValidObjectId(req.params.id)) return res.status(400).json({ error: 'ID inválido.' });
+    if (!isValidId(req.params.id)) return res.status(400).json({ error: 'ID inválido.' });
     const campo = await CampoPersonalizado.findOneAndDelete({ _id: req.params.id, userId: req.userId });
     if (!campo) return res.status(404).json({ error: 'Campo não encontrado.' });
     res.status(204).end();

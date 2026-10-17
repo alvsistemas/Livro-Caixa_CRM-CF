@@ -1,5 +1,5 @@
 const express = require('express');
-const mongoose = require('mongoose');
+const { isValidId } = require('../db/ids');
 const auth = require('../middleware/auth');
 const Contrato = require('../models/Contrato');
 const Card = require('../models/Card');
@@ -60,7 +60,7 @@ router.post('/', async (req, res) => {
 // PUT /api/comissoes/:id -> edita um contrato (recalcula as parcelas se o valor da venda ou o tipo mudar)
 router.put('/:id', async (req, res) => {
   try {
-    if (!mongoose.isValidObjectId(req.params.id)) {
+    if (!isValidId(req.params.id)) {
       return res.status(400).json({ error: 'ID inválido.' });
     }
     const { desc, scope, date, valorVenda, tipoProduto } = req.body;
@@ -115,7 +115,7 @@ router.put('/:id', async (req, res) => {
 // DELETE /api/comissoes/:id -> remove o contrato
 router.delete('/:id', async (req, res) => {
   try {
-    if (!mongoose.isValidObjectId(req.params.id)) {
+    if (!isValidId(req.params.id)) {
       return res.status(400).json({ error: 'ID inválido.' });
     }
     const contrato = await Contrato.findOneAndDelete({ _id: req.params.id, userId: req.userId });

@@ -2,7 +2,8 @@ require('dotenv').config();
 const path = require('path');
 const express = require('express');
 const cors = require('cors');
-const mongoose = require('mongoose');
+const { migrar } = require('./db/migrar');
+const { query: consultaBanco, encerrar: encerrarBanco } = require('./db/pool');
 
 const configRoutes = require('./routes/config');
 const authRoutes = require('./routes/auth');
@@ -42,7 +43,6 @@ const app = express();
 // cadastrado no Google Cloud Console).
 app.set('trust proxy', 1);
 const PORT = process.env.PORT || 3000;
-const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/livro_caixa';
 
 /* ---------- monitoramento de erros ----------
    Intercepta todo console.error do sistema (é o padrão que toda rota já usa antes de
@@ -130,13 +130,32 @@ const { enviarBackupsSemanais } = require('./utils/backupScheduler');
 const UMA_HORA = 60 * 60 * 1000;
 const CINCO_MINUTOS = 5 * 60 * 1000;
 
+// Erros do monitoramento ficam guardados por 30 dias (antes o MongoDB apagava sozinho)
+async function limparErrosAntigos() {
+  try {
+    await consultaBanco("DELETE FROM erros WHERE created_at < now() - interval '30 days'");
+  } catch (err) {
+    process.stderr.write(`Falha ao limpar erros antigos: ${err.message}\n`);
+  }
+}
+
 async function start() {
   try {
-    await mongoose.connect(MONGODB_URI);
-    console.log('Conectado ao MongoDB.');
-    app.listen(PORT, () => {
+    if (!process.env.DATABASE_URL) {
+      console.log('Aviso: DATABASE_URL não definida — usando o PostgreSQL local (postgres://livro:livro@127.0.0.1:5432/livro_caixa).');
+    }
+    await migrar(); // cria/atualiza as tabelas do banco sozinho
+    console.log('Conectado ao PostgreSQL.');
+    const servidor = app.listen(PORT, () => {
       console.log(`Servidor rodando em http://localhost:${PORT}`);
     });
+    // desligamento limpo (o Render manda SIGTERM a cada deploy)
+    process.on('SIGTERM', () => {
+      servidor.close(() => encerrarBanco().finally(() => process.exit(0)));
+      setTimeout(() => process.exit(0), 10000).unref();
+    });
+    setTimeout(limparErrosAntigos, 60 * 1000);
+    setInterval(limparErrosAntigos, 24 * UMA_HORA);
     // primeira checagem logo após subir (sem esperar 1h), depois de hora em hora
     setTimeout(verificarAutomacoesPorTempo, 30 * 1000);
     setInterval(verificarAutomacoesPorTempo, UMA_HORA);
@@ -150,10 +169,13 @@ async function start() {
     setTimeout(enviarBackupsSemanais, 90 * 1000);
     setInterval(enviarBackupsSemanais, 6 * UMA_HORA);
   } catch (err) {
-    console.error('Falha ao conectar no MongoDB:', err.message);
-    enviarAlertaTelegram(`Não foi possível conectar ao MongoDB — o servidor não vai subir.\n${err.message}`);
+    console.error('Falha ao conectar no PostgreSQL:', err.message);
+    enviarAlertaTelegram(`Não foi possível conectar ao banco de dados (PostgreSQL) — o servidor não vai subir.\n${err.message}`);
     process.exit(1);
   }
 }
 
-start();
+// "node server.js" sobe o servidor; os testes importam o app sem subir nada
+if (require.main === module) start();
+
+module.exports = { app, start };

@@ -1,36 +1,19 @@
-const mongoose = require('mongoose');
+const { definirModelo } = require('../db/modelo');
+const { jsonPadrao, str } = require('./_comum');
+const TIPOS_ETAPA = ['mensagem', 'tarefa', 'mover_coluna'];
+const validarEtapas = (v) => Array.isArray(v) && v.every((e) => e && Number(e.diasAposInicio) >= 0 && TIPOS_ETAPA.includes(e.tipo));
 
-const etapaSchema = new mongoose.Schema(
-  {
-    diasAposInicio: { type: Number, required: true, min: 0 }, // quantos dias depois do início do fluxo essa etapa roda
-    tipo: { type: String, enum: ['mensagem', 'tarefa', 'mover_coluna'], required: true },
-    params: { type: mongoose.Schema.Types.Mixed, default: {} },
+module.exports = definirModelo('Fluxo', {
+  tabela: 'fluxos',
+  campos: {
+    userId: { type: 'id', ref: 'User', required: true },
+    nome: { type: 'string', required: true, trim: true },
+    colunaGatilhoId: { type: 'id', ref: 'Column', required: true }, // começa quando o cliente entra nessa coluna
+    etapas: { type: 'json', default: () => [], validate: validarEtapas }, // [{ diasAposInicio, tipo, params }]
+    ativo: { type: 'boolean', default: true },
   },
-  { _id: false }
-);
-
-const fluxoSchema = new mongoose.Schema(
-  {
-    userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
-    nome: { type: String, required: true, trim: true },
-    colunaGatilhoId: { type: mongoose.Schema.Types.ObjectId, ref: 'Column', required: true }, // começa quando o cliente entra nessa coluna
-    etapas: { type: [etapaSchema], default: [] },
-    ativo: { type: Boolean, default: true },
-  },
-  {
-    timestamps: true,
-    toJSON: {
-      transform: (_doc, ret) => {
-        ret.id = ret._id.toString();
-        ret.colunaGatilhoId = ret.colunaGatilhoId.toString();
-        (ret.etapas || []).forEach((e) => {
-          if (e.params && e.params.colunaDestinoId) e.params.colunaDestinoId = e.params.colunaDestinoId.toString();
-        });
-        delete ret._id;
-        delete ret.__v;
-      },
-    },
-  }
-);
-
-module.exports = mongoose.model('Fluxo', fluxoSchema);
+  transformJSON: jsonPadrao((ret) => {
+    ret.colunaGatilhoId = str(ret.colunaGatilhoId);
+    (ret.etapas || []).forEach((e) => { if (e.params && e.params.colunaDestinoId) e.params.colunaDestinoId = String(e.params.colunaDestinoId); });
+  }),
+});

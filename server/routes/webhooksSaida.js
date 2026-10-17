@@ -1,5 +1,5 @@
 const express = require('express');
-const mongoose = require('mongoose');
+const { isValidId } = require('../db/ids');
 const auth = require('../middleware/auth');
 const WebhookSaida = require('../models/WebhookSaida');
 const { EVENTOS_DISPONIVEIS } = require('../models/WebhookSaida');
@@ -36,7 +36,7 @@ router.post('/', async (req, res) => {
 // PUT /api/webhooks-saida/:id -> edita um webhook (nome, url, eventos, ativo)
 router.put('/:id', async (req, res) => {
   try {
-    if (!mongoose.isValidObjectId(req.params.id)) return res.status(400).json({ error: 'ID inválido.' });
+    if (!isValidId(req.params.id)) return res.status(400).json({ error: 'ID inválido.' });
     const { nome, url, eventos, ativo } = req.body;
     const updates = {};
     if (typeof nome === 'string') updates.nome = nome.trim();
@@ -55,7 +55,7 @@ router.put('/:id', async (req, res) => {
 // DELETE /api/webhooks-saida/:id -> remove um webhook
 router.delete('/:id', async (req, res) => {
   try {
-    if (!mongoose.isValidObjectId(req.params.id)) return res.status(400).json({ error: 'ID inválido.' });
+    if (!isValidId(req.params.id)) return res.status(400).json({ error: 'ID inválido.' });
     const resultado = await WebhookSaida.findOneAndDelete({ _id: req.params.id, userId: req.userId });
     if (!resultado) return res.status(404).json({ error: 'Webhook não encontrado.' });
     res.status(204).end();
@@ -67,7 +67,7 @@ router.delete('/:id', async (req, res) => {
 // POST /api/webhooks-saida/:id/testar -> dispara um evento de teste, pra você ver na outra ponta
 router.post('/:id/testar', async (req, res) => {
   try {
-    if (!mongoose.isValidObjectId(req.params.id)) return res.status(400).json({ error: 'ID inválido.' });
+    if (!isValidId(req.params.id)) return res.status(400).json({ error: 'ID inválido.' });
     const webhook = await WebhookSaida.findOne({ _id: req.params.id, userId: req.userId });
     if (!webhook) return res.status(404).json({ error: 'Webhook não encontrado.' });
 

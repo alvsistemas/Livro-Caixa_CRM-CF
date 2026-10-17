@@ -1,25 +1,16 @@
-const mongoose = require('mongoose');
-
-const anexoSchema = new mongoose.Schema(
-  {
-    userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
-    cardId: { type: mongoose.Schema.Types.ObjectId, ref: 'Card', required: true },
-    nomeArquivo: { type: String, required: true },
-    tipoMime: { type: String, default: 'application/octet-stream' },
-    dadosBase64: { type: String, required: true }, // arquivo inteiro, já em base64 (data URL)
-    tamanho: { type: Number, default: 0 }, // em bytes, calculado no upload
+const { definirModelo } = require('../db/modelo');
+const { jsonPadrao, str } = require('./_comum');
+module.exports = definirModelo('Anexo', {
+  tabela: 'anexos',
+  campos: {
+    userId: { type: 'id', ref: 'User', required: true },
+    cardId: { type: 'id', ref: 'Card', required: true },
+    nomeArquivo: { type: 'string', required: true },
+    tipoMime: { type: 'string', default: 'application/octet-stream' },
+    dadosBase64: { type: 'string', required: true }, // arquivo inteiro, já em base64 (data URL)
+    tamanho: { type: 'int', default: 0 }, // em bytes
   },
-  {
-    timestamps: true,
-    toJSON: {
-      transform: (_doc, ret) => {
-        ret.id = ret._id.toString();
-        ret.cardId = ret.cardId.toString();
-        delete ret._id;
-        delete ret.__v;
-      },
-    },
-  }
-);
-
-module.exports = mongoose.model('Anexo', anexoSchema);
+  transformJSON: jsonPadrao((ret) => {
+    ret.cardId = str(ret.cardId);
+  }),
+});

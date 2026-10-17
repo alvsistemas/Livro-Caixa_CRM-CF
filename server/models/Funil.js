@@ -1,21 +1,11 @@
-const mongoose = require('mongoose');
-
-const funilSchema = new mongoose.Schema(
-  {
-    userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
-    nome: { type: String, required: true, trim: true },
-    ordem: { type: Number, default: 0 },
+const { definirModelo } = require('../db/modelo');
+const { jsonPadrao } = require('./_comum');
+module.exports = definirModelo('Funil', {
+  tabela: 'funis',
+  campos: {
+    userId: { type: 'id', ref: 'User', required: true },
+    nome: { type: 'string', required: true, trim: true },
+    ordem: { type: 'number', default: 0 },
   },
-  {
-    timestamps: true,
-    toJSON: {
-      transform: (_doc, ret) => {
-        ret.id = ret._id.toString();
-        delete ret._id;
-        delete ret.__v;
-      },
-    },
-  }
-);
-
-module.exports = mongoose.model('Funil', funilSchema);
+  transformJSON: jsonPadrao(),
+});

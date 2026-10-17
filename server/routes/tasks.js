@@ -1,5 +1,5 @@
 const express = require('express');
-const mongoose = require('mongoose');
+const { isValidId } = require('../db/ids');
 const auth = require('../middleware/auth');
 const Task = require('../models/Task');
 const Card = require('../models/Card');
@@ -49,7 +49,7 @@ router.post('/', async (req, res) => {
     if (!dados.titulo || !dados.titulo.trim()) {
       return res.status(400).json({ error: 'Título da tarefa é obrigatório.' });
     }
-    if (dados.leadId && !mongoose.isValidObjectId(dados.leadId)) {
+    if (dados.leadId && !isValidId(dados.leadId)) {
       return res.status(400).json({ error: 'Lead relacionado inválido.' });
     }
     if (dados.leadId) {
@@ -68,11 +68,11 @@ router.post('/', async (req, res) => {
 // PUT /api/tasks/:id -> edita uma tarefa
 router.put('/:id', async (req, res) => {
   try {
-    if (!mongoose.isValidObjectId(req.params.id)) {
+    if (!isValidId(req.params.id)) {
       return res.status(400).json({ error: 'ID inválido.' });
     }
     const dados = filtrarCampos(req.body);
-    if (dados.leadId && !mongoose.isValidObjectId(dados.leadId)) {
+    if (dados.leadId && !isValidId(dados.leadId)) {
       return res.status(400).json({ error: 'Lead relacionado inválido.' });
     }
     if (dados.vencimento !== undefined) dados.lembretePushEnviado = false; // mudou o horário: o lembrete vale de novo
@@ -92,7 +92,7 @@ router.put('/:id', async (req, res) => {
 // PUT /api/tasks/:id/toggle -> marca/desmarca como concluída
 router.put('/:id/toggle', async (req, res) => {
   try {
-    if (!mongoose.isValidObjectId(req.params.id)) {
+    if (!isValidId(req.params.id)) {
       return res.status(400).json({ error: 'ID inválido.' });
     }
     const task = await Task.findOne({ _id: req.params.id, userId: req.userId });
@@ -108,7 +108,7 @@ router.put('/:id/toggle', async (req, res) => {
 // DELETE /api/tasks/:id -> remove a tarefa
 router.delete('/:id', async (req, res) => {
   try {
-    if (!mongoose.isValidObjectId(req.params.id)) {
+    if (!isValidId(req.params.id)) {
       return res.status(400).json({ error: 'ID inválido.' });
     }
     const task = await Task.findOneAndDelete({ _id: req.params.id, userId: req.userId });

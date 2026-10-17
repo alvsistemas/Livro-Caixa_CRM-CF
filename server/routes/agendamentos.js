@@ -1,5 +1,5 @@
 const express = require('express');
-const mongoose = require('mongoose');
+const { isValidId } = require('../db/ids');
 const auth = require('../middleware/auth');
 const MensagemAgendada = require('../models/MensagemAgendada');
 const Card = require('../models/Card');
@@ -34,7 +34,7 @@ router.get('/', async (req, res) => {
 router.post('/', async (req, res) => {
   try {
     const { cardId, texto, agendadoPara } = req.body;
-    if (!cardId || !mongoose.isValidObjectId(cardId)) return res.status(400).json({ error: 'Escolha um cliente.' });
+    if (!cardId || !isValidId(cardId)) return res.status(400).json({ error: 'Escolha um cliente.' });
     if (!texto || !texto.trim()) return res.status(400).json({ error: 'Escreva o texto da mensagem.' });
     if (!agendadoPara) return res.status(400).json({ error: 'Escolha a data e hora do envio.' });
     const data = new Date(agendadoPara);
@@ -62,7 +62,7 @@ router.post('/', async (req, res) => {
 // POST /api/agendamentos/:id/cancelar -> cancela um agendamento que ainda não foi enviado
 router.post('/:id/cancelar', async (req, res) => {
   try {
-    if (!mongoose.isValidObjectId(req.params.id)) return res.status(400).json({ error: 'ID inválido.' });
+    if (!isValidId(req.params.id)) return res.status(400).json({ error: 'ID inválido.' });
     const agendamento = await MensagemAgendada.findOneAndUpdate(
       { _id: req.params.id, userId: req.userId, status: 'pendente' },
       { status: 'cancelada' },
@@ -78,7 +78,7 @@ router.post('/:id/cancelar', async (req, res) => {
 // DELETE /api/agendamentos/:id -> remove da lista (qualquer status)
 router.delete('/:id', async (req, res) => {
   try {
-    if (!mongoose.isValidObjectId(req.params.id)) return res.status(400).json({ error: 'ID inválido.' });
+    if (!isValidId(req.params.id)) return res.status(400).json({ error: 'ID inválido.' });
     const agendamento = await MensagemAgendada.findOneAndDelete({ _id: req.params.id, userId: req.userId });
     if (!agendamento) return res.status(404).json({ error: 'Agendamento não encontrado.' });
     res.status(204).end();

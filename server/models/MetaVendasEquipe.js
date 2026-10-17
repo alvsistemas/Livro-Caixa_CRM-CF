@@ -1,23 +1,13 @@
-const mongoose = require('mongoose');
-
-const metaVendasEquipeSchema = new mongoose.Schema(
-  {
-    equipeId: { type: mongoose.Schema.Types.ObjectId, ref: 'Equipe', required: true },
-    mes: { type: String, required: true }, // formato "YYYY-MM"
-    valorMeta: { type: Number, default: 0 }, // 0 = sem meta definida; o gestor define o valor no Dashboard
+const { definirModelo } = require('../db/modelo');
+const { jsonPadrao, str } = require('./_comum');
+module.exports = definirModelo('MetaVendasEquipe', {
+  tabela: 'metas_vendas_equipe',
+  campos: {
+    equipeId: { type: 'id', ref: 'Equipe', required: true },
+    mes: { type: 'string', required: true }, // "YYYY-MM"
+    valorMeta: { type: 'money', default: 0 }, // 0 = sem meta definida
   },
-  {
-    timestamps: true,
-    toJSON: {
-      transform: (_doc, ret) => {
-        ret.id = ret._id.toString();
-        ret.equipeId = ret.equipeId.toString();
-        delete ret._id;
-        delete ret.__v;
-      },
-    },
-  }
-);
-metaVendasEquipeSchema.index({ equipeId: 1, mes: 1 }, { unique: true });
-
-module.exports = mongoose.model('MetaVendasEquipe', metaVendasEquipeSchema);
+  transformJSON: jsonPadrao((ret) => {
+    ret.equipeId = str(ret.equipeId);
+  }),
+});

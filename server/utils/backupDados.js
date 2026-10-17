@@ -14,8 +14,7 @@ const MetaVendas = require('../models/MetaVendas');
 const PossivelLead = require('../models/PossivelLead');
 const Anexo = require('../models/Anexo');
 const RegraComissao = require('../models/RegraComissao');
-const Financeiro = require('../models/Financeiro');
-const { serializar } = require('./financeiro');
+const { carregarFinanceiro } = require('./financeiro');
 
 // Monta o objeto de backup de um usuário (usado tanto pelo botão "Backup" quanto pelo backup
 // automático semanal por e-mail). Tokens e segredos nunca entram. Com incluirAnexos=false o
@@ -43,12 +42,12 @@ async function montarBackup(userId, { incluirAnexos = true } = {}) {
     PossivelLead.find({ userId }),
     RegraComissao.find({ userId }),
     incluirAnexos ? Anexo.find({ userId }) : Promise.resolve([]),
-    Financeiro.findOne({ userId }).lean(),
+    carregarFinanceiro(userId),
   ]);
 
   const backup = {
     geradoEm: new Date().toISOString(),
-    versao: 1,
+    versao: 2, // 2 = PostgreSQL (IDs em UUID); a importação aceita também os backups da versão 1
     usuario: usuario ? usuario.toJSON() : null,
     clientes: cards.map((d) => d.toJSON()),
     colunas: columns.map((d) => d.toJSON()),
@@ -64,7 +63,7 @@ async function montarBackup(userId, { incluirAnexos = true } = {}) {
     mensagensAgendadas: mensagensAgendadas.map((d) => d.toJSON()),
     metasDeVendas: metasVendas.map((d) => d.toJSON()),
     possiveisLeads: possiveisLeads.map((d) => d.toJSON()),
-    controleFinanceiro: serializar(financeiro), // lançamentos, cartões, investimentos, objetivos, perfil e config
+    controleFinanceiro: financeiro, // lançamentos, cartões, investimentos, objetivos, perfil e config
   };
   if (incluirAnexos) backup.anexos = anexos.map((d) => d.toJSON());
   return backup;

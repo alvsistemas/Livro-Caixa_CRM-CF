@@ -1,22 +1,12 @@
-const mongoose = require('mongoose');
-
-const campoPersonalizadoSchema = new mongoose.Schema(
-  {
-    userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
-    nome: { type: String, required: true, trim: true },
-    tipo: { type: String, enum: ['texto', 'numero', 'data'], default: 'texto' },
-    ordem: { type: Number, default: 0 },
+const { definirModelo } = require('../db/modelo');
+const { jsonPadrao } = require('./_comum');
+module.exports = definirModelo('CampoPersonalizado', {
+  tabela: 'campos_personalizados',
+  campos: {
+    userId: { type: 'id', ref: 'User', required: true },
+    nome: { type: 'string', required: true, trim: true },
+    tipo: { type: 'string', enum: ['texto', 'numero', 'data'], default: 'texto' },
+    ordem: { type: 'number', default: 0 },
   },
-  {
-    timestamps: true,
-    toJSON: {
-      transform: (_doc, ret) => {
-        ret.id = ret._id.toString();
-        delete ret._id;
-        delete ret.__v;
-      },
-    },
-  }
-);
-
-module.exports = mongoose.model('CampoPersonalizado', campoPersonalizadoSchema);
+  transformJSON: jsonPadrao(),
+});
