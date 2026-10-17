@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Entrar — Livro-Caixa</title>
+<link rel="manifest" href="manifest.json" />
+<meta name="theme-color" content="#141414" />
+<link rel="icon" href="icons/icon-192.png" />
+<link rel="apple-touch-icon" href="icons/icon-192.png" />
+<link rel="stylesheet" href="css/style.css?v=20261102" />
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+</head>
+<body>
+  <div class="auth-wrap">
+    <div class="auth-box">
+      <h1 class="auth-title" id="auth-title">Livro-Caixa</h1>
+      <p class="auth-subtitle">suas vendas e o seu dinheiro, num só lugar</p>
+
+      <div class="auth-tabs">
+        <button type="button" class="auth-tab active" data-mode="login">Entrar</button>
+        <button type="button" class="auth-tab" data-mode="register">Criar conta</button>
+      </div>
+
+      <div id="auth-error" class="error-banner" style="display:none"></div>
+
+      <form id="auth-form" class="auth-form">
+        <div class="field" id="field-nome" style="display:none">
+          <label>Nome</label>
+          <input type="text" id="a-nome" placeholder="Seu nome" />
+        </div>
+        <div class="field">
+          <label>E-mail</label>
+          <input type="email" id="a-email" placeholder="voce@email.com" required />
+        </div>
+        <div class="field">
+          <label>Senha</label>
+          <input type="password" id="a-senha" placeholder="Mínimo 6 caracteres" required minlength="6" />
+        </div>
+        <button type="submit" class="btn-save auth-submit" id="auth-submit">Entrar</button>
+        <p id="esqueci-wrap" style="display:none;text-align:center;font-size:13px;margin:12px 0 0;"><a href="#" id="esqueci-link" style="color:inherit;opacity:.8;">Esqueci minha senha</a></p>
+      </form>
+
+      <form id="esqueci-form" class="auth-form" style="display:none">
+        <p class="settings-page-note">Digite o e-mail da sua conta. Enviaremos um link para você criar uma nova senha.</p>
+        <div class="field">
+          <label>E-mail</label>
+          <input type="email" id="esqueci-email" placeholder="voce@email.com" required />
+        </div>
+        <button type="submit" class="btn-save auth-submit" id="esqueci-submit">Enviar link</button>
+        <p style="text-align:center;font-size:13px;margin:12px 0 0;"><a href="#" class="voltar-login" style="color:inherit;opacity:.8;">Voltar para o login</a></p>
+      </form>
+
+      <form id="reset-form" class="auth-form" style="display:none">
+        <p class="settings-page-note">Crie uma nova senha para a sua conta.</p>
+        <div class="field">
+          <label>Nova senha</label>
+          <input type="password" id="reset-senha" placeholder="Mínimo 6 caracteres" required minlength="6" autocomplete="new-password" />
+        </div>
+        <div class="field">
+          <label>Repita a nova senha</label>
+          <input type="password" id="reset-senha2" placeholder="Repita a senha" required minlength="6" autocomplete="new-password" />
+        </div>
+        <button type="submit" class="btn-save auth-submit" id="reset-submit">Salvar nova senha</button>
+        <p style="text-align:center;font-size:13px;margin:12px 0 0;"><a href="#" class="voltar-login" style="color:inherit;opacity:.8;">Voltar para o login</a></p>
+      </form>
+
+      <div id="auth-info" class="error-banner" style="display:none;background:#e8f5e9;color:#1b5e20;border-color:#a5d6a7;"></div>
+
+      <form id="twofa-form" class="auth-form" style="display:none">
+        <p class="settings-page-note">Digite o código do seu app autenticador (Google Authenticator, Authy, etc.)</p>
+        <div class="field">
+          <label>Código de 6 dígitos</label>
+          <input type="text" id="twofa-codigo" placeholder="000000" maxlength="6" inputmode="numeric" autocomplete="one-time-code" />
+        </div>
+        <button type="submit" class="btn-save auth-submit" id="twofa-submit">Confirmar</button>
+      </form>
+
+      <div class="auth-divider" id="auth-divider"><span>ou</span></div>
+      <div id="google-btn-container" class="google-btn-wrap"></div>
+      <p id="google-btn-fallback" class="google-btn-fallback" style="display:none">Login com Google ainda não configurado neste servidor.</p>
+      <p style="text-align:center;font-size:12px;margin:16px 0 0;opacity:.7;"><a href="privacidade.html" style="color:inherit;">Política de Privacidade</a> · <a href="termos.html" style="color:inherit;">Termos de Serviço</a></p>
+    </div>
+  </div>
+
+  <script src="js/login.js?v=20261102"></script>
+</body>
+</html>

@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Controle financeiro — Livro-Caixa</title>
+<link rel="manifest" href="../manifest.json" />
+<meta name="theme-color" content="#2F6F4E" />
+<link rel="icon" href="../icons/icon-192.png" />
+<link rel="apple-touch-icon" href="../icons/icon-192.png" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-title" content="Livro-Caixa" />
+<link rel="stylesheet" href="styles.css?v=20261102" />
+</head>
+<body>
+
+<!-- Carregamento e escolha de personagem (cobre tudo até o perfil ser criado) -->
+<div id="onboarding-root"></div>
+
+<!-- App principal -->
+<div class="app" id="app-root" style="display:none">
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="brand-row">
+        <span class="brand-icon" id="brand-icon">L</span>
+        <span class="brand-title">Controle financeiro</span>
+      </div>
+      <p class="brand-sub">Livro-Caixa · Pessoal &amp; Empresa</p>
+    </div>
+    <nav class="nav" id="nav">
+      <button class="nav-item active" data-tab="dashboard"><span class="nav-ico">▦</span><span class="nav-label">Painel</span></button>
+      <button class="nav-item" data-tab="lucro"><span class="nav-ico">◆</span><span class="nav-label">Lucro</span></button>
+      <button class="nav-item" data-tab="lancamentos"><span class="nav-ico">⇄</span><span class="nav-label">Lançamentos</span></button>
+      <button class="nav-item" data-tab="cartoes"><span class="nav-ico">▭</span><span class="nav-label">Cartões</span></button>
+      <button class="nav-item" data-tab="investimentos"><span class="nav-ico">↗</span><span class="nav-label">Investimentos</span><span class="lock-ico">🔒</span></button>
+      <button class="nav-item" data-tab="empresa"><span class="nav-ico">▣</span><span class="nav-label">Empresa</span><span class="lock-ico">🔒</span></button>
+      <button class="nav-item" data-tab="objetivos"><span class="nav-ico">◎</span><span class="nav-label">Objetivos</span></button>
+      <button class="nav-item" data-tab="assistente"><span class="nav-ico">✦</span><span class="nav-label">Assistente</span><span class="lock-ico">🔒</span></button>
+      <button class="nav-item" data-tab="cadastro"><span class="nav-ico">☺</span><span class="nav-label">Meu perfil</span></button>
+    </nav>
+    <div class="nav nav-bottom">
+      <a class="nav-item" href="../inicio.html" title="Abrir o CRM ou voltar para a escolha de aplicativo"><span class="nav-ico">⇆</span><span class="nav-label">Trocar de aplicativo</span></a>
+      <button class="nav-item nav-sair" id="logout-btn" type="button" title="Sair da conta"><span class="nav-ico">⏻</span><span class="nav-label">Sair</span></button>
+    </div>
+    <p class="sidebar-footer"><span id="save-status" class="save-status">Seus dados ficam salvos na sua conta.</span></p>
+  </aside>
+
+  <main class="main" id="main"></main>
+</div>
+
+<div id="modal-root"></div>
+
+<script src="script.js?v=20261102"></script>
+
+</body>
+</html>

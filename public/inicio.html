@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Livro-Caixa — escolha o aplicativo</title>
+<link rel="manifest" href="manifest.json" />
+<meta name="theme-color" content="#141414" />
+<link rel="icon" href="icons/icon-192.png" />
+<link rel="apple-touch-icon" href="icons/icon-192.png" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-title" content="Livro-Caixa" />
+<link rel="stylesheet" href="css/style.css?v=20261102" />
+<link rel="stylesheet" href="css/inicio.css?v=20261102" />
+</head>
+<body class="inicio-body">
+  <main class="inicio-wrap">
+    <header class="inicio-head">
+      <p class="inicio-marca">Livro-Caixa</p>
+      <h1 class="inicio-titulo">Olá<span id="inicio-nome"></span>! O que vamos abrir hoje?</h1>
+      <p class="inicio-sub">Os dois aplicativos usam a mesma conta e conversam entre si: as vendas fechadas no CRM aparecem no Controle financeiro.</p>
+    </header>
+
+    <div class="inicio-apps">
+      <a class="inicio-app inicio-app-crm" href="index.html">
+        <span class="inicio-app-icone" aria-hidden="true">
+          <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="5" height="16" rx="1.2"/><rect x="10" y="4" width="5" height="11" rx="1.2"/><rect x="17" y="4" width="4" height="7" rx="1.2"/></svg>
+        </span>
+        <span class="inicio-app-nome">CRM</span>
+        <span class="inicio-app-desc">Clientes, funil de vendas, conversas, tarefas e comissões.</span>
+        <span class="inicio-app-acao">Abrir o CRM →</span>
+      </a>
+
+      <a class="inicio-app inicio-app-fin" href="financeiro/">
+        <span class="inicio-app-icone" aria-hidden="true">
+          <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19V5"/><path d="M4 19h16"/><path d="M8 15l3-4 3 2 5-6"/></svg>
+        </span>
+        <span class="inicio-app-nome">Controle financeiro</span>
+        <span class="inicio-app-desc">Receitas, despesas, cartões, objetivos e o lucro de verdade do seu negócio.</span>
+        <span class="inicio-app-acao">Abrir o Controle financeiro →</span>
+      </a>
+    </div>
+
+    <footer class="inicio-rodape">
+      <button type="button" class="inicio-sair" id="inicio-sair">Sair da conta</button>
+    </footer>
+  </main>
+  <script src="js/inicio.js?v=20261102"></script>
+</body>
+</html>

@@ -1,0 +1,31 @@
+/* Tela de escolha de aplicativo (CRM ou Controle financeiro), logo depois do login */
+.inicio-body{ margin:0; min-height:100vh; background:var(--bg); color:var(--ink); font-family:'IBM Plex Sans',system-ui,sans-serif; display:flex; align-items:center; justify-content:center; }
+.inicio-wrap{ width:100%; max-width:880px; padding:40px 20px; box-sizing:border-box; }
+.inicio-head{ margin-bottom:28px; }
+.inicio-marca{ font-family:'IBM Plex Mono',monospace; font-size:12px; font-weight:600; letter-spacing:.08em; text-transform:uppercase; color:var(--ink-soft); margin:0 0 10px; }
+.inicio-titulo{ font-family:'Fraunces',serif; font-size:32px; line-height:1.15; font-weight:600; letter-spacing:-.015em; margin:0; }
+.inicio-sub{ font-size:14px; line-height:1.55; color:var(--ink-soft); margin:10px 0 0; max-width:560px; }
+.inicio-apps{ display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+.inicio-app{ display:flex; flex-direction:column; gap:8px; padding:24px; border-radius:16px; border:1px solid var(--line); background:var(--paper); color:var(--ink); text-decoration:none; transition:transform .15s ease, box-shadow .15s ease, border-color .15s ease; min-height:200px; box-sizing:border-box; }
+.inicio-app:hover{ transform:translateY(-2px); box-shadow:0 10px 28px rgba(0,0,0,.08); }
+.inicio-app:focus-visible{ outline:3px solid var(--ink); outline-offset:3px; }
+.inicio-app-icone{ width:48px; height:48px; border-radius:12px; display:flex; align-items:center; justify-content:center; color:#fff; margin-bottom:6px; }
+.inicio-app-crm .inicio-app-icone{ background:#141414; }
+.inicio-app-fin .inicio-app-icone{ background:#2F6F4E; }
+.inicio-app-crm:hover{ border-color:#141414; }
+.inicio-app-fin:hover{ border-color:#2F6F4E; }
+.inicio-app-nome{ font-family:'Fraunces',serif; font-size:22px; font-weight:600; }
+.inicio-app-desc{ font-size:14px; line-height:1.5; color:var(--ink-soft); flex:1; }
+.inicio-app-acao{ font-size:13px; font-weight:600; margin-top:6px; }
+.inicio-app-fin .inicio-app-acao{ color:#2F6F4E; }
+.inicio-rodape{ margin-top:28px; display:flex; justify-content:center; }
+.inicio-sair{ border:none; background:none; color:var(--danger); font-size:13px; font-weight:500; cursor:pointer; padding:8px 12px; border-radius:8px; }
+.inicio-sair:hover{ background:var(--danger-soft); }
+[data-theme="dark"] .inicio-app-crm .inicio-app-icone{ background:#F0F0F0; color:#141414; }
+[data-theme="dark"] .inicio-app-fin .inicio-app-acao{ color:#6FBF92; }
+@media (max-width:640px){
+  .inicio-body{ align-items:flex-start; }
+  .inicio-titulo{ font-size:26px; }
+  .inicio-apps{ grid-template-columns:1fr; }
+  .inicio-app{ min-height:0; }
+}
