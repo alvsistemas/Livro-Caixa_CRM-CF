@@ -59,21 +59,48 @@ function sqlDeContexto(ctx) {
   return `BEGIN${papel}; SELECT set_config('app.bypass', 'on', true)`;
 }
 
+// Erros de conexão (banco acordando, conexão ociosa derrubada pelo pooler do Neon...):
+// nesses casos a consulta nem chegou a rodar, então dá pra tentar de novo com segurança.
+const ERROS_DE_CONEXAO = new Set(['ECONNRESET', 'ECONNREFUSED', 'ETIMEDOUT', 'EPIPE', '57P01', '57P02', '57P03', '08000', '08003', '08006']);
+function ehErroDeConexao(err) {
+  if (!err) return false;
+  if (ERROS_DE_CONEXAO.has(err.code)) return true;
+  return /Connection terminated|connection timeout|timeout exceeded when trying to connect|Client has encountered a connection error/i.test(err.message || '');
+}
+
 // Executa uma consulta respeitando o contexto atual (usuário logado ou sistema).
 async function query(texto, params = []) {
+  try {
+    return await queryUmaVez(texto, params);
+  } catch (err) {
+    const ctx = atual();
+    // só repete se caiu ANTES da consulta rodar (ao conectar ou ao abrir a transação):
+    // assim nunca grava a mesma coisa duas vezes
+    if ((ctx && ctx.cliente) || !err.antesDaConsulta || !ehErroDeConexao(err)) throw err;
+    await new Promise((ok) => setTimeout(ok, 300));
+    return queryUmaVez(texto, params);
+  }
+}
+async function queryUmaVez(texto, params) {
   const ctx = atual();
   if (ctx && ctx.cliente) return ctx.cliente.query(texto, params);
-  const cliente = await obterPool().connect();
+  let cliente;
   try {
-    await cliente.query(sqlDeContexto(ctx));
+    cliente = await obterPool().connect();
+  } catch (err) { err.antesDaConsulta = true; throw err; }
+  let quebrada = null;
+  try {
+    try { await cliente.query(sqlDeContexto(ctx)); } catch (err) { err.antesDaConsulta = true; throw err; }
     const resultado = await cliente.query(texto, params);
     await cliente.query('COMMIT');
     return resultado;
   } catch (err) {
-    try { await cliente.query('ROLLBACK'); } catch (e) { /* conexão pode já estar quebrada */ }
+    if (ehErroDeConexao(err)) quebrada = err;
+    else { try { await cliente.query('ROLLBACK'); } catch (e) { quebrada = e; } }
     throw err;
   } finally {
-    cliente.release();
+    // conexão com defeito é descartada (release com erro), em vez de voltar pro pool
+    cliente.release(quebrada || undefined);
   }
 }
 
@@ -102,4 +129,4 @@ async function encerrar() {
   await p.end();
 }
 
-module.exports = { query, transacao, encerrar, obterPool, urlDoBanco, definirPapelDaAplicacao };
+module.exports = { query, transacao, encerrar, obterPool, urlDoBanco, definirPapelDaAplicacao, ehErroDeConexao };

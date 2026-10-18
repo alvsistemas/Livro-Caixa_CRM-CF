@@ -73,3 +73,21 @@ describe('resumo financeiro para a IA', () => {
     assert.equal(r.cartoes[0].vencimento, 10);
   });
 });
+
+describe('lembrete diário de contas', () => {
+  const { montarLembrete } = require('../utils/lembreteFinanceiro');
+  test('resume o que vence hoje, amanhã e o que está atrasado', () => {
+    const dados = { transacoes: [
+      { desc: 'Luz', date: '2026-10-18', type: 'Despesa', value: 120, recurrence: 'unico', status: 'Pendente', account: 'Boleto' },
+      { desc: 'Internet', date: '2026-10-19', type: 'Despesa', value: 99.9, recurrence: 'unico', status: 'Pendente', account: 'Boleto' },
+      { desc: 'Água', date: '2026-10-10', type: 'Despesa', value: 80, recurrence: 'unico', status: 'Pendente', account: 'Boleto' },
+      { desc: 'Paga', date: '2026-10-18', type: 'Despesa', value: 10, recurrence: 'unico', status: 'Pago', account: 'Pix' },
+    ], cartoes: [] };
+    const l = montarLembrete(dados, '2026-10-18');
+    assert.equal(l.titulo, '1 conta vence hoje');
+    assert.match(l.corpo, /Hoje: Luz/);
+    assert.match(l.corpo, /Amanhã: Internet/);
+    assert.match(l.corpo, /1 em atraso/);
+    assert.equal(montarLembrete({ transacoes: [], cartoes: [] }, '2026-10-18'), null);
+  });
+});

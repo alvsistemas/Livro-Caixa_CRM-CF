@@ -44,14 +44,29 @@
 - Ferramentas novas do financeiro: `resumo_financeiro`, `lancamentos_financeiros`, `cartoes_objetivos_investimentos` (contas em `server/utils/financeiroResumo.js`, espelhando a aba Lucro, incluindo vendas/comissões do CRM).
 - Aba Assistente do financeiro: alertas + atalhos que mandam a pergunta para a bolinha. O antigo robô de palavras-chave saiu.
 
+## Animação de abrir/fechar aplicativo
+- `public/js/transicao-apps.js` + `public/css/transicao-apps.css`, carregados no `<head>` de `inicio.html`, `index.html` e `financeiro/index.html`.
+- Abrir: na tela de escolha, o cartão vira uma "caixa" (ícone + nome) que cresce até a tela cheia e então navega; o app chega coberto da mesma cor e a caixa some aos poucos.
+- Fechar: o clique em qualquer link para `inicio.html` (delegado) cobre a tela com a caixa do app; na escolha, ela encolhe até o cartão.
+- Passa entre páginas pelo sessionStorage (`transicao-app`, vale 8 s). Sem animação com prefers-reduced-motion; Ctrl/Cmd+clique abre normal; trata o voltar do navegador (pageshow).
+
+## Controle financeiro completo (versão 20261109)
+- `public/financeiro/calculos.js`: regra única de lançamentos (único / fixo com `fimEm` / parcelado, `excecoes[AAAA-MM]` = { status, value, removido }), faturas por cartão (fechamento → mês de vencimento), limite usado (inclui parcelas futuras), saldo de conta, a pagar e receber, plano de quitação (avalanche / bola de neve). Usado pelo site E pelo servidor (IA e lembretes). Testes em `server/test/calculosFinanceiro.test.js`.
+- Telas novas (um arquivo cada, registradas em `TELAS`): A pagar e receber + Contas e saldo (`contas.js`), Cartões (`cartoes.js`), Orçamento + Categorias (`orcamento.js`), Dívidas (`dividas.js`), Comprovantes (`comprovantes.js`), Importar extrato OFX/CSV e Livro-Caixa antigo (`importar.js`), Relatórios/gráficos/resumo anual/IR/exportar Excel-PDF (`relatorios.js`), Aparência/Lembretes/Níveis (`perfil.js`).
+- Status de fixo/parcelado é por mês; mudar valor ou excluir pergunta "só este mês / daqui em diante / todos".
+- Banco: migração `003_financeiro_novo.sql` — `financeiro_itens` (listas contas, transferencias, dividas, orcamentos, categorias; uma linha por item, jsonb) e `financeiro_comprovantes` (arquivo em bytea, até 3 MB, confere a assinatura do arquivo). Rotas `/api/financeiro/comprovantes`.
+- Cores: config.corDestaque = 'personagem' | 'crm' | '#hex'; modo noturno compartilhado com o CRM (localStorage darkMode). Cores do JS viraram variáveis CSS (tema escuro em styles.css).
+- IA: ferramenta `criar_lancamento` (lança pela bolinha); a bolinha salva o pendente antes (`antesDeEnviar`) e o financeiro recarrega depois (`depoisDeAlterar`, resposta com `dadosAlterados`).
+- Lembrete diário de contas (push, 8h de Brasília): `server/utils/lembreteFinanceiro.js`; marca `config.lembreteEnviadoEm` (o servidor preserva essa chave quando o site salva a config); desliga em Meu perfil → Lembretes.
+- Livro-Caixa antigo: versão com botão "Exportar meus dados" em `livro-caixa-antigo-com-exportar.zip`; no novo, Meu perfil → Importar dados.
+- Login que voltava pra tela de login: erro do banco no `middleware/auth.js` virava 401 (agora 503 + "tentarDeNovo"); senha atual/código 2FA errados em rotas logadas também davam 401 (agora 400). O site repete sozinho em 502/503/504. `db/pool.js` repete a consulta só quando a conexão caiu antes de rodar e descarta conexões quebradas.
+
 ## O que saiu do Livro-Caixa antigo
 - Dados de exemplo (seeds): conta nova começa vazia.
 - A aba "Comissões" de consórcio (fórmula da carta de crédito): as comissões agora vêm do CRM.
 
 ## Pendências
 - **Plano premium removido por enquanto** (a pedido): todas as abas do financeiro liberadas, sem cadeados, sem tela de bloqueio e sem o cartão "Plano". Refazer depois como sistema de assinatura de verdade (cobrança real, ligado aos planos da página de divulgação). O campo `perfil.plan` de contas antigas fica salvo, mas não é usado.
-- Dados do Livro-Caixa antigo (salvos no navegador) não são importados automaticamente.
 - Trocar `SEU-APP.onrender.com` pelo endereço real (página de divulgação, README, `.env.example`, `utils/email.js`).
 - E-mails de contato em `privacidade.html` e `termos.html` ainda são `SEU-EMAIL-DE-CONTATO-AQUI`.
 - WhatsApp oficial exige empresa verificada na Meta; na YCloud, cadastrar o webhook novo.
-- Login às vezes volta para a tela de login (antigo, não diagnosticado).

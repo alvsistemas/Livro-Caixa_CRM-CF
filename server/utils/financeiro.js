@@ -1,6 +1,10 @@
 /* Regras do Controle financeiro no servidor: quais seções existem e o que cada uma aceita. */
 
-const SECOES_LISTA = ['transacoes', 'cartoes', 'investimentos', 'objetivos'];
+// Listas com tabela própria (colunas fixas)
+const SECOES_TABELA = ['transacoes', 'cartoes', 'investimentos', 'objetivos'];
+// Listas novas, guardadas em financeiro_itens (um item por linha, campos em jsonb)
+const SECOES_ITENS = ['contas', 'transferencias', 'dividas', 'orcamentos', 'categorias'];
+const SECOES_LISTA = [...SECOES_TABELA, ...SECOES_ITENS];
 const SECOES_OBJETO = ['perfil', 'config'];
 const SECOES = [...SECOES_LISTA, ...SECOES_OBJETO];
 
@@ -23,6 +27,7 @@ function validarSecao(secao, valor) {
     if (!Array.isArray(valor)) return { ok: false, erro: 'Era esperada uma lista.' };
     if (valor.length > MAX_ITENS) return { ok: false, erro: 'Itens demais nessa lista.' };
     if (!valor.every(ehObjetoSimples)) return { ok: false, erro: 'Cada item da lista precisa ser um objeto.' };
+    if (SECOES_ITENS.includes(secao) && valor.length > 2000) return { ok: false, erro: 'Itens demais nessa lista.' };
     return { ok: true, valor };
   }
 
@@ -48,7 +53,9 @@ function validarSecao(secao, valor) {
 
 // Formato devolvido pro front-end, mesmo quando o usuário ainda não salvou nada.
 function dadosPadrao() {
-  return { transacoes: [], cartoes: [], investimentos: [], objetivos: [], perfil: null, config: {} };
+  const base = { perfil: null, config: {} };
+  for (const s of SECOES_LISTA) base[s] = [];
+  return base;
 }
 
 function serializar(doc) {
@@ -59,7 +66,7 @@ function serializar(doc) {
   return base;
 }
 
-module.exports = { SECOES, SECOES_LISTA, SECOES_OBJETO, MODOS_INTEGRACAO, validarSecao, dadosPadrao, serializar };
+module.exports = { SECOES, SECOES_LISTA, SECOES_TABELA, SECOES_ITENS, SECOES_OBJETO, MODOS_INTEGRACAO, validarSecao, dadosPadrao, serializar };
 
 /* ------------------------------------------------------------------ */
 /* Gravação no PostgreSQL: cada lista vira linhas de uma tabela própria */
@@ -150,6 +157,8 @@ async function carregarFinanceiro(userId) {
     const { rows } = await query(`SELECT * FROM ${def.tabela} WHERE user_id = $1::uuid ORDER BY posicao, created_at`, [userId]);
     dados[secao] = rows.map((r) => linhaParaItem(def, r));
   }
+  const itens = await query('SELECT secao, id, dados FROM financeiro_itens WHERE user_id = $1::uuid ORDER BY secao, posicao, created_at', [userId]);
+  for (const r of itens.rows) if (dados[r.secao]) dados[r.secao].push({ ...(r.dados || {}), id: r.id });
   const { rows } = await query('SELECT perfil, config FROM financeiro_perfis WHERE user_id = $1::uuid', [userId]);
   if (rows[0]) {
     dados.perfil = rows[0].perfil || null;
@@ -161,13 +170,18 @@ async function carregarFinanceiro(userId) {
 // Substitui uma seção inteira (já validada por validarSecao), numa transação só
 async function salvarSecaoFinanceiro(userId, secao, valor) {
   if (SECOES_OBJETO.includes(secao)) {
+    // config: preserva a marca que o servidor grava (dia do último lembrete enviado)
+    const novo = secao === 'config'
+      ? `EXCLUDED.config || COALESCE(jsonb_strip_nulls(jsonb_build_object('lembreteEnviadoEm', financeiro_perfis.config->'lembreteEnviadoEm')), '{}'::jsonb)`
+      : `EXCLUDED.${secao}`;
     await query(
       `INSERT INTO financeiro_perfis (user_id, ${secao}) VALUES ($1::uuid, $2::jsonb)
-       ON CONFLICT (user_id) DO UPDATE SET ${secao} = EXCLUDED.${secao}, updated_at = now()`,
+       ON CONFLICT (user_id) DO UPDATE SET ${secao} = ${novo}, updated_at = now()`,
       [userId, JSON.stringify(valor === undefined ? null : (secao === 'config' && !valor ? {} : valor))]
     );
     return;
   }
+  if (SECOES_ITENS.includes(secao)) return salvarItens(userId, secao, valor);
   const def = TABELAS[secao];
   // ids repetidos: fica o último (é o que o front-end teria mostrado por último)
   const porId = new Map();
@@ -199,6 +213,35 @@ async function salvarSecaoFinanceiro(userId, secao, valor) {
       await query(
         `INSERT INTO ${def.tabela} (${cols.join(', ')}) VALUES ${linhas.join(', ')}
          ON CONFLICT (user_id, id) DO UPDATE SET ${atualiza.join(', ')}, updated_at = now()`,
+        params
+      );
+    }
+  });
+}
+
+// Listas novas: substitui todos os itens da seção (um item por linha em financeiro_itens)
+async function salvarItens(userId, secao, valor) {
+  const porId = new Map();
+  valor.forEach((item, posicao) => {
+    const id = texto(item.id).slice(0, 100) || `sem-id-${posicao}`;
+    const { id: _ignora, ...dados } = item;
+    porId.set(id, { id, dados, posicao });
+  });
+  await transacao(async () => {
+    const ids = [...porId.keys()];
+    await query('DELETE FROM financeiro_itens WHERE user_id = $1::uuid AND secao = $2 AND NOT (id = ANY($3::text[]))', [userId, secao, ids]);
+    const lista = [...porId.values()];
+    const LOTE = 300;
+    for (let i = 0; i < lista.length; i += LOTE) {
+      const params = [userId, secao];
+      const linhas = lista.slice(i, i + LOTE).map(({ id, dados, posicao }) => {
+        params.push(id, posicao, JSON.stringify(dados));
+        const n = params.length;
+        return `($1::uuid, $2, $${n - 2}, $${n - 1}, $${n}::jsonb)`;
+      });
+      await query(
+        `INSERT INTO financeiro_itens (user_id, secao, id, posicao, dados) VALUES ${linhas.join(', ')}
+         ON CONFLICT (user_id, secao, id) DO UPDATE SET posicao = EXCLUDED.posicao, dados = EXCLUDED.dados, updated_at = now()`,
         params
       );
     }

@@ -9,8 +9,15 @@ Depois do login, a tela `inicio.html` pergunta qual aplicativo abrir:
 
 - **CRM** (`index.html`) — funil de vendas, clientes, conversas, tarefas, comissões.
 - **Controle financeiro** (`financeiro/`) — o antigo Livro-Caixa: receitas e despesas
-  (únicas, fixas ou parceladas), cartões, investimentos, objetivos, área da Empresa,
-  assistente e a aba **Lucro**.
+  (únicas, fixas com data de fim ou parceladas, com ajuste "só este mês"), contas e saldo
+  real, transferências, contas a pagar e receber (com lembrete no celular), fatura de cada
+  cartão, orçamento por categoria, dívidas com plano de quitação, investimentos, objetivos,
+  área da Empresa, relatórios (gráficos, resumo anual e ajuda para o IR), importação de
+  extrato (OFX/CSV) e do Livro-Caixa antigo, exportação Excel/PDF, comprovantes, categorias
+  personalizadas, modo noturno, níveis por perfil e a aba **Lucro**.
+  Arquivos: `calculos.js` (todas as contas, usado também pelo servidor), `script.js`
+  (núcleo e telas antigas) e um arquivo por tela nova (`contas.js`, `cartoes.js`,
+  `orcamento.js`, `dividas.js`, `comprovantes.js`, `importar.js`, `relatorios.js`, `perfil.js`).
 
 Os dois usam a mesma conta (mesmo token). O botão **Trocar de aplicativo** fica no
 fim da barra lateral dos dois. A raiz do site (`/`) redireciona para `inicio.html`.

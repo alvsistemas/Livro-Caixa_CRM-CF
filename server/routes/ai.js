@@ -8,7 +8,7 @@ const Contrato = require('../models/Contrato');
 const Funil = require('../models/Funil');
 const { perguntarIA, chamarIA } = require('../utils/ia');
 const { resumoComissoesDoMes } = require('../utils/comissaoResumo');
-const { carregarFinanceiro } = require('../utils/financeiro');
+const { carregarFinanceiro, salvarSecaoFinanceiro } = require('../utils/financeiro');
 const { resumoDoMes, lancamentosDoMes, cartoesObjetivosInvestimentos } = require('../utils/financeiroResumo');
 
 const router = express.Router();
@@ -130,6 +130,8 @@ E estas são as áreas do Controle financeiro:
 - **Meu perfil**: nome, foto, personagem (trocar personagem ou refazer as perguntas do primeiro acesso) e nível de evolução.
 - **Personagens**: no primeiro acesso a pessoa responde perguntas rápidas e recebe um perfil (O Organizado, O Endividado, O Consumista, O Investidor, ou as versões femininas, como A Empresária e A Investidora), com um nome que ela escolhe. O perfil define a cor do painel e o estilo das dicas.
 
+**Lançar pela conversa**: quando a pessoa pedir para lançar, registrar ou anotar um gasto ou uma receita (ex.: "gastei 52 reais no mercado no débito", "recebi 1.500 do cliente João"), use a ferramenta criar_lancamento. Só pergunte se faltar o valor. Não pergunte detalhes opcionais: escolha a categoria pelo contexto, use a data de hoje se ela não disser outra e a forma de pagamento que ela mencionar (débito = Conta Corrente, crédito = Cartão de Crédito). Depois confirme em uma frase o que foi lançado (valor, categoria, data e forma) e diga que dá pra ajustar em Lançamentos. Nunca crie lançamentos que a pessoa não pediu, e um pedido cria um lançamento só (a não ser que ela liste vários).
+
 Se o usuário perguntar algo específico dos dados dele (tipo "quantos leads eu tenho", "quanto vou receber de comissão", "quanto gastei esse mês", "qual foi meu lucro"), USE as ferramentas disponíveis pra consultar os dados reais antes de responder — nunca invente números. Valores em reais, no formato brasileiro (R$ 1.234,56). Se a pergunta não tiver nada a ver com o sistema ou com as finanças e vendas da pessoa, responda com educação que seu foco é ajudar com o Livro-Caixa.`;
 
 // Personagens do Controle financeiro (mesmos ids de public/financeiro/script.js)
@@ -206,6 +208,28 @@ const FERRAMENTAS_ASSISTENTE = [
     input_schema: { type: 'object', properties: {} },
   },
   {
+    name: 'criar_lancamento',
+    description: 'Controle financeiro: cria UM lançamento (receita ou despesa) quando a pessoa pede explicitamente para lançar/registrar algo. Devolve o que foi gravado.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        descricao: { type: 'string', description: 'Descrição curta, ex.: "Mercado", "Cliente João"' },
+        valor: { type: 'number', description: 'Valor em reais, positivo (de cada parcela, se parcelado)' },
+        tipo: { type: 'string', enum: ['Despesa', 'Receita'] },
+        categoria: { type: 'string', description: 'Categoria (ex.: Alimentação, Transporte, Moradia, Saúde, Lazer, Salário, Vendas). Se não souber, Outros.' },
+        data: { type: 'string', description: 'AAAA-MM-DD. Se não informado, hoje.' },
+        forma: { type: 'string', enum: ['Cartão de Crédito', 'Conta Corrente', 'Dinheiro', 'Pix', 'Boleto'] },
+        escopo: { type: 'string', enum: ['Pessoal', 'Empresa'] },
+        conta: { type: 'string', description: 'Nome da conta (banco/carteira) cadastrada, se a pessoa disser' },
+        cartao: { type: 'string', description: 'Nome do cartão cadastrado, se for no crédito e a pessoa disser qual' },
+        parcelas: { type: 'integer', description: 'Número de parcelas, se for parcelado (2 ou mais)' },
+        fixo: { type: 'boolean', description: 'true se for um gasto/receita que se repete todo mês' },
+        pago: { type: 'boolean', description: 'false se ainda vai pagar/receber. Padrão: true se a data já passou ou é hoje.' },
+      },
+      required: ['descricao', 'valor'],
+    },
+  },
+  {
     name: 'buscar_lead',
     description: 'Busca um cliente/lead específico do usuário pelo nome (ou parte do nome) e retorna seus dados (coluna atual, valor, temperatura, telefone).',
     input_schema: {
@@ -270,6 +294,8 @@ async function executarFerramenta(nome, input, userId) {
     return lancamentosDoMes(dados, crm, mes, { tipo: input && input.tipo, categoria: input && input.categoria });
   }
 
+  if (nome === 'criar_lancamento') return criarLancamentoPelaIA(input || {}, userId);
+
   if (nome === 'buscar_lead') {
     const nome_ = (input && input.nome || '').trim();
     if (!nome_) return { encontrados: [] };
@@ -283,6 +309,50 @@ async function executarFerramenta(nome, input, userId) {
   }
 
   return { erro: 'Ferramenta desconhecida.' };
+}
+
+const CATEGORIAS_PADRAO = {
+  Despesa: ['Moradia', 'Alimentação', 'Transporte', 'Saúde', 'Educação', 'Lazer', 'Assinaturas', 'Impostos', 'Cartão de Crédito', 'Dívidas', 'Marketing', 'Fornecedores', 'Salários', 'Comissões', 'Ferramentas/Software', 'Aluguel Comercial', 'Outros'],
+  Receita: ['Salário', 'Freelance', 'Vendas', 'Serviços Prestados', 'Comissão', 'Dividendos', 'Rendimentos', 'Reembolso', 'Outros'],
+};
+const FORMAS = ['Cartão de Crédito', 'Conta Corrente', 'Dinheiro', 'Pix', 'Boleto'];
+const hojeEmBrasilia = () => new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' });
+const semAcento = (t) => String(t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+
+// Grava um lançamento pedido na conversa (validando tudo: a IA pode mandar qualquer coisa)
+async function criarLancamentoPelaIA(input, userId) {
+  const valor = Math.round(Math.abs(Number(input.valor)) * 100) / 100;
+  if (!Number.isFinite(valor) || valor <= 0 || valor > 100000000) return { erro: 'Valor inválido: pergunte o valor à pessoa.' };
+  const descricao = String(input.descricao || '').trim().slice(0, 140);
+  if (!descricao) return { erro: 'Falta a descrição.' };
+  const dados = await carregarFinanceiro(userId);
+  const tipo = input.tipo === 'Receita' ? 'Receita' : 'Despesa';
+  const minhas = (dados.categorias || []).filter((c) => c.tipo === tipo).map((c) => c.nome);
+  const todas = [...CATEGORIAS_PADRAO[tipo], ...minhas];
+  const categoria = todas.find((c) => semAcento(c) === semAcento(input.categoria)) || 'Outros';
+  const hoje = hojeEmBrasilia();
+  const data = /^\d{4}-\d{2}-\d{2}$/.test(String(input.data || '')) ? input.data : hoje;
+  const forma = FORMAS.includes(input.forma) ? input.forma : 'Pix';
+  const parcelas = parseInt(input.parcelas, 10) >= 2 ? Math.min(120, parseInt(input.parcelas, 10)) : null;
+  const tx = {
+    id: Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4),
+    date: data, desc: descricao, type: tipo, category: categoria,
+    scope: input.escopo === 'Empresa' ? 'Empresa' : 'Pessoal', account: forma,
+    status: input.pago === false ? 'Pendente' : (data > hoje ? 'Agendado' : 'Pago'),
+    value: valor, recurrence: parcelas ? 'parcelado' : (input.fixo ? 'fixo' : 'unico'), parcelas,
+    criadoPelaIA: true,
+  };
+  if (forma === 'Cartão de Crédito') {
+    const cartoes = dados.cartoes || [];
+    const c = cartoes.find((x) => semAcento(x.name) === semAcento(input.cartao)) || (cartoes.length === 1 ? cartoes[0] : null);
+    if (c) tx.cardId = c.id;
+  } else {
+    const contas = dados.contas || [];
+    const k = contas.find((x) => semAcento(x.name) === semAcento(input.conta)) || (contas.length === 1 ? contas[0] : null);
+    if (k) tx.contaId = k.id;
+  }
+  await salvarSecaoFinanceiro(userId, 'transacoes', [tx, ...(dados.transacoes || [])]);
+  return { ok: true, lancamento: { descricao, valor, tipo, categoria, data, forma, status: tx.status, recorrencia: tx.recurrence, parcelas } };
 }
 
 // POST /api/ai/assistente -> chat de ajuda geral sobre o sistema (bolinha flutuante),
@@ -300,8 +370,9 @@ router.post('/assistente', async (req, res) => {
       content: String(m.content || '').slice(0, 2000),
     }));
 
-    const systemPrompt = `${SYSTEM_PROMPT_ASSISTENTE}\n\n${await contextoDaPessoa(req.userId, contexto)}`;
+    const systemPrompt = `${SYSTEM_PROMPT_ASSISTENTE}\n\nHoje é ${hojeEmBrasilia()}. ${await contextoDaPessoa(req.userId, contexto)}`;
     let resposta = '';
+    let dadosAlterados = false;
     for (let rodada = 0; rodada < 4; rodada++) {
       const data = await chamarIA({
         system: systemPrompt,
@@ -318,6 +389,7 @@ router.post('/assistente', async (req, res) => {
           let resultado;
           try {
             resultado = await executarFerramenta(bloco.name, bloco.input, req.userId);
+            if (bloco.name === 'criar_lancamento' && resultado && resultado.ok) dadosAlterados = true;
           } catch (err) {
             resultado = { erro: 'Não foi possível consultar essa informação agora.' };
           }
@@ -332,7 +404,7 @@ router.post('/assistente', async (req, res) => {
       break;
     }
 
-    res.json({ resposta: resposta || 'Não consegui formular uma resposta agora — tenta reformular a pergunta?' });
+    res.json({ resposta: resposta || 'Não consegui formular uma resposta agora — tenta reformular a pergunta?', dadosAlterados });
   } catch (err) {
     res.status(500).json({ error: err.message || 'Erro ao consultar o assistente.' });
   }

@@ -236,6 +236,68 @@ describe('API com PostgreSQL (integração)', { skip: pular }, () => {
     assert.equal(daBia.pessoal.despesas, 0);
   });
 
+  test('Controle financeiro: listas novas, comprovantes e lançar pela IA', async () => {
+    const t = contas.ana.token;
+    // listas novas (contas, transferências, dívidas, orçamentos, categorias)
+    const contasFin = [{ id: 'k1', name: 'Nubank', tipo: 'Conta digital', saldoInicial: 1000.5, dataSaldo: '2026-10-01' }, { id: 'k2', name: 'Poupança', tipo: 'Poupança', saldoInicial: 0, dataSaldo: '2026-10-01' }];
+    assert.equal((await api('PUT', '/api/financeiro/contas', { valor: contasFin }, t)).status, 200);
+    assert.equal((await api('PUT', '/api/financeiro/transferencias', { valor: [{ id: 'tr1', data: '2026-10-05', deContaId: 'k1', paraContaId: 'k2', valor: 300 }] }, t)).status, 200);
+    assert.equal((await api('PUT', '/api/financeiro/dividas', { valor: [{ id: 'd1', name: 'Cartão', saldo: 2000, juros: 12, parcela: 150 }] }, t)).status, 200);
+    assert.equal((await api('PUT', '/api/financeiro/orcamentos', { valor: [{ id: 'o1', category: 'Alimentação', limite: 800 }] }, t)).status, 200);
+    assert.equal((await api('PUT', '/api/financeiro/categorias', { valor: [{ id: 'c1', nome: 'Pet', tipo: 'Despesa', dedutivel: false }] }, t)).status, 200);
+    const r = await api('GET', '/api/financeiro', undefined, t);
+    assert.deepEqual(r.dados.dados.contas.map((k) => k.name), ['Nubank', 'Poupança']);
+    assert.equal(r.dados.dados.contas[0].saldoInicial, 1000.5);
+    assert.equal(r.dados.dados.transferencias[0].valor, 300);
+    assert.equal(r.dados.dados.dividas[0].juros, 12);
+    assert.equal(r.dados.dados.orcamentos[0].category, 'Alimentação');
+    assert.equal(r.dados.dados.categorias[0].nome, 'Pet');
+    // remover um item da lista apaga
+    await api('PUT', '/api/financeiro/contas', { valor: [contasFin[0]] }, t);
+    assert.equal((await api('GET', '/api/financeiro', undefined, t)).dados.dados.contas.length, 1);
+    // outra pessoa não vê
+    assert.equal((await api('GET', '/api/financeiro', undefined, contas.bia.token)).dados.dados.dividas.length, 0);
+
+    // comprovantes
+    const png = 'data:image/png;base64,' + Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1, 2, 3]).toString('base64');
+    const up = await api('POST', '/api/financeiro/comprovantes', { lancamentoId: 'ia2', nome: 'recibo.png', tipo: 'image/png', dados: png }, t);
+    assert.equal(up.status, 201, JSON.stringify(up.dados));
+    const falso = await api('POST', '/api/financeiro/comprovantes', { lancamentoId: 'ia2', nome: 'x.pdf', tipo: 'application/pdf', dados: png }, t);
+    assert.equal(falso.status, 400); // diz que é PDF mas não é
+    const arquivo = await fetch(`${base}/api/financeiro/comprovantes/${up.dados.id}`, { headers: { Authorization: `Bearer ${t}` } });
+    assert.equal(arquivo.status, 200);
+    assert.equal(arquivo.headers.get('content-type'), 'image/png');
+    const daBia = await fetch(`${base}/api/financeiro/comprovantes/${up.dados.id}`, { headers: { Authorization: `Bearer ${contas.bia.token}` } });
+    assert.equal(daBia.status, 404); // Row-Level Security: não existe pra ela
+    const lista = await api('GET', '/api/financeiro/comprovantes?lancamento=ia2', undefined, t);
+    assert.equal(lista.dados.comprovantes.length, 1);
+    assert.equal((await api('DELETE', `/api/financeiro/comprovantes/${up.dados.id}`, undefined, t)).status, 204);
+
+    // a IA cria um lançamento (validando o que ela manda)
+    const { comoUsuario } = require('../db/contexto');
+    const { executarFerramenta } = require('../routes/ai');
+    const criado = await comoUsuario(contas.ana.id, () => executarFerramenta('criar_lancamento', { descricao: 'Mercado', valor: 52.3, categoria: 'alimentacao', forma: 'Conta Corrente', conta: 'nubank' }, contas.ana.id));
+    assert.equal(criado.ok, true, JSON.stringify(criado));
+    assert.equal(criado.lancamento.categoria, 'Alimentação');
+    const depois = (await api('GET', '/api/financeiro', undefined, t)).dados.dados.transacoes;
+    const tx = depois.find((x) => x.desc === 'Mercado' && x.criadoPelaIA);
+    assert.ok(tx);
+    assert.equal(tx.value, 52.3);
+    assert.equal(tx.contaId, 'k1');
+    assert.ok(depois.some((x) => x.id === 'ia1'), 'os lançamentos que já existiam continuam');
+    const invalido = await comoUsuario(contas.ana.id, () => executarFerramenta('criar_lancamento', { descricao: 'X', valor: -0 }, contas.ana.id));
+    assert.ok(invalido.erro);
+
+    // o lembrete diário não é apagado quando o site salva a configuração
+    const { query } = require('../db/pool');
+    const { comoSistema } = require('../db/contexto');
+    await comoSistema(() => query(`UPDATE financeiro_perfis SET config = config || '{"lembreteEnviadoEm":"2026-10-18"}' WHERE user_id = $1::uuid`, [contas.ana.id]));
+    await api('PUT', '/api/financeiro/config', { valor: { integracaoCrm: 'vendas', corDestaque: '#1D4E89' } }, t);
+    const cfg = (await api('GET', '/api/financeiro', undefined, t)).dados.dados.config;
+    assert.equal(cfg.lembreteEnviadoEm, '2026-10-18');
+    assert.equal(cfg.corDestaque, '#1D4E89');
+  });
+
   test('equipe: gestor vê o resumo dos membros e passa um lead pra outra pessoa', async () => {
     const ana = contas.ana.token;
     const eq = await api('POST', '/api/equipe', { nome: 'Time A' }, ana);

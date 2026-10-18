@@ -1,6 +1,6 @@
 /* =======================================================================
    Livro-Caixa — Controle financeiro (Pessoal & Empresa)
-   Vanilla JS. Os dados ficam na conta do usuário (MongoDB, rota /api/financeiro)
+   Vanilla JS. Os dados ficam na conta do usuário (PostgreSQL, rota /api/financeiro)
    e as vendas/comissões do CRM entram aqui como receitas, pra mostrar o lucro.
    ======================================================================= */
 
@@ -60,10 +60,22 @@ const TIPS = {
 /* ----------------------------------------------------------------------- */
 /* Constantes gerais                                                       */
 /* ----------------------------------------------------------------------- */
-const COLORS = { pessoal: "#2F6F4E", empresa: "#A15C38", gold: "#B9922E", red: "#B33F3F", ink: "#1C2B22" };
+// Cores como variáveis do CSS: assim valem no modo claro e no escuro (ver styles.css)
+const COLORS = { pessoal: "var(--pessoal)", empresa: "var(--empresa)", gold: "var(--gold)", red: "var(--red)", ink: "var(--ink)" };
 
-const CATEGORIAS_DESPESA = ["Moradia","Alimentação","Transporte","Saúde","Educação","Lazer","Assinaturas","Impostos","Cartão de Crédito","Marketing","Fornecedores","Salários","Comissões","Ferramentas/Software","Aluguel Comercial","Outros"];
+const CATEGORIAS_DESPESA = ["Moradia","Alimentação","Transporte","Saúde","Educação","Lazer","Assinaturas","Impostos","Cartão de Crédito","Dívidas","Marketing","Fornecedores","Salários","Comissões","Ferramentas/Software","Aluguel Comercial","Outros"];
 const CATEGORIAS_RECEITA = ["Salário","Freelance","Vendas","Serviços Prestados","Comissão","Dividendos","Rendimentos","Reembolso","Outros"];
+// Categorias dedutíveis no Imposto de Renda (resumo anual) — as personalizadas podem ser marcadas também
+const CATEGORIAS_DEDUTIVEIS = ["Saúde", "Educação"];
+// Padrão + as que a pessoa criou (em Meu perfil → Categorias), com "Outros" sempre por último
+function categoriasDe(tipo) {
+  const base = tipo === "Receita" ? CATEGORIAS_RECEITA : CATEGORIAS_DESPESA;
+  const minhas = (state.categorias || []).filter((c) => c.tipo === tipo).map((c) => c.nome).filter((n) => n && !base.includes(n));
+  return [...base.filter((c) => c !== "Outros"), ...minhas, "Outros"];
+}
+function ehDedutivel(categoria) {
+  return CATEGORIAS_DEDUTIVEIS.includes(categoria) || (state.categorias || []).some((c) => c.nome === categoria && c.dedutivel);
+}
 const CONTAS = ["Cartão de Crédito","Conta Corrente","Dinheiro","Pix","Boleto"];
 const TIPOS_INVEST = ["Renda Fixa","Renda Variável","Fundos","Cripto","Previdência","Outros"];
 
@@ -107,14 +119,23 @@ function sair() {
   localStorage.removeItem("user");
   window.location.href = "../login.html";
 }
-async function api(method, path, body) {
+// Servidor acordando ou ocupado (502/503/504): tenta de novo sozinho, sem deslogar.
+// GET sempre pode repetir; gravações só quando o servidor avisa que nem chegaram a rodar.
+async function api(method, path, body, tentativa = 0) {
   const opts = { method, headers: { Authorization: "Bearer " + sessionToken } };
   if (body !== undefined) { opts.headers["Content-Type"] = "application/json"; opts.body = JSON.stringify(body); }
   const res = await fetch(API_BASE + path, opts);
   if (res.status === 401) { sair(); throw new Error("Sessão expirada."); }
   let data = null;
   try { data = await res.json(); } catch (e) {}
-  if (!res.ok) throw new Error((data && data.error) || "Erro de comunicação com o servidor.");
+  if (!res.ok) {
+    const acordando = [502, 503, 504].includes(res.status) && (method === "GET" || (data && data.tentarDeNovo));
+    if (acordando && tentativa < 2) {
+      await new Promise((ok) => setTimeout(ok, tentativa ? 2500 : 1000));
+      return api(method, path, body, tentativa + 1);
+    }
+    throw new Error((data && data.error) || (acordando ? "O servidor está acordando. Tente de novo em alguns segundos." : "Erro de comunicação com o servidor."));
+  }
   return data;
 }
 
@@ -130,6 +151,12 @@ const state = {
   goals: [],
   profile: null,
   config: { integracaoCrm: "vendas", descontarComissoes: false },
+  contas: [],
+  transferencias: [],
+  dividas: [],
+  orcamentos: [],
+  categorias: [],
+  filtros: { texto: "", tipo: "", categoria: "", status: "", forma: "", todosMeses: false },
   crm: { columns: [], cards: [], contratos: [], carregado: false, erro: null },
   user: null,
 };
@@ -137,7 +164,7 @@ const state = {
 /* Salvamento: cada alteração marca a seção como "pendente" e, depois de uma pausa
    curta, manda só as seções alteradas pro servidor. Se falhar (sem internet, etc.),
    tenta de novo sozinho e avisa no rodapé da barra lateral. */
-const SECAO_ESTADO = { transacoes: "txs", cartoes: "cards", investimentos: "invs", objetivos: "goals", perfil: "profile", config: "config" };
+const SECAO_ESTADO = { transacoes: "txs", cartoes: "cards", investimentos: "invs", objetivos: "goals", perfil: "profile", config: "config", contas: "contas", transferencias: "transferencias", dividas: "dividas", orcamentos: "orcamentos", categorias: "categorias" };
 const salvamento = { pendentes: new Set(), timer: null, salvando: false, erro: null };
 function persist(secao) {
   salvamento.pendentes.add(secao);
@@ -183,6 +210,19 @@ function saveInvs() { persist("investimentos"); }
 function saveGoals() { persist("objetivos"); }
 function saveProfile() { persist("perfil"); }
 function saveConfig() { persist("config"); }
+function saveContas() { persist("contas"); }
+function saveTransferencias() { persist("transferencias"); }
+function saveDividas() { persist("dividas"); }
+function saveOrcamentos() { persist("orcamentos"); }
+function saveCategorias() { persist("categorias"); }
+// Espera tudo que está pendente chegar no servidor (antes de a IA gravar algo, por exemplo)
+async function salvarTudoAgora() {
+  clearTimeout(salvamento.timer);
+  for (let i = 0; i < 20 && (salvamento.salvando || salvamento.pendentes.size); i++) {
+    if (!salvamento.salvando) await enviarPendentes();
+    else await new Promise((ok) => setTimeout(ok, 150));
+  }
+}
 
 /* ----------------------------------------------------------------------- */
 /* Integração com o CRM                                                     */
@@ -262,11 +302,37 @@ function totalCrm(rows) { return rows.filter((r) => r.tx.origem === "crm" && r.t
 /* ----------------------------------------------------------------------- */
 /* Tema dinâmico                                                            */
 /* ----------------------------------------------------------------------- */
-function applyTheme() {
+// Cor de destaque: a do personagem (padrão), a mesma do CRM, ou uma escolhida em Meu perfil.
+// O modo escuro é o mesmo do CRM (fica salvo no navegador e vale nos dois aplicativos).
+const ACCENT_PRESETS = ["#141414", "#1D4E89", "#1F4D3A", "#6E1E2B", "#9C6B12", "#4A2E6F"]; // as cores do CRM
+const modoEscuro = () => { try { return localStorage.getItem("darkMode") === "1"; } catch (e) { return false; } };
+function definirModoEscuro(ligado) {
+  try { localStorage.setItem("darkMode", ligado ? "1" : "0"); } catch (e) { /* ignora */ }
+  document.documentElement.setAttribute("data-theme", ligado ? "dark" : "light");
+}
+function corDeDestaque() {
+  const escolha = (state.config && state.config.corDestaque) || "personagem";
+  if (escolha === "crm") { try { return localStorage.getItem("accentColor") || ACCENT_PRESETS[0]; } catch (e) { return ACCENT_PRESETS[0]; } }
+  if (/^#[0-9a-f]{6}$/i.test(escolha)) return escolha;
   const char = getCharacter();
-  const colors = char ? PROFILE_COLORS[char.profile] : PROFILE_COLORS.organizadora;
-  document.documentElement.style.setProperty("--char", colors.primary);
-  document.documentElement.style.setProperty("--char-soft", colors.soft);
+  return (char ? PROFILE_COLORS[char.profile] : PROFILE_COLORS.organizadora).primary;
+}
+function luminancia(hex) {
+  const c = hex.replace("#", "").match(/.{2}/g).map((x) => { const v = parseInt(x, 16) / 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); });
+  return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
+}
+function clarear(hex, quanto) {
+  const c = hex.replace("#", "").match(/.{2}/g).map((x) => parseInt(x, 16));
+  return "#" + c.map((v) => Math.round(v + (255 - v) * quanto).toString(16).padStart(2, "0")).join("");
+}
+function applyTheme() {
+  const escuro = modoEscuro();
+  document.documentElement.setAttribute("data-theme", escuro ? "dark" : "light");
+  let cor = corDeDestaque();
+  // no escuro, uma cor muito escura (preto, por exemplo) sumiria no fundo: clareia um pouco
+  if (escuro && luminancia(cor) < 0.12) cor = clarear(cor, 0.38);
+  document.documentElement.style.setProperty("--char", cor);
+  document.documentElement.style.setProperty("--char-soft", `color-mix(in srgb, ${cor} ${escuro ? 22 : 13}%, var(--ivory))`);
 }
 function getCharacter() {
   if (!state.profile || !state.profile.character) return null;
@@ -276,28 +342,32 @@ function getCharacter() {
 /* ----------------------------------------------------------------------- */
 /* Motor de ocorrências (único / fixo / parcelado)                         */
 /* ----------------------------------------------------------------------- */
+// Linhas de um mês: { tx, value, badge, status, data, mes, ajustada }. A regra de cada
+// lançamento (único, fixo com fim, parcelado, ajustes de um mês só) fica em calculos.js.
 function occurrencesForMonth(month, scope) {
   const rows = [];
-  state.txs.forEach((tx) => {
-    if (scope && scope !== "Todos" && tx.scope !== scope) return;
-    const anchor = monthKey(tx.date);
-    if (tx.recurrence === "fixo") {
-      if (anchor <= month) rows.push({ tx, value: tx.value, badge: "Fixo" });
-    } else if (tx.recurrence === "parcelado") {
-      const idx = monthsBetween(anchor, month);
-      if (idx >= 0 && idx < (tx.parcelas || 1)) {
-        const value = parcelaValue(tx, idx);
-        rows.push({ tx, value, badge: `${idx + 1}/${tx.parcelas}` });
-      }
-    } else {
-      if (anchor === month) rows.push({ tx, value: tx.value, badge: null });
-    }
+  Calculos.ocorrenciasDoMes(state.txs, month).forEach((o) => {
+    if (scope && scope !== "Todos" && o.tx.scope !== scope) return;
+    rows.push({ tx: o.tx, value: o.valor, badge: o.parcela, status: o.status, data: o.data, mes: month, ajustada: o.ajustada });
   });
   crmRowsForMonth(month).forEach((r) => {
     if (scope && scope !== "Todos" && r.tx.scope !== scope) return;
-    rows.push(r);
+    rows.push({ ...r, status: r.tx.status, data: r.tx.date, mes: month });
   });
   return rows;
+}
+// Muda o status de um lançamento num mês. Fixo/parcelado: só naquele mês (os outros meses
+// continuam com o status padrão). Único: muda o próprio lançamento.
+function definirStatusNoMes(tx, mes, status) {
+  if (tx.recurrence === "fixo" || tx.recurrence === "parcelado") {
+    tx.excecoes = { ...(tx.excecoes || {}) };
+    const atual = { ...(tx.excecoes[mes] || {}) };
+    if (status === tx.status) delete atual.status; else atual.status = status;
+    if (Object.keys(atual).length) tx.excecoes[mes] = atual; else delete tx.excecoes[mes];
+  } else {
+    tx.status = status;
+  }
+  if (status === "Pago") tx.pagoEm = { ...(tx.pagoEm || {}), [mes]: todayISO() };
 }
 function sumsFromOccurrences(rows) {
   const rec = rows.filter((r) => r.tx.type === "Receita").reduce((a, r) => a + r.value, 0);
@@ -310,11 +380,14 @@ function parcelaValue(tx, idx) {
   if (tx.parcelas1 == null) return tx.value;
   return idx < tx.parcelas1 ? tx.value : (tx.value2 != null ? tx.value2 : tx.value);
 }
-function cardUsage() {
-  const rows = occurrencesForMonth(state.month).filter((r) => r.tx.account === "Cartão de Crédito" && r.tx.type === "Despesa");
-  const total = rows.reduce((a, r) => a + r.value, 0);
-  return state.cards.length ? total / state.cards.length : 0;
+// Fatura de um cartão que vence no mês e limite usado de verdade (ver calculos.js)
+function faturaDoMes(cartao, mes) {
+  const f = Calculos.faturasDoCartao(cartao, state.txs, state.cards, { ateMes: Calculos.somarMeses(mes, 1) })[mes];
+  return f || { mes, itens: [], total: 0 };
 }
+function limiteUsadoDoCartao(cartao) { return Calculos.limiteUsado(cartao, state.txs, state.cards); }
+// Os dados no formato que calculos.js espera
+function dadosParaCalculo() { return { transacoes: state.txs, cartoes: state.cards, contas: state.contas, transferencias: state.transferencias }; }
 
 /* ----------------------------------------------------------------------- */
 /* Navegação                                                                */
@@ -328,12 +401,15 @@ document.getElementById("nav").addEventListener("click", (e) => {
   render();
 });
 
+// Telas que ficam em arquivos próprios (contas.js, cartoes.js, orcamento.js...) se
+// registram aqui: TELAS.nome = { render, ligar }
+const TELAS = {};
 function render() {
   applyTheme();
   const main = document.getElementById("main");
-  if (state.tab === "dashboard") main.innerHTML = renderDashboard();
+  if (TELAS[state.tab]) main.innerHTML = TELAS[state.tab].render();
+  else if (state.tab === "dashboard") main.innerHTML = renderDashboard();
   else if (state.tab === "lancamentos") main.innerHTML = renderLancamentos();
-  else if (state.tab === "cartoes") main.innerHTML = renderCartoes();
   else if (state.tab === "investimentos") main.innerHTML = renderInvestimentos();
   else if (state.tab === "empresa") main.innerHTML = renderEmpresa();
   else if (state.tab === "objetivos") main.innerHTML = renderObjetivos();
@@ -341,6 +417,7 @@ function render() {
   else if (state.tab === "assistente") main.innerHTML = renderAssistente();
   else if (state.tab === "cadastro") main.innerHTML = renderCadastro();
   attachMainEvents();
+  if (typeof atualizarBadgeAPagar === "function") atualizarBadgeAPagar();
 }
 
 /* ----------------------------------------------------------------------- */
@@ -362,29 +439,36 @@ function recurBadge(badge) {
 }
 const STATUS_OPTIONS = ["Pago", "Pendente", "Agendado"];
 const STATUS_COLORS = {
-  Previsto: { text: "#2E5FA3", bg: "#E1E9F5" },
-  Pago: { text: COLORS.pessoal, bg: "#E3EEE7" },
-  Pendente: { text: COLORS.red, bg: "#F5E2E0" },
-  Agendado: { text: "#2E5FA3", bg: "#E1E9F5" },
+  Previsto: { text: "var(--azul)", bg: "var(--azul-soft)" },
+  Pago: { text: "var(--pessoal)", bg: "var(--pessoal-soft)" },
+  Pendente: { text: "var(--red)", bg: "var(--red-soft)" },
+  Agendado: { text: "var(--azul)", bg: "var(--azul-soft)" },
 };
-function statusSelect(tx) {
-  const c = STATUS_COLORS[tx.status] || STATUS_COLORS.Pago;
-  const opts = STATUS_OPTIONS.map((o) => `<option value="${o}" ${o === tx.status ? "selected" : ""}>${o}</option>`).join("");
-  return `<select class="status-select" data-id="${tx.id}" style="color:${c.text};background:${c.bg}">${opts}</select>`;
+// status da linha (no mês da linha — fixo/parcelado têm status por mês)
+function statusSelect(row) {
+  const st = row.status || row.tx.status;
+  const opts = STATUS_OPTIONS.map((o) => `<option value="${o}" ${o === st ? "selected" : ""}>${o}</option>`).join("");
+  return `<select class="status-select status-${(st || "Pago").toLowerCase()}" data-id="${row.tx.id}" data-mes="${row.mes || ""}" title="${row.tx.recurrence && row.tx.recurrence !== "unico" ? "Muda só neste mês" : ""}">${opts}</select>`;
 }
 function categorySelect(tx) {
-  const cats = tx.type === "Receita" ? CATEGORIAS_RECEITA : CATEGORIAS_DESPESA;
-  const opts = cats.map((c) => `<option value="${c}" ${c === tx.category ? "selected" : ""}>${escapeHtml(c)}</option>`).join("");
-  return `<select class="status-select cat-select" data-id="${tx.id}" style="color:${COLORS.ink};background:#F1F0EA">${opts}</select>`;
+  const cats = categoriasDe(tx.type);
+  if (tx.category && !cats.includes(tx.category)) cats.unshift(tx.category);
+  const opts = cats.map((c) => `<option value="${escapeHtml(c)}" ${c === tx.category ? "selected" : ""}>${escapeHtml(c)}</option>`).join("");
+  return `<select class="status-select cat-select neutro" data-id="${tx.id}">${opts}</select>`;
 }
 function scopeSelectInline(tx) {
   const opts = ["Pessoal", "Empresa"].map((s) => `<option value="${s}" ${s === tx.scope ? "selected" : ""}>${s}</option>`).join("");
-  const isEmp = tx.scope === "Empresa";
-  return `<select class="status-select scope-select" data-id="${tx.id}" style="color:${isEmp ? COLORS.empresa : COLORS.pessoal};background:${isEmp ? "#F3E7DE" : "#E3EEE7"}">${opts}</select>`;
+  return `<select class="status-select scope-select ${tx.scope === "Empresa" ? "escopo-empresa" : "escopo-pessoal"}" data-id="${tx.id}">${opts}</select>`;
 }
 function accountSelectInline(tx) {
   const opts = CONTAS.map((c) => `<option value="${c}" ${c === tx.account ? "selected" : ""}>${c}</option>`).join("");
-  return `<select class="status-select account-select" data-id="${tx.id}" style="color:${COLORS.ink};background:#F1F0EA">${opts}</select>`;
+  return `<select class="status-select account-select neutro" data-id="${tx.id}">${opts}</select>`;
+}
+// "Nubank" / "Conta Itaú" embaixo da forma de pagamento
+function origemDoLancamento(tx) {
+  if (tx.account === Calculos.CARTAO) { const c = Calculos.cartaoDoLancamento(tx, state.cards); return c ? `💳 ${escapeHtml(c.name)}` : (state.cards.length > 1 ? `<span class="aviso-mini">escolha o cartão</span>` : ""); }
+  const conta = tx.contaId && state.contas.find((k) => k.id === tx.contaId);
+  return conta ? `🏦 ${escapeHtml(conta.name)}` : "";
 }
 function valueInputInline(tx, displayValue) {
   const v = displayValue != null ? displayValue : tx.value;
@@ -410,7 +494,7 @@ function monthNav(inputId) {
 function crmRowHtml(r) {
   const isReceita = r.tx.type === "Receita";
   const st = STATUS_COLORS[r.tx.status] || STATUS_COLORS.Agendado;
-  return `<tr class="crm-row">
+  return `<tr class="crm-row" data-crm="1">
       <td class="mono" style="color:var(--ink-muted);white-space:nowrap;font-size:12px">${brDate(r.tx.date)}</td>
       <td>${escapeHtml(r.tx.desc)} <span class="tag crm" title="Vem do CRM — edite lá">CRM</span> ${recurBadge(r.badge)}</td>
       <td style="font-size:13px">${escapeHtml(r.tx.category)}</td>
@@ -423,17 +507,17 @@ function crmRowHtml(r) {
 }
 function occTable(rows) {
   if (rows.length === 0) return `<div class="table-wrap"><p class="empty-msg">Nenhum lançamento neste filtro/mês.</p></div>`;
-  const sorted = rows.slice().sort((a, b) => (a.tx.date < b.tx.date ? 1 : -1));
+  const sorted = rows.slice().sort((a, b) => ((a.data || a.tx.date) < (b.data || b.tx.date) ? 1 : -1));
   const trs = sorted.map((r) => r.tx.origem === "crm" ? crmRowHtml(r) : `
-    <tr data-id="${r.tx.id}">
-      <td class="mono" style="color:var(--ink-muted);white-space:nowrap;font-size:12px">${brDate(r.tx.date)}</td>
-      <td>${escapeHtml(r.tx.desc)} ${recurBadge(r.badge)}</td>
+    <tr data-id="${r.tx.id}" data-mes="${r.mes || ""}">
+      <td class="mono" style="color:var(--ink-muted);white-space:nowrap;font-size:12px">${brDate(r.data || r.tx.date)}</td>
+      <td>${escapeHtml(r.tx.desc)} ${recurBadge(r.badge)}${r.ajustada ? ` <span class="tag ajuste" title="Valor ou status mudado só neste mês">ajustado</span>` : ""}${(r.tx.comprovantes || []).length ? ` <button class="icon-btn tx-comprovantes" title="Ver comprovante">📎</button>` : ""}</td>
       <td>${categorySelect(r.tx)}</td>
       <td>${scopeSelectInline(r.tx)}</td>
-      <td>${accountSelectInline(r.tx)}</td>
+      <td>${accountSelectInline(r.tx)}<div class="origem-mini">${origemDoLancamento(r.tx)}</div></td>
       <td>${valueInputInline(r.tx, r.value)}</td>
-      <td>${statusSelect(r.tx)}</td>
-      <td><button class="icon-btn tx-edit" title="Editar">✎</button><button class="icon-btn tx-del" title="Excluir">🗑</button></td>
+      <td>${statusSelect(r)}</td>
+      <td style="white-space:nowrap"><button class="icon-btn tx-edit" title="Editar">✎</button><button class="icon-btn tx-del" title="Excluir">🗑</button></td>
     </tr>`).join("");
   return `<div class="table-wrap"><table>
     <thead><tr><th>Data</th><th>Descrição</th><th>Categoria</th><th>Escopo</th><th>Forma</th><th>Valor</th><th>Status</th><th></th></tr></thead>
@@ -480,6 +564,8 @@ function renderDashboard() {
       ${statCard("Lucro do mês", fmtBRL(dashSums.saldo), dashSums.saldo < 0 ? COLORS.red : COLORS.gold, `<a href="#" class="link-lucro" data-goto="lucro">Ver de onde vem e para onde vai →</a>`)}
     </div>
 
+    ${resumoDoDiaADia()}
+
     <div class="grid grid-2" style="margin-bottom:20px">
       <div class="card">
         <h2 class="section-title" style="border-color:${COLORS.pessoal}">Despesas por categoria</h2>
@@ -488,58 +574,117 @@ function renderDashboard() {
       </div>
       <div class="card">
         <h2 class="section-title" style="border-color:${COLORS.gold}">Objetivos em andamento</h2>
+        ${state.goals.length ? "" : `<p style="color:var(--ink-muted);font-size:14px">Nenhum objetivo ainda. <a href="#" class="link-lucro" data-goto="objetivos">Criar um objetivo →</a></p>`}
         ${state.goals.map((g) => { const pct = g.target ? g.current / g.target : 0; return `
           <div style="margin-bottom:14px"><div class="bar-line"><span>${escapeHtml(g.name)} <span style="font-size:12px;color:${g.scope === "Empresa" ? COLORS.empresa : COLORS.pessoal}">· ${g.scope}</span></span><span class="mono" style="font-size:12px;color:var(--ink-muted)">${fmtPct(pct)}</span></div>${bar(pct, pct >= 1 ? COLORS.pessoal : COLORS.gold)}</div>`; }).join("")}
       </div>
     </div>
 
     <div class="grid grid-3">
-      ${statCard("Limite de cartões", fmtBRL(state.cards.reduce((a, c) => a + c.limit, 0)), COLORS.pessoal)}
+      ${statCard("Limite livre dos cartões", fmtBRL(state.cards.reduce((a, c) => a + (c.limit || 0) - limiteUsadoDoCartao(c), 0)), COLORS.pessoal, state.cards.length ? `de ${fmtBRL(state.cards.reduce((a, c) => a + (c.limit || 0), 0))} no total` : `<a href="#" class="link-lucro" data-goto="cartoes">Cadastrar cartão →</a>`)}
       ${statCard("Total investido", fmtBRL(investTotals.applied), COLORS.pessoal, `Valor atual: ${fmtBRL(investTotals.current)}`)}
       ${statCard("Rentabilidade média", fmtPct(rentMedia), COLORS.gold)}
     </div>
   `;
 }
 
+// Saldo nas contas, o que vence nos próximos 7 dias e como está o orçamento do mês
+function resumoDoDiaADia() {
+  const dados = dadosParaCalculo();
+  const saldo = state.contas.reduce((a, k) => a + Calculos.saldoDaConta(k, dados), 0);
+  const semana = Calculos.aPagarEReceber(dados, { dias: 7 });
+  const pagar = semana.filter((p) => p.tipo === "pagar");
+  const atrasado = pagar.filter((p) => p.atrasado);
+  const orc = window.resumoDoOrcamento ? resumoDoOrcamento(state.month) : null;
+  return `<div class="grid grid-3" style="margin-bottom:20px">
+    ${state.contas.length
+      ? statCard("Saldo nas contas", fmtBRL(saldo), saldo < 0 ? COLORS.red : COLORS.pessoal, `<a href="#" class="link-lucro" data-goto="contas">${state.contas.length} conta${state.contas.length > 1 ? "s" : ""} →</a>`)
+      : statCard("Saldo nas contas", "—", "var(--ink-muted)", `<a href="#" class="link-lucro" data-goto="contas">Cadastre suas contas pra ver quanto você tem →</a>`)}
+    ${statCard("A pagar em 7 dias", fmtBRL(pagar.reduce((a, p) => a + p.valor, 0)), atrasado.length ? COLORS.red : "var(--ink)", atrasado.length ? `<span style="color:${COLORS.red}">${atrasado.length} em atraso</span> · <a href="#" class="link-lucro" data-goto="apagar">ver</a>` : `<a href="#" class="link-lucro" data-goto="apagar">${pagar.length ? `${pagar.length} conta${pagar.length > 1 ? "s" : ""} →` : "Nada vencendo →"}</a>`)}
+    ${orc && orc.categorias
+      ? statCard("Orçamento do mês", `${fmtBRL(orc.gasto)}`, orc.estourados ? COLORS.red : COLORS.gold, `de ${fmtBRL(orc.limite)} · ${orc.estourados ? `<span style="color:${COLORS.red}">${orc.estourados} categoria${orc.estourados > 1 ? "s" : ""} estourada${orc.estourados > 1 ? "s" : ""}</span>` : "dentro do planejado"} · <a href="#" class="link-lucro" data-goto="orcamento">ver</a>`)
+      : statCard("Orçamento do mês", "—", "var(--ink-muted)", `<a href="#" class="link-lucro" data-goto="orcamento">Defina quanto gastar em cada categoria →</a>`)}
+  </div>`;
+}
+
 /* ----------------------------------------------------------------------- */
 /* Lançamentos                                                              */
 /* ----------------------------------------------------------------------- */
+// Busca e filtros: valem pro mês em tela ou, marcando "todos os meses", pra todos os lançamentos
+const semAcento = (t) => String(t || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+function linhasFiltradas() {
+  const fl = state.filtros;
+  let rows;
+  if (fl.todosMeses) {
+    rows = state.txs.filter((tx) => state.scopeFilter === "Todos" || tx.scope === state.scopeFilter)
+      .map((tx) => ({ tx, value: Number(tx.value) || 0, badge: tx.recurrence === "fixo" ? "Fixo" : tx.recurrence === "parcelado" ? `${tx.parcelas}x` : null, status: tx.status, data: tx.date, mes: Calculos.anoMes(tx.date) }));
+  } else {
+    rows = occurrencesForMonth(state.month, state.scopeFilter);
+  }
+  const busca = semAcento(fl.texto).trim();
+  return rows.filter((r) => {
+    if (busca && !semAcento(`${r.tx.desc} ${r.tx.category} ${r.value.toFixed(2).replace(".", ",")}`).includes(busca)) return false;
+    if (fl.tipo && r.tx.type !== fl.tipo) return false;
+    if (fl.categoria && r.tx.category !== fl.categoria) return false;
+    if (fl.status && (r.status || r.tx.status) !== fl.status) return false;
+    if (fl.forma && r.tx.account !== fl.forma) return false;
+    return true;
+  });
+}
+function filtrosHtml() {
+  const fl = state.filtros;
+  const cats = [...new Set([...categoriasDe("Despesa"), ...categoriasDe("Receita")])];
+  const sel = (id, rotulo, opcoes, valor) => `<select id="${id}" class="filtro-select" aria-label="${rotulo}"><option value="">${rotulo}</option>${opcoes.map((o) => `<option value="${escapeHtml(o)}" ${o === valor ? "selected" : ""}>${escapeHtml(o)}</option>`).join("")}</select>`;
+  const ativos = ["texto", "tipo", "categoria", "status", "forma"].filter((k) => fl[k]).length;
+  return `<div class="filtros">
+    <input type="search" id="filtro-texto" class="filtro-busca" placeholder="Buscar por descrição, categoria ou valor" value="${escapeHtml(fl.texto)}" aria-label="Buscar lançamentos" />
+    ${sel("filtro-tipo", "Receitas e despesas", ["Receita", "Despesa"], fl.tipo)}
+    ${sel("filtro-categoria", "Todas as categorias", cats, fl.categoria)}
+    ${sel("filtro-status", "Qualquer status", STATUS_OPTIONS, fl.status)}
+    ${sel("filtro-forma", "Qualquer forma", CONTAS, fl.forma)}
+    <label class="filtro-check"><input type="checkbox" id="filtro-todos" ${fl.todosMeses ? "checked" : ""} /> Todos os meses</label>
+    ${ativos || fl.todosMeses ? `<button type="button" class="link-btn" id="filtro-limpar">Limpar filtros</button>` : ""}
+  </div>`;
+}
 function renderLancamentos() {
-  const rows = occurrencesForMonth(state.month, state.scopeFilter);
+  const rows = linhasFiltradas();
+  const s = sumsFromOccurrences(rows);
+  const filtrando = ["texto", "tipo", "categoria", "status", "forma"].some((k) => state.filtros[k]) || state.filtros.todosMeses;
   return `
     <div class="row-between">
       <h1 class="page-title">Lançamentos</h1>
       <div class="row-gap">
-        ${monthNav()}
+        ${state.filtros.todosMeses ? "" : monthNav()}
         ${scopePills()}
+        <button class="btn ghost" id="importar-extrato-btn" title="Importar o extrato do banco (CSV ou OFX)">⇪ Importar extrato</button>
+        <button class="btn ghost" id="exportar-btn" title="Baixar em Excel ou PDF">⇩ Exportar</button>
         <button class="btn pessoal" id="new-tx-btn">+ Novo</button>
       </div>
     </div>
-    <p style="font-size:12px;color:var(--ink-muted);margin:-14px 0 16px">Contas <span class="tag fixo">Fixo</span> repetem todo mês. Contas <span class="tag parcelado">Parcelado</span> aparecem automaticamente até acabar as parcelas.</p>
+    ${filtrosHtml()}
+    <p class="lanc-resumo">${rows.length} lançamento${rows.length === 1 ? "" : "s"}${filtrando ? " encontrados" : ""} · <span class="val-receita">+ ${fmtBRL(s.rec)}</span> · <span class="val-despesa">− ${fmtBRL(s.desp)}</span>${state.filtros.todosMeses ? " · valores de cada lançamento (por mês, nos fixos e parcelados)" : ""}</p>
+    <p style="font-size:12px;color:var(--ink-muted);margin:0 0 16px">Contas <span class="tag fixo">Fixo</span> repetem todo mês. Contas <span class="tag parcelado">Parcelado</span> aparecem automaticamente até acabar as parcelas. Mudou o valor ou o status de um fixo na tabela? Dá pra aplicar só naquele mês.</p>
     ${occTable(rows)}
   `;
 }
-
-/* ----------------------------------------------------------------------- */
-/* Cartões                                                                  */
-/* ----------------------------------------------------------------------- */
-function renderCartoes() {
-  const usage = cardUsage();
-  const items = state.cards.map((c) => {
-    const used = usage;
-    const pct = c.limit ? used / c.limit : 0;
-    return `<div class="item-card" data-id="${c.id}">
-      <div class="item-head">
-        <div><h3 class="item-title">${escapeHtml(c.name)}</h3><p class="item-note">Vence dia ${c.dueDay} · melhor compra dia ${c.bestDay}</p></div>
-        <div><button class="icon-btn card-edit" title="Editar">✎</button><button class="icon-btn card-del" title="Excluir">🗑</button></div>
-      </div>
-      <div class="bar-line"><span>Fatura estimada do mês</span><span class="mono" style="font-weight:700">${fmtBRL(used)}</span></div>
-      ${bar(pct, pct > 0.8 ? COLORS.red : COLORS.pessoal)}
-      <div class="bar-line" style="margin-top:8px;font-size:12px;color:var(--ink-muted)"><span>Limite ${fmtBRL(c.limit)}</span><span>Disponível ${fmtBRL(c.limit - used)}</span></div>
-    </div>`;
-  }).join("");
-  return `<div class="row-between"><h1 class="page-title">Cartões de crédito</h1><button class="btn pessoal" id="new-card-btn">+ Novo cartão</button></div>
-    <div class="grid grid-2">${items || `<p class="empty-msg">Nenhum cartão cadastrado.</p>`}</div>`;
+function ligarFiltros() {
+  const busca = document.getElementById("filtro-texto");
+  if (!busca) return;
+  let t = null;
+  busca.addEventListener("input", (e) => {
+    clearTimeout(t);
+    t = setTimeout(() => { state.filtros.texto = e.target.value; const pos = e.target.selectionStart; render(); const b = document.getElementById("filtro-texto"); if (b) { b.focus(); b.setSelectionRange(pos, pos); } }, 220);
+  });
+  [["filtro-tipo", "tipo"], ["filtro-categoria", "categoria"], ["filtro-status", "status"], ["filtro-forma", "forma"]].forEach(([id, k]) => {
+    document.getElementById(id).addEventListener("change", (e) => { state.filtros[k] = e.target.value; render(); });
+  });
+  document.getElementById("filtro-todos").addEventListener("change", (e) => { state.filtros.todosMeses = e.target.checked; render(); });
+  const limpar = document.getElementById("filtro-limpar");
+  if (limpar) limpar.addEventListener("click", () => { state.filtros = { texto: "", tipo: "", categoria: "", status: "", forma: "", todosMeses: false }; render(); });
+  const imp = document.getElementById("importar-extrato-btn");
+  if (imp) imp.addEventListener("click", () => window.abrirImportarExtrato && abrirImportarExtrato());
+  const exp = document.getElementById("exportar-btn");
+  if (exp) exp.addEventListener("click", () => window.abrirExportar && abrirExportar());
 }
 
 /* ----------------------------------------------------------------------- */
@@ -716,11 +861,16 @@ function buildAlerts() {
   const rows = occurrencesForMonth(state.month);
   const s = sumsFromOccurrences(rows);
   if (s.saldo < 0) alerts.push({ type: "warn", text: `Seu saldo em ${monthLabel(state.month)} está negativo: ${fmtBRL(s.saldo)}. Vale revisar os gastos do mês.` });
-  const usage = cardUsage();
   state.cards.forEach((c) => {
-    const pct = c.limit ? usage / c.limit : 0;
-    if (pct > 0.8) alerts.push({ type: "warn", text: `O cartão ${c.name} está com ${fmtPct(pct)} do limite usado esse mês.` });
+    const pct = c.limit ? limiteUsadoDoCartao(c) / c.limit : 0;
+    if (pct > 0.8) alerts.push({ type: "warn", text: `O cartão ${escapeHtml(c.name)} está com ${fmtPct(pct)} do limite comprometido.` });
   });
+  const pendencias = Calculos.aPagarEReceber(dadosParaCalculo(), { dias: 7 });
+  const atrasadas = pendencias.filter((p) => p.atrasado && p.tipo === "pagar");
+  if (atrasadas.length) alerts.push({ type: "warn", text: `${atrasadas.length} conta${atrasadas.length > 1 ? "s" : ""} em atraso, somando ${fmtBRL(atrasadas.reduce((a, p) => a + p.valor, 0))}. <a href="#" data-goto="apagar">Ver contas a pagar</a>` });
+  const semana = pendencias.filter((p) => !p.atrasado && p.tipo === "pagar");
+  if (semana.length) alerts.push({ type: "info", text: `${semana.length} conta${semana.length > 1 ? "s vencem" : " vence"} nos próximos 7 dias (${fmtBRL(semana.reduce((a, p) => a + p.valor, 0))}).` });
+  if (window.alertasDeOrcamento) alertasDeOrcamento(state.month).forEach((a) => alerts.push(a));
   state.goals.forEach((g) => {
     const pct = g.target ? g.current / g.target : 0;
     const diasRestantes = (new Date(g.deadline) - new Date()) / 86400000;
@@ -770,21 +920,8 @@ function renderAssistente() {
 /* ----------------------------------------------------------------------- */
 /* Cadastro                                                                 */
 /* ----------------------------------------------------------------------- */
-function computeLevel() {
-  const hasRec = state.txs.some((t) => t.type === "Receita");
-  const hasDesp = state.txs.some((t) => t.type === "Despesa");
-  const hasGoal = state.goals.length > 0;
-  const hasBudgetDiscipline = state.txs.filter((t) => t.recurrence === "fixo").length >= 1;
-  const hasInvest = state.invs.length > 0;
-  const goalDone = state.goals.some((g) => g.current >= g.target);
-  let level = 1;
-  const checks = [hasRec, hasDesp, hasGoal, hasBudgetDiscipline, hasInvest || goalDone];
-  level = 1 + checks.filter(Boolean).length;
-  return Math.min(level, 5);
-}
 function renderCadastro() {
   const char = getCharacter();
-  const level = computeLevel();
   const photo = state.profile && state.profile.photo;
   return `
     <h1 class="page-title">Meu perfil</h1>
@@ -814,13 +951,7 @@ function renderCadastro() {
       </div>
     </div>
 
-    <div class="card">
-      <h2 class="section-title" style="border-color:var(--char)">Evolução</h2>
-      <p style="font-size:13px;color:var(--ink-muted);margin-top:0">Nível ${level} de 5</p>
-      <div class="level-track">
-        ${[1,2,3,4,5].map((n) => `<div class="level-dot ${n <= level ? "done" : ""}">${n}</div>`).join("")}
-      </div>
-    </div>
+    ${typeof secoesDoPerfil === "function" ? secoesDoPerfil() : ""}
   `;
 }
 
@@ -835,12 +966,19 @@ function attachMainEvents() {
   const newTxBtn = document.getElementById("new-tx-btn") || document.getElementById("new-tx-emp-btn");
   if (newTxBtn) newTxBtn.addEventListener("click", () => openTxModal(null, state.tab === "empresa" ? "Empresa" : undefined));
   document.querySelectorAll(".tx-edit").forEach((b) => b.addEventListener("click", (e) => { const id = e.target.closest("tr").dataset.id; openTxModal(state.txs.find((t) => t.id === id)); }));
-  document.querySelectorAll(".tx-del").forEach((b) => b.addEventListener("click", (e) => { const id = e.target.closest("tr").dataset.id; if (confirm("Excluir este lançamento? (remove de todos os meses, se for fixo/parcelado)")) { state.txs = state.txs.filter((t) => t.id !== id); saveTxs(); render(); } }));
-  document.querySelectorAll(".status-select").forEach((sel) => sel.addEventListener("change", (e) => {
-    const id = e.target.dataset.id;
-    const tx = state.txs.find((t) => t.id === id);
+  document.querySelectorAll(".tx-del").forEach((b) => b.addEventListener("click", (e) => {
+    const tr = e.target.closest("tr");
+    const tx = state.txs.find((t) => t.id === tr.dataset.id);
+    if (tx) excluirLancamento(tx, tr.dataset.mes || state.month);
+  }));
+  document.querySelectorAll(".tx-comprovantes").forEach((b) => b.addEventListener("click", (e) => {
+    const tx = state.txs.find((t) => t.id === e.target.closest("tr").dataset.id);
+    if (tx && window.abrirComprovantes) abrirComprovantes(tx);
+  }));
+  document.querySelectorAll(".status-select:not(.cat-select):not(.scope-select):not(.account-select)").forEach((sel) => sel.addEventListener("change", (e) => {
+    const tx = state.txs.find((t) => t.id === e.target.dataset.id);
     if (!tx) return;
-    tx.status = e.target.value;
+    definirStatusNoMes(tx, e.target.dataset.mes || state.month, e.target.value);
     saveTxs();
     render();
   }));
@@ -869,18 +1007,11 @@ function attachMainEvents() {
     render();
   }));
   document.querySelectorAll(".value-inline").forEach((inp) => inp.addEventListener("change", (e) => {
-    const id = e.target.dataset.id;
-    const tx = state.txs.find((t) => t.id === id);
+    const tx = state.txs.find((t) => t.id === e.target.dataset.id);
     if (!tx) return;
-    tx.value = parseFloat(e.target.value) || 0;
-    saveTxs();
-    render();
+    const mes = e.target.closest("tr").dataset.mes || state.month;
+    mudarValorDoLancamento(tx, mes, parseFloat(e.target.value) || 0);
   }));
-
-  const newCardBtn = document.getElementById("new-card-btn");
-  if (newCardBtn) newCardBtn.addEventListener("click", () => openCardModal(null));
-  document.querySelectorAll(".card-edit").forEach((b) => b.addEventListener("click", (e) => { const id = e.target.closest(".item-card").dataset.id; openCardModal(state.cards.find((c) => c.id === id)); }));
-  document.querySelectorAll(".card-del").forEach((b) => b.addEventListener("click", (e) => { const id = e.target.closest(".item-card").dataset.id; if (confirm("Excluir este cartão?")) { state.cards = state.cards.filter((c) => c.id !== id); saveCards(); render(); } }));
 
   const newInvBtn = document.getElementById("new-inv-btn");
   if (newInvBtn) newInvBtn.addEventListener("click", () => openInvModal(null));
@@ -922,6 +1053,112 @@ function attachMainEvents() {
   if (changeCharBtn) changeCharBtn.addEventListener("click", () => openCharacterPicker());
   const redoQuizBtn = document.getElementById("redo-quiz-btn");
   if (redoQuizBtn) redoQuizBtn.addEventListener("click", () => openQuiz(true));
+
+  if (state.tab === "lancamentos") ligarFiltros();
+  if (TELAS[state.tab] && TELAS[state.tab].ligar) TELAS[state.tab].ligar();
+  if (state.tab === "cadastro") Object.values(TELAS).forEach((t) => t.ligarNoPerfil && t.ligarNoPerfil());
+}
+
+/* ----------------------------------------------------------------------- */
+/* Fixo/parcelado: "só este mês", "daqui em diante" ou "todos os meses"     */
+/* ----------------------------------------------------------------------- */
+// Pergunta o alcance de uma mudança. opcoes: [[valor, rótulo, descrição]]. Resolve com o valor ou null.
+function perguntarAlcance(titulo, texto, opcoes) {
+  return new Promise((resolve) => {
+    openModal(titulo, `<p class="modal-texto">${texto}</p>
+      <div class="alcance-opcoes">${opcoes.map(([v, r, d]) => `<button type="button" class="alcance-opcao" data-alcance="${v}"><strong>${r}</strong>${d ? `<span>${d}</span>` : ""}</button>`).join("")}</div>`);
+    let respondeu = false;
+    document.querySelectorAll("[data-alcance]").forEach((b) => b.addEventListener("click", () => { respondeu = true; closeModal(); resolve(b.dataset.alcance); }));
+    const fechar = () => { if (!respondeu) resolve(null); };
+    document.getElementById("modal-close").addEventListener("click", fechar);
+    document.getElementById("modal-overlay").addEventListener("click", (e) => { if (e.target.id === "modal-overlay") fechar(); });
+  });
+}
+// Divide um fixo em dois a partir de "mes": o original termina no mês anterior e um novo
+// começa em "mes" com as mudanças. Devolve o novo.
+function dividirFixo(tx, mes, mudancas) {
+  const excAntes = {}; const excDepois = {};
+  Object.entries(tx.excecoes || {}).forEach(([m, v]) => { (m < mes ? excAntes : excDepois)[m] = v; });
+  const novo = { ...tx, ...mudancas, id: uid(), date: Calculos.diaNoMes(mes, parseInt(String(tx.date).slice(8, 10), 10)), excecoes: excDepois, comprovantes: [] };
+  tx.fimEm = Calculos.somarMeses(mes, -1);
+  tx.excecoes = excAntes;
+  state.txs = [novo, ...state.txs];
+  return novo;
+}
+async function mudarValorDoLancamento(tx, mes, valor) {
+  if (tx.recurrence === "fixo" || tx.recurrence === "parcelado") {
+    const fixo = tx.recurrence === "fixo";
+    const alcance = await perguntarAlcance("Mudar o valor", `Novo valor: <b>${fmtBRL(valor)}</b>. Onde aplicar?`, fixo ? [
+      ["mes", "Só em " + monthLabel(mes), "Os outros meses continuam como estão."],
+      ["daqui", "De " + monthLabel(mes) + " em diante", "Os meses anteriores ficam com o valor antigo."],
+      ["todos", "Em todos os meses", ""],
+    ] : [
+      ["mes", "Só nesta parcela", ""],
+      ["todos", "Em todas as parcelas", ""],
+    ]);
+    if (!alcance) { render(); return; }
+    if (alcance === "mes") {
+      tx.excecoes = { ...(tx.excecoes || {}), [mes]: { ...((tx.excecoes || {})[mes] || {}), value: valor } };
+    } else if (alcance === "daqui" && Calculos.anoMes(tx.date) < mes) {
+      dividirFixo(tx, mes, { value: valor });
+    } else {
+      tx.value = valor;
+      if (tx.excecoes) Object.values(tx.excecoes).forEach((e) => { delete e.value; });
+    }
+  } else {
+    tx.value = valor;
+  }
+  saveTxs(); render();
+  avisarOrcamento(tx, mes);
+}
+async function excluirLancamento(tx, mes) {
+  if (tx.recurrence === "fixo" || tx.recurrence === "parcelado") {
+    const fixo = tx.recurrence === "fixo";
+    const alcance = await perguntarAlcance("Excluir lançamento", `<b>${escapeHtml(tx.desc)}</b> se repete. O que excluir?`, fixo ? [
+      ["mes", "Só " + monthLabel(mes), "Some apenas deste mês."],
+      ["daqui", "De " + monthLabel(mes) + " em diante", "Os meses anteriores continuam registrados."],
+      ["todos", "Todos os meses", "Apaga o lançamento inteiro."],
+    ] : [
+      ["mes", "Só esta parcela", ""],
+      ["todos", "Todas as parcelas", "Apaga o lançamento inteiro."],
+    ]);
+    if (!alcance) return;
+    if (alcance === "mes") {
+      tx.excecoes = { ...(tx.excecoes || {}), [mes]: { ...((tx.excecoes || {})[mes] || {}), removido: true } };
+    } else if (alcance === "daqui" && Calculos.anoMes(tx.date) < mes) {
+      tx.fimEm = Calculos.somarMeses(mes, -1);
+    } else {
+      apagarLancamento(tx);
+    }
+  } else {
+    if (!confirm(`Excluir "${tx.desc}"?`)) return;
+    apagarLancamento(tx);
+  }
+  saveTxs(); render();
+}
+function apagarLancamento(tx) {
+  state.txs = state.txs.filter((t) => t.id !== tx.id);
+  if ((tx.comprovantes || []).length) api("DELETE", `/financeiro/comprovantes/do-lancamento?lancamento=${encodeURIComponent(tx.id)}`).catch(() => {});
+}
+
+/* ----------------------------------------------------------------------- */
+/* Avisos rápidos (toast) e alerta de orçamento                             */
+/* ----------------------------------------------------------------------- */
+function toast(texto, tipo = "info") {
+  let el = document.getElementById("toast");
+  if (!el) { el = document.createElement("div"); el.id = "toast"; el.setAttribute("role", "status"); document.body.appendChild(el); }
+  el.className = `toast toast-${tipo} visivel`;
+  el.innerHTML = texto;
+  clearTimeout(el._t);
+  el._t = setTimeout(() => el.classList.remove("visivel"), 5200);
+}
+// Depois de lançar uma despesa: avisa quando a categoria passa de 80% ou de 100% do orçamento
+function avisarOrcamento(tx, mes) {
+  if (!tx || tx.type !== "Despesa" || !window.situacaoDoOrcamento) return;
+  const sit = situacaoDoOrcamento(tx.category, mes || Calculos.anoMes(tx.date));
+  if (!sit) return;
+  if (sit.pct >= 1) toast(`⚠️ <b>${escapeHtml(tx.category)}</b> passou do orçamento de ${monthLabel(sit.mes)}: ${fmtBRL(sit.gasto)} de ${fmtBRL(sit.limite)}.`, "erro");
+  else if (sit.pct >= 0.8) toast(`Atenção: <b>${escapeHtml(tx.category)}</b> já usou ${fmtPct(sit.pct)} do orçamento de ${monthLabel(sit.mes)}.`, "aviso");
 }
 
 // Reduz a foto pra no máximo 256px (JPEG) antes de salvar na conta
@@ -962,79 +1199,94 @@ function wireChipGroup(name, onChange) {
   document.querySelectorAll(`[data-chipgroup="${name}"] .chip`).forEach((chip) => chip.addEventListener("click", () => onChange(chip.dataset.value)));
 }
 
-/* ---- Transação (com recorrência) ----
-   No modal de edição (lápis) só aparecem: Descrição, Data, Recorrência e Número de parcelas.
-   Categoria, Escopo, Forma, Valor e Status são editados direto na tabela (seleção inline,
-   igual à coluna Status). Ao CRIAR um lançamento novo, o formulário continua completo,
-   pois ainda não existe linha na tabela para editar esses campos inline. */
-function openTxModal(existing, defaultScope) {
-  const f = existing ? { ...existing } : { date: todayISO(), desc: "", type: "Despesa", category: CATEGORIAS_DESPESA[0], scope: defaultScope || "Pessoal", account: CONTAS[0], status: "Pago", value: "", recurrence: "unico", parcelas: 2 };
+/* ---- Lançamento (com recorrência, conta, cartão e comprovantes) ----
+   O mesmo formulário serve pra criar e editar. Num fixo/parcelado, o que muda aqui vale
+   pra todos os meses; pra mudar um mês só, edite o valor ou o status direto na tabela. */
+// Conta que já vem marcada num lançamento novo: a última usada com essa forma de pagamento
+// (ou a primeira conta cadastrada)
+function contaSugerida(forma) {
+  const ultima = state.txs.find((tx) => tx.contaId && tx.account === forma && state.contas.some((k) => k.id === tx.contaId))
+    || state.txs.find((tx) => tx.contaId && state.contas.some((k) => k.id === tx.contaId));
+  return ultima ? ultima.contaId : (state.contas[0] ? state.contas[0].id : "");
+}
+const ROTULO_RECORRENCIA = { unico: "Único", fixo: "Fixo (todo mês)", parcelado: "Parcelado" };
+function openTxModal(existing, defaultScope, preenchido) {
+  const base = { date: todayISO(), desc: "", type: "Despesa", category: categoriasDe("Despesa")[0], scope: defaultScope || "Pessoal", account: CONTAS[0], status: "Pago", value: "", recurrence: "unico", parcelas: 2, fimEm: "", cardId: "", contaId: contaSugerida(CONTAS[0]), comprovantes: [] };
+  const f = existing ? { ...base, ...existing, fimEm: existing.fimEm || "", cardId: existing.cardId || "", contaId: existing.contaId || "" } : { ...base, ...(preenchido || {}) };
+  if (!f.id) f.id = uid();
   const isEdit = !!existing;
+  const enviadosAgora = []; // comprovantes enviados neste formulário (apagados se cancelar um lançamento novo)
   const draw = () => {
-    const cats = f.type === "Receita" ? CATEGORIAS_RECEITA : CATEGORIAS_DESPESA;
-    const camposExtras = isEdit ? "" : `
+    const cats = categoriasDe(f.type);
+    if (f.category && !cats.includes(f.category)) cats.unshift(f.category);
+    const recorrente = f.recurrence !== "unico";
+    const noCartao = f.account === Calculos.CARTAO;
+    if (noCartao && !f.cardId && state.cards.length === 1) f.cardId = state.cards[0].id;
+    openModal(isEdit ? "Editar lançamento" : "Novo lançamento", `
+      <div class="field"><label>Descrição</label><input id="f-desc" value="${escapeHtml(f.desc)}" placeholder="Ex.: Supermercado" /></div>
       <div class="field-row">
-        <div class="field"><label>Valor ${f.recurrence !== "unico" ? "(por mês)" : ""} (R$)</label><input id="f-value" type="number" step="0.01" value="${f.value}" placeholder="0,00" /></div>
+        <div class="field"><label>Valor ${recorrente ? (f.recurrence === "parcelado" ? "(de cada parcela)" : "(por mês)") : ""} (R$)</label><input id="f-value" type="number" step="0.01" inputmode="decimal" value="${f.value}" placeholder="0,00" /></div>
         <div class="field"><label>Tipo</label>${chipGroup("type", ["Despesa","Receita"], f.type, f.type === "Receita" ? COLORS.pessoal : COLORS.red)}</div>
       </div>
+      <div class="field"><label>Data ${recorrente ? "(primeiro mês)" : ""}</label><input id="f-date" type="date" value="${f.date}" /></div>
+      <div class="field"><label>Recorrência</label>${chipGroup("recurrence", Object.values(ROTULO_RECORRENCIA), ROTULO_RECORRENCIA[f.recurrence], COLORS.gold)}</div>
+      ${f.recurrence === "parcelado" ? `<div class="field"><label>Número de parcelas</label><input id="f-parcelas" type="number" min="2" max="120" value="${f.parcelas || 2}" /></div>` : ""}
+      ${f.recurrence === "fixo" ? `<div class="field"><label>Repete até (opcional)</label><input id="f-fim" type="month" value="${f.fimEm || ""}" /><p class="field-ajuda">Deixe em branco pra repetir sem data para acabar.</p></div>` : ""}
       <div class="field"><label>Escopo</label>${chipGroup("scope", ["Pessoal","Empresa"], f.scope, f.scope === "Empresa" ? COLORS.empresa : COLORS.pessoal)}</div>
-      <div class="field"><label>Categoria</label>${chipGroup("category", cats, f.category, COLORS.gold)}</div>
-      <div class="field"><label>Forma de pagamento</label>${chipGroup("account", CONTAS, f.account, COLORS.ink)}</div>
-      <div class="field"><label>Status</label>${chipGroup("status", ["Pago","Pendente","Agendado"], f.status, COLORS.pessoal)}</div>
-    `;
-    openModal(existing ? "Editar lançamento" : "Novo lançamento", `
-      <div class="field"><label>Descrição</label><input id="f-desc" value="${escapeHtml(f.desc)}" placeholder="Ex.: Supermercado" /></div>
-      <div class="field"><label>Data ${f.recurrence !== "unico" ? "(início)" : ""}</label><input id="f-date" type="date" value="${f.date}" /></div>
-      <div class="field"><label>Recorrência</label>${chipGroup("recurrence", ["unico","fixo","parcelado"].map((r) => ({unico:"Único",fixo:"Fixo (todo mês)",parcelado:"Parcelado"}[r])), {unico:"Único",fixo:"Fixo (todo mês)",parcelado:"Parcelado"}[f.recurrence], COLORS.gold)}</div>
-      ${f.recurrence === "parcelado" ? `<div class="field"><label>Número de parcelas</label><input id="f-parcelas" type="number" min="2" max="60" value="${f.parcelas || 2}" /></div>` : ""}
-      ${isEdit ? `<p style="font-size:12px;color:var(--ink-muted);margin:-6px 0 14px">Categoria, escopo, forma, valor e status são editados direto na tabela de lançamentos.</p>` : ""}
-      ${camposExtras}
-      <button ${!f.desc || !f.value ? "disabled" : ""} class="btn save-btn" id="f-save" style="background:${f.scope === "Empresa" ? COLORS.empresa : COLORS.pessoal}">Salvar lançamento</button>
+      <div class="field"><label>Categoria</label>${chipGroup("category", cats, f.category, COLORS.gold)}
+        <button type="button" class="link-btn" id="f-nova-cat">+ Nova categoria</button></div>
+      <div class="field"><label>Forma de pagamento</label>${chipGroup("account", CONTAS, f.account, "var(--char)")}</div>
+      ${noCartao ? (state.cards.length
+        ? `<div class="field"><label>Cartão</label>${chipGroup("card", state.cards.map((c) => c.name), (state.cards.find((c) => c.id === f.cardId) || {}).name, "var(--char)")}${f.type === "Despesa" && f.cardId ? `<p class="field-ajuda">Entra na fatura que vence em ${monthLabel(Calculos.faturaDaCompra(state.cards.find((c) => c.id === f.cardId), f.date))}.</p>` : ""}</div>`
+        : `<p class="field-ajuda">Cadastre seus cartões na aba Cartões pra ver a fatura de cada um.</p>`) : ""}
+      ${!noCartao && state.contas.length ? `<div class="field"><label>Conta ${f.type === "Receita" ? "onde entra" : "de onde sai"}</label>${chipGroup("conta", ["Nenhuma", ...state.contas.map((k) => k.name)], (state.contas.find((k) => k.id === f.contaId) || {}).name || "Nenhuma", "var(--char)")}</div>` : ""}
+      <div class="field"><label>${recorrente ? "Status padrão (cada mês pode ser marcado à parte)" : "Status"}</label>${chipGroup("status", STATUS_OPTIONS, f.status, COLORS.pessoal)}</div>
+      ${window.comprovantesNoFormulario ? comprovantesNoFormulario(f) : ""}
+      <button ${!f.desc || f.value === "" ? "disabled" : ""} class="btn save-btn" id="f-save" style="background:${f.scope === "Empresa" ? COLORS.empresa : COLORS.pessoal}">Salvar lançamento</button>
     `);
-    document.getElementById("f-desc").addEventListener("input", (e) => { f.desc = e.target.value; });
-    document.getElementById("f-date").addEventListener("change", (e) => { f.date = e.target.value; });
-    const valueInput = document.getElementById("f-value");
-    if (valueInput) valueInput.addEventListener("input", (e) => { f.value = e.target.value; });
+    document.getElementById("f-desc").addEventListener("input", (e) => { f.desc = e.target.value; atualizarBotao(); });
+    document.getElementById("f-value").addEventListener("input", (e) => { f.value = e.target.value; atualizarBotao(); });
+    document.getElementById("f-date").addEventListener("change", (e) => { f.date = e.target.value; if (noCartao) draw(); });
     const parcelasInput = document.getElementById("f-parcelas");
     if (parcelasInput) parcelasInput.addEventListener("input", (e) => { f.parcelas = e.target.value; });
-    wireChipGroup("recurrence", (label) => { f.recurrence = { "Único":"unico","Fixo (todo mês)":"fixo","Parcelado":"parcelado" }[label]; draw(); });
-    wireChipGroup("type", (v) => { f.type = v; f.category = v === "Receita" ? CATEGORIAS_RECEITA[0] : CATEGORIAS_DESPESA[0]; draw(); });
+    const fimInput = document.getElementById("f-fim");
+    if (fimInput) fimInput.addEventListener("change", (e) => { f.fimEm = e.target.value; });
+    wireChipGroup("recurrence", (label) => { f.recurrence = Object.keys(ROTULO_RECORRENCIA).find((k) => ROTULO_RECORRENCIA[k] === label); draw(); });
+    wireChipGroup("type", (v) => { f.type = v; f.category = categoriasDe(v)[0]; draw(); });
     wireChipGroup("scope", (v) => { f.scope = v; draw(); });
     wireChipGroup("category", (v) => { f.category = v; draw(); });
-    wireChipGroup("account", (v) => { f.account = v; draw(); });
+    wireChipGroup("account", (v) => { f.account = v; if (!isEdit && !f.contaId) f.contaId = contaSugerida(v); draw(); });
+    wireChipGroup("card", (nome) => { f.cardId = (state.cards.find((c) => c.name === nome) || {}).id || ""; draw(); });
+    wireChipGroup("conta", (nome) => { f.contaId = (state.contas.find((k) => k.name === nome) || {}).id || ""; draw(); });
     wireChipGroup("status", (v) => { f.status = v; draw(); });
+    document.getElementById("f-nova-cat").addEventListener("click", () => {
+      const nome = (prompt(`Nome da nova categoria de ${f.type === "Receita" ? "receita" : "despesa"}:`) || "").trim().slice(0, 40);
+      if (!nome) return;
+      if (!categoriasDe(f.type).includes(nome)) { state.categorias = [...state.categorias, { id: uid(), nome, tipo: f.type, dedutivel: false }]; saveCategorias(); }
+      f.category = nome; draw();
+    });
+    if (window.ligarComprovantesNoFormulario) ligarComprovantesNoFormulario(f, enviadosAgora, draw);
+    const fecharSemSalvar = () => { if (!isEdit && enviadosAgora.length) enviadosAgora.forEach((id) => api("DELETE", `/financeiro/comprovantes/${id}`).catch(() => {})); };
+    document.getElementById("modal-close").addEventListener("click", fecharSemSalvar);
+    document.getElementById("modal-overlay").addEventListener("click", (e) => { if (e.target.id === "modal-overlay") fecharSemSalvar(); });
     document.getElementById("f-save").addEventListener("click", () => {
-      if (!f.desc || !f.value) return;
-      const data = { ...f, value: parseFloat(f.value) || 0, id: f.id || uid(), parcelas: f.recurrence === "parcelado" ? (parseInt(f.parcelas, 10) || 2) : null };
+      if (!f.desc || f.value === "") return;
+      const data = { ...f, value: parseFloat(f.value) || 0, parcelas: f.recurrence === "parcelado" ? (parseInt(f.parcelas, 10) || 2) : null };
+      if (data.recurrence !== "fixo" || !data.fimEm) delete data.fimEm;
+      if (data.account !== Calculos.CARTAO) delete data.cardId; else delete data.contaId;
+      if (!data.cardId) delete data.cardId;
+      if (!data.contaId) delete data.contaId;
+      if (data.recurrence === "unico") delete data.excecoes;
       const exists = state.txs.some((t) => t.id === data.id);
       state.txs = exists ? state.txs.map((t) => (t.id === data.id ? data : t)) : [data, ...state.txs];
       saveTxs(); closeModal(); render();
+      avisarOrcamento(data, Calculos.anoMes(data.date));
     });
   };
+  const atualizarBotao = () => { const b = document.getElementById("f-save"); if (b) b.disabled = !f.desc || f.value === ""; };
   draw();
 }
 
-/* ---- Cartão / Investimento / Objetivo (iguais à versão anterior) ---- */
-function openCardModal(existing) {
-  const f = existing ? { ...existing } : { name: "", limit: "", dueDay: "", bestDay: "" };
-  openModal(existing ? "Editar cartão" : "Novo cartão", `
-    <div class="field"><label>Nome do cartão</label><input id="f-name" value="${escapeHtml(f.name)}" /></div>
-    <div class="field"><label>Limite (R$)</label><input id="f-limit" type="number" value="${f.limit}" /></div>
-    <div class="field-row">
-      <div class="field"><label>Dia de vencimento</label><input id="f-due" type="number" value="${f.dueDay}" /></div>
-      <div class="field"><label>Melhor dia de compra</label><input id="f-best" type="number" value="${f.bestDay}" /></div>
-    </div>
-    <button class="btn save-btn pessoal" id="f-save">Salvar cartão</button>
-  `);
-  document.getElementById("f-save").addEventListener("click", () => {
-    const name = document.getElementById("f-name").value;
-    if (!name) return;
-    const data = { id: f.id || uid(), name, limit: parseFloat(document.getElementById("f-limit").value) || 0, dueDay: parseInt(document.getElementById("f-due").value) || 0, bestDay: parseInt(document.getElementById("f-best").value) || 0 };
-    const exists = state.cards.some((c) => c.id === data.id);
-    state.cards = exists ? state.cards.map((c) => (c.id === data.id ? data : c)) : [...state.cards, data];
-    saveCards(); closeModal(); render();
-  });
-}
 function openInvModal(existing) {
   const f = existing ? { ...existing } : { name: "", type: TIPOS_INVEST[0], scope: "Pessoal", institution: "", date: todayISO(), applied: "", current: "" };
   const draw = () => {
@@ -1359,7 +1611,20 @@ function startApp() {
 let iaDisponivel = true;
 function ligarAssistenteIA() {
   if (!window.AssistenteIA) { iaDisponivel = false; return; }
-  AssistenteIA.iniciar({ contexto: "financeiro" });
+  AssistenteIA.iniciar({
+    contexto: "financeiro",
+    antesDeEnviar: salvarTudoAgora,
+    // a IA criou um lançamento: busca os dados de novo e redesenha
+    depoisDeAlterar: async () => {
+      try {
+        await salvarTudoAgora();
+        const fin = await api("GET", "/financeiro");
+        state.txs = (fin.dados && fin.dados.transacoes) || state.txs;
+        render();
+        toast("Lançamento criado pela conversa. Confira em Lançamentos.", "ok");
+      } catch (e) { /* na próxima abertura aparece */ }
+    },
+  });
   fetch(API_BASE + "/config/integracoes").then((r) => (r.ok ? r.json() : null)).then((cfg) => {
     if (!cfg || cfg.assistenteIA !== false) return;
     iaDisponivel = false;
@@ -1384,6 +1649,11 @@ async function iniciar() {
     state.goals = d.objetivos || [];
     state.profile = d.perfil || null;
     state.config = { integracaoCrm: "vendas", descontarComissoes: false, ...(d.config || {}) };
+    state.contas = d.contas || [];
+    state.transferencias = d.transferencias || [];
+    state.dividas = d.dividas || [];
+    state.orcamentos = d.orcamentos || [];
+    state.categorias = d.categorias || [];
   } catch (e) {
     telaDeErro(e.message || "Não foi possível carregar seus dados.");
     return;

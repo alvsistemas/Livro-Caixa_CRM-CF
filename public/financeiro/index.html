@@ -4,14 +4,17 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Controle financeiro — Livro-Caixa</title>
+<script>try{document.documentElement.setAttribute("data-theme",localStorage.getItem("darkMode")==="1"?"dark":"light")}catch(e){}</script>
 <link rel="manifest" href="../manifest.json" />
 <meta name="theme-color" content="#2F6F4E" />
 <link rel="icon" href="../icons/icon-192.png" />
 <link rel="apple-touch-icon" href="../icons/icon-192.png" />
 <meta name="apple-mobile-web-app-capable" content="yes" />
 <meta name="apple-mobile-web-app-title" content="Livro-Caixa" />
-<link rel="stylesheet" href="../css/assistente-ia.css?v=20261107" />
-<link rel="stylesheet" href="styles.css?v=20261107" />
+<link rel="stylesheet" href="../css/assistente-ia.css?v=20261109" />
+<link rel="stylesheet" href="styles.css?v=20261109" />
+<link rel="stylesheet" href="../css/transicao-apps.css?v=20261109" />
+<script src="../js/transicao-apps.js?v=20261109"></script>
 </head>
 <body>
 
@@ -32,10 +35,15 @@
       <button class="nav-item active" data-tab="dashboard"><span class="nav-ico">▦</span><span class="nav-label">Painel</span></button>
       <button class="nav-item" data-tab="lucro"><span class="nav-ico">◆</span><span class="nav-label">Lucro</span></button>
       <button class="nav-item" data-tab="lancamentos"><span class="nav-ico">⇄</span><span class="nav-label">Lançamentos</span></button>
+      <button class="nav-item" data-tab="apagar"><span class="nav-ico">◷</span><span class="nav-label">A pagar e receber</span><span class="nav-badge" id="badge-apagar" hidden></span></button>
+      <button class="nav-item" data-tab="contas"><span class="nav-ico">▤</span><span class="nav-label">Contas e saldo</span></button>
       <button class="nav-item" data-tab="cartoes"><span class="nav-ico">▭</span><span class="nav-label">Cartões</span></button>
+      <button class="nav-item" data-tab="orcamento"><span class="nav-ico">¤</span><span class="nav-label">Orçamento</span></button>
+      <button class="nav-item" data-tab="dividas"><span class="nav-ico">⛓</span><span class="nav-label">Dívidas</span></button>
       <button class="nav-item" data-tab="investimentos"><span class="nav-ico">↗</span><span class="nav-label">Investimentos</span></button>
       <button class="nav-item" data-tab="empresa"><span class="nav-ico">▣</span><span class="nav-label">Empresa</span></button>
       <button class="nav-item" data-tab="objetivos"><span class="nav-ico">◎</span><span class="nav-label">Objetivos</span></button>
+      <button class="nav-item" data-tab="relatorios"><span class="nav-ico">▥</span><span class="nav-label">Relatórios</span></button>
       <button class="nav-item" data-tab="assistente"><span class="nav-ico">✦</span><span class="nav-label">Assistente</span></button>
       <button class="nav-item" data-tab="cadastro"><span class="nav-ico">☺</span><span class="nav-label">Meu perfil</span></button>
     </nav>
@@ -52,8 +60,18 @@
 <div id="modal-root"></div>
 <div id="assistente-root"></div>
 
-<script src="../js/assistente-ia.js?v=20261107"></script>
-<script src="script.js?v=20261107"></script>
+<script src="../js/assistente-ia.js?v=20261109"></script>
+<script src="calculos.js?v=20261109"></script>
+<script src="script.js?v=20261109"></script>
+<script src="contas.js?v=20261109"></script>
+<script src="cartoes.js?v=20261109"></script>
+<script src="orcamento.js?v=20261109"></script>
+<script src="dividas.js?v=20261109"></script>
+<script src="comprovantes.js?v=20261109"></script>
+<script src="importar.js?v=20261109"></script>
+<script src="relatorios.js?v=20261109"></script>
+<script src="perfil.js?v=20261109"></script>
+
 
 </body>
 </html>

@@ -20,6 +20,8 @@
   const st = {
     contexto: 'crm',
     saudacao: null,
+    antesDeEnviar: null, // o app pode terminar de salvar o que está pendente antes (a IA pode gravar dados)
+    depoisDeAlterar: null, // chamado quando a IA gravou algo (ex.: criou um lançamento) pra o app recarregar
     habilitado: true,
     aberto: false,
     animando: null, // 'abrindo' | 'fechando' | null
@@ -64,7 +66,7 @@
     if (typeof st.saudacao === 'function') { try { return st.saudacao(st.nome); } catch (e) { /* usa a padrão */ } }
     const quem = st.nome === NOME_PADRAO ? 'o assistente do Livro-Caixa' : st.nome;
     return st.contexto === 'financeiro'
-      ? `Oi! Eu sou ${quem}. Pergunte sobre seus gastos, saldo, lucro, cartões e objetivos, ou peça uma dica. Também ajudo com o CRM.`
+      ? `Oi! Eu sou ${quem}. Pergunte sobre seus gastos, saldo, lucro, cartões e objetivos, peça uma dica, ou me diga um gasto pra eu lançar (ex.: "gastei 52 no mercado no débito"). Também ajudo com o CRM.`
       : `Oi! Eu sou ${quem}. Pode perguntar qualquer coisa sobre como usar o CRM — Pipeline, Agenda, Rotina, Comissões, Fluxos — e também sobre o Controle financeiro.`;
   }
 
@@ -162,6 +164,7 @@
     const controle = new AbortController();
     const limite = setTimeout(() => controle.abort(), 45000);
     try {
+      if (typeof st.antesDeEnviar === 'function') { try { await st.antesDeEnviar(); } catch (e) { /* segue mesmo assim */ } }
       const res = await fetch('/api/ai/assistente', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token() },
@@ -173,6 +176,7 @@
       if (res.status === 401) throw new Error('sua sessão expirou. Entre de novo.');
       if (!res.ok) throw new Error((data && data.error) || 'tenta de novo em instantes.');
       st.mensagens.push({ role: 'assistant', content: (data && data.resposta) || '(sem resposta)' });
+      if (data && data.dadosAlterados && typeof st.depoisDeAlterar === 'function') { try { st.depoisDeAlterar(); } catch (e) { /* ignora */ } }
     } catch (e) {
       const msg = e.name === 'AbortError' ? 'demorou demais para responder. Tenta de novo?' : (e.message || 'tenta de novo em instantes.');
       st.mensagens.push({ role: 'assistant', content: 'Não consegui responder agora — ' + msg, erro: true });
@@ -245,6 +249,8 @@
     iniciar(opcoes = {}) {
       st.contexto = opcoes.contexto === 'financeiro' ? 'financeiro' : 'crm';
       st.saudacao = opcoes.saudacao || null;
+      st.antesDeEnviar = opcoes.antesDeEnviar || null;
+      st.depoisDeAlterar = opcoes.depoisDeAlterar || null;
       carregarPreferencias();
       render();
     },

@@ -126,6 +126,7 @@ const { verificarAutomacoesPorTempo } = require('./utils/automacaoScheduler');
 const { processarFluxos } = require('./utils/fluxoScheduler');
 const { processarAgendamentos } = require('./utils/agendamentoScheduler');
 const { enviarLembretesDeTarefas } = require('./utils/lembreteScheduler');
+const { enviarLembretesFinanceiros } = require('./utils/lembreteFinanceiro');
 const { enviarBackupsSemanais } = require('./utils/backupScheduler');
 const UMA_HORA = 60 * 60 * 1000;
 const CINCO_MINUTOS = 5 * 60 * 1000;
@@ -166,6 +167,9 @@ async function start() {
     // lembretes de tarefa por notificação push (a cada 2 min) e backup semanal por e-mail (confere de 6 em 6 horas)
     setTimeout(enviarLembretesDeTarefas, 20 * 1000);
     setInterval(enviarLembretesDeTarefas, 2 * 60 * 1000);
+    // contas a pagar do Controle financeiro: um resumo por dia, a partir das 8h (confere de 30 em 30 min)
+    setTimeout(enviarLembretesFinanceiros, 60 * 1000);
+    setInterval(enviarLembretesFinanceiros, 30 * 60 * 1000);
     setTimeout(enviarBackupsSemanais, 90 * 1000);
     setInterval(enviarBackupsSemanais, 6 * UMA_HORA);
   } catch (err) {

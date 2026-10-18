@@ -455,7 +455,20 @@ function erroParaMostrar(){
   return errorMsg;
 }
 
-async function apiRequest(method, path, body, timeoutMs){
+// Servidor acordando (Render/Neon) ou ocupado: tenta de novo sozinho, sem deslogar.
+// GET sempre pode repetir; os outros métodos só quando o servidor avisa que a ação nem
+// chegou a rodar (resposta 503 com "tentarDeNovo").
+async function apiRequest(method, path, body, timeoutMs, tentativa){
+  tentativa = tentativa || 0;
+  const res = await apiRequestUmaVez(method, path, body, timeoutMs);
+  if(res && res.__repetir && tentativa < 2){
+    await new Promise(ok=> setTimeout(ok, tentativa ? 2500 : 1000));
+    return apiRequest(method, path, body, timeoutMs, tentativa + 1);
+  }
+  if(res && res.__repetir) throw new Error(res.mensagem);
+  return res;
+}
+async function apiRequestUmaVez(method, path, body, timeoutMs){
   const opts = { method, headers: {} };
   const token = getToken();
   if(token) opts.headers['Authorization'] = 'Bearer ' + token;
@@ -483,7 +496,12 @@ async function apiRequest(method, path, body, timeoutMs){
   }
   if(!res.ok){
     let msg = 'Erro na requisição ao servidor';
-    try{ const data = await res.json(); if(data && data.error) msg = data.error; }catch(e){}
+    let data = null;
+    try{ data = await res.json(); if(data && data.error) msg = data.error; }catch(e){}
+    const servidorAcordando = res.status === 502 || res.status === 503 || res.status === 504;
+    if(servidorAcordando && (method === 'GET' || (data && data.tentarDeNovo))){
+      return { __repetir:true, mensagem: msg === 'Erro na requisição ao servidor' ? 'O servidor está acordando. Tente de novo em alguns segundos.' : msg };
+    }
     throw new Error(msg);
   }
   if(res.status === 204) return null;

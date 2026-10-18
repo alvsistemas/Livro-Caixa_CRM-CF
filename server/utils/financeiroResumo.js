@@ -16,26 +16,12 @@ const anoMes = (v) => {
   return String(v).slice(0, 7);
 };
 
-// Lançamentos do próprio financeiro que caem no mês (único / fixo / parcelado)
+const Calc = require('../../public/financeiro/calculos');
+
+// Lançamentos do próprio financeiro que caem no mês (único / fixo / parcelado, com os
+// ajustes de um mês só e a data de fim) — mesma regra do site
 function ocorrenciasDoMes(transacoes, mes) {
-  const linhas = [];
-  for (const tx of transacoes || []) {
-    const ancora = anoMes(tx.date);
-    if (!/^\d{4}-\d{2}$/.test(ancora)) continue;
-    if (tx.recurrence === 'fixo') {
-      if (ancora <= mes) linhas.push({ tx, valor: Number(tx.value) || 0, parcela: 'fixo' });
-    } else if (tx.recurrence === 'parcelado') {
-      const idx = mesesEntre(ancora, mes);
-      const total = Number(tx.parcelas) || 1;
-      if (idx >= 0 && idx < total) {
-        const valor = tx.parcelas1 == null ? tx.value : (idx < tx.parcelas1 ? tx.value : (tx.value2 != null ? tx.value2 : tx.value));
-        linhas.push({ tx, valor: Number(valor) || 0, parcela: `${idx + 1}/${total}` });
-      }
-    } else if (ancora === mes) {
-      linhas.push({ tx, valor: Number(tx.value) || 0, parcela: null });
-    }
-  }
-  return linhas;
+  return Calc.ocorrenciasDoMes(transacoes, mes).map((o) => ({ tx: { ...o.tx, status: o.status }, valor: o.valor, parcela: o.parcela, data: o.data }));
 }
 
 function parcelaDoContrato(ct, idx) {

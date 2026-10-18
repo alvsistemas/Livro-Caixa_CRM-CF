@@ -16,8 +16,14 @@ module.exports = async function auth(req, res, next) {
     return res.status(401).json({ error: 'Não autenticado.' });
   }
 
+  let payload;
   try {
-    const payload = jwt.verify(token, JWT_SECRET);
+    payload = jwt.verify(token, JWT_SECRET);
+  } catch (err) {
+    return res.status(401).json({ error: 'Sessão expirada ou inválida.' });
+  }
+
+  try {
     if (payload.twofa) {
       // token temporário de 2FA — só serve pra validar o código, nunca pra acessar rotas normais
       return res.status(401).json({ error: 'Não autenticado.' });
@@ -32,7 +38,10 @@ module.exports = async function auth(req, res, next) {
     // (o PostgreSQL só deixa ver e gravar as linhas dele — Row-Level Security)
     comoUsuario(req.userId, () => next());
   } catch (err) {
-    return res.status(401).json({ error: 'Sessão expirada ou inválida.' });
+    // Erro do banco (acordando, conexão caiu...) NÃO é sessão inválida: responder 401 aqui
+    // fazia o site deslogar a pessoa à toa. 503 = "tente de novo", e o site tenta sozinho.
+    console.error('Falha ao conferir a sessão no banco:', err.message);
+    return res.status(503).json({ error: 'O servidor está ocupado. Tente de novo em instantes.', tentarDeNovo: true });
   }
 };
 

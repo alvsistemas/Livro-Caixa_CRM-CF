@@ -250,7 +250,7 @@ router.post('/2fa/confirmar', auth, async (req, res) => {
     const user = await User.findById(req.userId);
     if (!user || !user.twoFactorSecret) return res.status(400).json({ error: 'Inicie a configuração do 2FA primeiro.' });
     if (!verificarCodigoTOTP(user.twoFactorSecret, codigo)) {
-      return res.status(401).json({ error: 'Código incorreto. Confira o app autenticador e tente de novo.' });
+      return res.status(400).json({ error: 'Código incorreto. Confira o app autenticador e tente de novo.' });
     }
     user.twoFactorEnabled = true;
     await user.save();
@@ -268,7 +268,7 @@ router.post('/2fa/desativar', auth, async (req, res) => {
     const user = await User.findById(req.userId);
     if (!user || !user.twoFactorEnabled) return res.status(400).json({ error: 'A verificação em duas etapas não está ativada.' });
     if (!verificarCodigoTOTP(user.twoFactorSecret, codigo)) {
-      return res.status(401).json({ error: 'Código incorreto.' });
+      return res.status(400).json({ error: 'Código incorreto.' });
     }
     user.twoFactorEnabled = false;
     user.twoFactorSecret = null;
@@ -392,7 +392,7 @@ router.put('/password', auth, async (req, res) => {
     if (user.senhaHash) {
       if (!senhaAtual) return res.status(400).json({ error: 'Informe a senha atual.' });
       const ok = await bcrypt.compare(senhaAtual, user.senhaHash);
-      if (!ok) return res.status(401).json({ error: 'Senha atual incorreta.' });
+      if (!ok) return res.status(400).json({ error: 'Senha atual incorreta.' });
     }
 
     user.senhaHash = await bcrypt.hash(senhaNova, 10);
