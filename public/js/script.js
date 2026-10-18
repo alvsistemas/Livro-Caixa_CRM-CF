@@ -202,23 +202,7 @@ let cardTouchDrag = null; // { cardId, cardEl, btn, arrastando, ultimoX, ultimoY
 let cardTouchLongPressTimer = null; // timer do "segurar pra arrastar" do card no celular (precisa existir antes do 1º toque, senão soltar o mouse no desktop gera erro no console)
 let autoScrollDoArrastoInterval = null;
 let arrastoRafPendente = false; // limita o trabalho pesado do arrastar a 1x por quadro de tela
-let assistenteBolhaX = null; // null = fica na posição padrão (canto inferior direito) até a pessoa arrastar
-let assistenteBolhaY = null;
-let assistenteAberto = false;
-let assistenteMensagens = [];
-let assistenteEnviando = false;
-let assistenteAnimando = null; // 'abrindo' | 'fechando' | null — só anima na abertura/fechamento, não a cada re-render
-let assistenteEditandoNome = false;
-const ASSISTENTE_NOME_PADRAO = 'Assistente do CRM';
-let assistenteNome = ASSISTENTE_NOME_PADRAO;
-try{ assistenteNome = (localStorage.getItem('assistente-nome')||'').trim().slice(0,30) || ASSISTENTE_NOME_PADRAO; }catch(err){}
-let assistenteDrag = null; // { startX, startY, bolhaXInicial, bolhaYInicial, moveu, pointerId }
-try{
-  const posSalva = JSON.parse(localStorage.getItem('assistente-bolha-pos')||'null');
-  if(posSalva && typeof posSalva.x==='number' && typeof posSalva.y==='number'){
-    assistenteBolhaX = posSalva.x; assistenteBolhaY = posSalva.y;
-  }
-}catch(e){}
+// Assistente de IA (bolinha): componente compartilhado com o Controle financeiro, em js/assistente-ia.js
 let menuDiaAberto = null; // { diaISO, x, y } — dia com o menu de copiar/mover aberto, ou null
 let checklistDiaModal = null; // { diaISO, modo, marcados:Set } — telinha de escolher quais itens do dia entram na cópia/mover
 let longPressDisparou = false; // marca que o menu já abriu pelo toque, pra ignorar o "click" fantasma que o touch dispara em seguida
@@ -1197,7 +1181,7 @@ async function loadIntegracoesConfig(){
     // que às vezes falha do que esconder uma integração que na verdade está configurada
   }
   renderApp();
-  renderAssistente();
+  if(window.AssistenteIA) AssistenteIA.definirHabilitado(integracoesConfig.assistenteIA); // some se o servidor não tiver chave de IA
 }
 /* ---------- Agenda por link (.ics) — alternativa ao Google Agenda ---------- */
 async function loadIcsStatus(){
@@ -4734,170 +4718,6 @@ function renderAppPreservandoScroll(){
     if(scrollsColunas[el.dataset.colId]!==undefined) el.scrollTop = scrollsColunas[el.dataset.colId];
   });
 }
-/* ---------- Assistente flutuante (bolinha de ajuda) ---------- */
-function renderAssistente(){
-  const root = document.getElementById('assistente-root');
-  if(!root) return;
-  if(!getToken()){ root.innerHTML=''; return; } // só aparece logado
-  if(!integracoesConfig.assistenteIA){ root.innerHTML=''; return; } // servidor sem ANTHROPIC_API_KEY configurada
-
-  const posBolha = assistenteBolhaX!=null ? `left:${assistenteBolhaX}px; top:${assistenteBolhaY}px; right:auto; bottom:auto;` : '';
-
-  root.innerHTML = `
-    <button id="assistente-bolha" class="assistente-bolha" style="${posBolha}" title="${esc(assistenteNome)}">${assistenteAberto ? '✕' : '💬'}</button>
-    ${assistenteAberto ? `
-      <div class="assistente-painel${assistenteAnimando ? ' '+assistenteAnimando : ''}" id="assistente-painel">
-        <div class="assistente-painel-head">
-          ${assistenteEditandoNome
-            ? `<span class="assistente-nome-edit">✨ <input type="text" id="assistente-nome-input" maxlength="30" value="${esc(assistenteNome)}" aria-label="Nome do assistente" /></span>`
-            : `<span class="assistente-nome">✨ <span class="assistente-nome-txt">${esc(assistenteNome)}</span><button id="assistente-editar-nome" class="assistente-editar-nome" title="Editar nome" aria-label="Editar nome do assistente">${ICON_EDIT}</button></span>`}
-          <button id="assistente-fechar" title="Fechar">✕</button>
-        </div>
-        <div class="assistente-mensagens" id="assistente-mensagens-lista">
-          ${!assistenteMensagens.length ? `<div class="assistente-msg assistente-msg-assistant">Oi! Eu sou ${esc(assistenteNome)}. Pode perguntar qualquer coisa sobre como usar o CRM — Pipeline, Agenda, Rotina, Comissões, Fluxos, o que precisar.</div>` : ''}
-          ${assistenteMensagens.map(m=>`<div class="assistente-msg assistente-msg-${m.role}">${esc(m.content)}</div>`).join('')}
-          ${assistenteEnviando ? `<div class="assistente-msg assistente-msg-assistant assistente-digitando">Digitando…</div>` : ''}
-        </div>
-        <div class="assistente-input-row">
-          <input type="text" id="assistente-input" placeholder="Pergunte algo…" ${assistenteEnviando?'disabled':''} />
-          <button id="assistente-enviar" ${assistenteEnviando?'disabled':''} title="Enviar">➤</button>
-        </div>
-      </div>
-    ` : ''}
-  `;
-  if(assistenteAberto) posicionarPainelAssistente();
-  ligarBindingsAssistente();
-  assistenteAnimando = null; // a animação roda uma vez; re-renders seguintes (ex.: nova mensagem) não repetem
-  if(assistenteEditandoNome){ const ni = document.getElementById('assistente-nome-input'); if(ni){ ni.focus(); ni.select(); } }
-  const lista = document.getElementById('assistente-mensagens-lista');
-  if(lista) lista.scrollTop = lista.scrollHeight;
-}
-// Posiciona o painel de conversa perto de onde a bolinha estiver no momento (ela pode
-// ter sido arrastada pra qualquer canto), sempre mantendo ele inteiro dentro da tela.
-function posicionarPainelAssistente(){
-  const bolha = document.getElementById('assistente-bolha');
-  const painel = document.getElementById('assistente-painel');
-  if(!bolha || !painel) return;
-  const rectBolha = bolha.getBoundingClientRect();
-  const largura = 336, altura = 460;
-  let left = rectBolha.right - largura;
-  let top = rectBolha.top - altura - 12;
-  if(top < 12) top = rectBolha.bottom + 12; // não cabe em cima, abre embaixo da bolinha
-  left = Math.min(Math.max(12, left), window.innerWidth - largura - 12);
-  top = Math.min(Math.max(12, top), window.innerHeight - altura - 12);
-  painel.style.left = left+'px';
-  painel.style.top = top+'px';
-  // cresce/encolhe a partir da bolinha
-  painel.style.transformOrigin = (rectBolha.left + rectBolha.width/2 - left)+'px '+(rectBolha.top + rectBolha.height/2 - top)+'px';
-}
-function alternarAssistente(){
-  if(assistenteAberto){
-    if(assistenteAnimando==='fechando') return;
-    const painel = document.getElementById('assistente-painel');
-    const reduz = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    if(!painel || reduz){ assistenteAberto = false; assistenteEditandoNome = false; renderAssistente(); return; }
-    assistenteAnimando = 'fechando';
-    painel.classList.add('fechando');
-    const bolha = document.getElementById('assistente-bolha');
-    if(bolha) bolha.textContent = '💬';
-    setTimeout(()=>{ assistenteAberto = false; assistenteEditandoNome = false; assistenteAnimando = null; renderAssistente(); }, 220);
-  } else {
-    assistenteAberto = true;
-    assistenteAnimando = 'abrindo';
-    renderAssistente();
-  }
-}
-function salvarNomeAssistente(){
-  const ni = document.getElementById('assistente-nome-input');
-  if(ni){
-    const novo = ni.value.trim().slice(0,30) || ASSISTENTE_NOME_PADRAO;
-    assistenteNome = novo;
-    try{ localStorage.setItem('assistente-nome', novo); }catch(err){}
-  }
-  assistenteEditandoNome = false;
-  renderAssistente();
-}
-async function enviarMensagemAssistente(){
-  const input = document.getElementById('assistente-input');
-  if(!input) return;
-  const texto = input.value.trim();
-  if(!texto || assistenteEnviando) return;
-  assistenteMensagens.push({ role:'user', content: texto });
-  input.value = '';
-  assistenteEnviando = true;
-  renderAssistente();
-  try{
-    const data = await apiRequest('POST', '/ai/assistente', { mensagens: assistenteMensagens }, 45000);
-    assistenteMensagens.push({ role:'assistant', content: data.resposta || '(sem resposta)' });
-  }catch(e){
-    assistenteMensagens.push({ role:'assistant', content: 'Não consegui responder agora — ' + (e.message||'tenta de novo em instantes.') });
-  }
-  assistenteEnviando = false;
-  renderAssistente();
-}
-function ligarBindingsAssistente(){
-  const bolha = document.getElementById('assistente-bolha');
-  if(bolha){
-    bolha.addEventListener('pointerdown', (e)=>{
-      assistenteDrag = {
-        startX:e.clientX, startY:e.clientY,
-        bolhaXInicial: bolha.getBoundingClientRect().left, bolhaYInicial: bolha.getBoundingClientRect().top,
-        moveu:false, pointerId:e.pointerId,
-      };
-      try{ bolha.setPointerCapture(e.pointerId); }catch(err){}
-    });
-    bolha.addEventListener('pointermove', (e)=>{
-      if(!assistenteDrag || assistenteDrag.pointerId!==e.pointerId) return;
-      const dx = e.clientX - assistenteDrag.startX;
-      const dy = e.clientY - assistenteDrag.startY;
-      if(!assistenteDrag.moveu && Math.sqrt(dx*dx+dy*dy) < 5) return; // tremedeira do dedo/mão, não é arrastar de verdade ainda
-      assistenteDrag.moveu = true;
-      let novoX = assistenteDrag.bolhaXInicial + dx;
-      let novoY = assistenteDrag.bolhaYInicial + dy;
-      novoX = Math.min(Math.max(4, novoX), window.innerWidth - bolha.offsetWidth - 4);
-      novoY = Math.min(Math.max(4, novoY), window.innerHeight - bolha.offsetHeight - 4);
-      bolha.style.left = novoX+'px';
-      bolha.style.top = novoY+'px';
-      bolha.style.right = 'auto';
-      bolha.style.bottom = 'auto';
-      const painel = document.getElementById('assistente-painel');
-      if(painel) posicionarPainelAssistente();
-    });
-    const soltar = (e)=>{
-      if(!assistenteDrag || assistenteDrag.pointerId!==e.pointerId) return;
-      if(assistenteDrag.moveu){
-        assistenteBolhaX = parseFloat(bolha.style.left);
-        assistenteBolhaY = parseFloat(bolha.style.top);
-        try{ localStorage.setItem('assistente-bolha-pos', JSON.stringify({x:assistenteBolhaX, y:assistenteBolhaY})); }catch(err){}
-      } else {
-        alternarAssistente();
-      }
-      assistenteDrag = null;
-    };
-    bolha.addEventListener('pointerup', soltar);
-    bolha.addEventListener('pointercancel', ()=>{ assistenteDrag = null; });
-  }
-  const fecharBtn = document.getElementById('assistente-fechar');
-  if(fecharBtn) fecharBtn.addEventListener('click', alternarAssistente);
-  const editarNomeBtn = document.getElementById('assistente-editar-nome');
-  if(editarNomeBtn) editarNomeBtn.addEventListener('click', ()=>{ assistenteEditandoNome = true; renderAssistente(); });
-  const nomeInput = document.getElementById('assistente-nome-input');
-  if(nomeInput){
-    let cancelado = false;
-    nomeInput.addEventListener('keydown', (e)=>{
-      if(e.key==='Enter'){ e.preventDefault(); nomeInput.blur(); }
-      else if(e.key==='Escape'){ cancelado = true; assistenteEditandoNome = false; renderAssistente(); }
-    });
-    nomeInput.addEventListener('blur', ()=>{ if(!cancelado && assistenteEditandoNome) salvarNomeAssistente(); });
-  }
-  const enviarBtn = document.getElementById('assistente-enviar');
-  if(enviarBtn) enviarBtn.addEventListener('click', enviarMensagemAssistente);
-  const input = document.getElementById('assistente-input');
-  if(input){
-    input.addEventListener('keydown', (e)=>{ if(e.key==='Enter') enviarMensagemAssistente(); });
-  }
-}
-window.addEventListener('resize', ()=>{ if(assistenteAberto) posicionarPainelAssistente(); });
 
 function renderApp(){
   const app = document.getElementById('app');
@@ -10939,7 +10759,7 @@ function closeConfirm(){ confirmState = null; document.getElementById('confirm-r
 
 /* ---------- start ---------- */
 if(getToken()){
-  renderAssistente();
+  if(window.AssistenteIA) AssistenteIA.iniciar({ contexto:'crm' });
   tratarRetornoDoGoogle();
   loadBoard();
   loadFunis();

@@ -205,6 +205,37 @@ describe('API com PostgreSQL (integração)', { skip: pular }, () => {
     assert.equal((await api('PUT', '/api/financeiro/senhas', { valor: [] }, t)).status, 400);
   });
 
+  test('IA: ferramentas do Controle financeiro leem os dados da própria pessoa', async () => {
+    const { comoUsuario } = require('../db/contexto');
+    const { executarFerramenta, contextoDaPessoa } = require('../routes/ai');
+    const t = contas.ana.token;
+    const mes = new Date().toISOString().slice(0, 7);
+    await api('PUT', '/api/financeiro/transacoes', { valor: [
+      { id: 'ia1', date: `${mes}-02`, desc: 'Salário', type: 'Receita', category: 'Salário', scope: 'Pessoal', status: 'Pago', value: 4000, recurrence: 'unico' },
+      { id: 'ia2', date: `${mes}-03`, desc: 'Mercado', type: 'Despesa', category: 'Alimentação', scope: 'Pessoal', status: 'Pago', value: 650.35, recurrence: 'unico' },
+    ] }, t);
+    await api('PUT', '/api/financeiro/perfil', { valor: { name: 'Ana', character: 'jonathan', characterName: 'Pedro', plan: 'gratis', photo: null } }, t);
+    await api('PUT', '/api/financeiro/config', { valor: { integracaoCrm: 'vendas' } }, t);
+    await api('PUT', '/api/financeiro/objetivos', { valor: [{ id: 'g1', name: 'Reserva', scope: 'Pessoal', target: 1000, current: 250 }] }, t);
+
+    const resumo = await comoUsuario(contas.ana.id, () => executarFerramenta('resumo_financeiro', {}, contas.ana.id));
+    assert.equal(resumo.mes, mes);
+    assert.ok(resumo.total.receitas >= 4000, JSON.stringify(resumo)); // + vendas do CRM no mês, se houver
+    assert.equal(resumo.pessoal.despesas, 650.35);
+    assert.equal(resumo.maioresDespesas[0].categoria, 'Alimentação');
+    const lista = await comoUsuario(contas.ana.id, () => executarFerramenta('lancamentos_financeiros', { tipo: 'Despesa' }, contas.ana.id));
+    assert.deepEqual(lista.lancamentos.map((l) => l.descricao), ['Mercado']);
+    const metas = await comoUsuario(contas.ana.id, () => executarFerramenta('cartoes_objetivos_investimentos', {}, contas.ana.id));
+    assert.equal(metas.objetivos[0].progresso, '25%');
+    const ctx = await comoUsuario(contas.ana.id, () => contextoDaPessoa(contas.ana.id, 'financeiro'));
+    assert.match(ctx, /Controle financeiro/);
+    assert.match(ctx, /O Endividado/);
+    assert.match(ctx, /Pedro/);
+    // outra pessoa: a mesma ferramenta não enxerga os dados da Ana
+    const daBia = await comoUsuario(contas.bia.id, () => executarFerramenta('resumo_financeiro', {}, contas.bia.id));
+    assert.equal(daBia.pessoal.despesas, 0);
+  });
+
   test('equipe: gestor vê o resumo dos membros e passa um lead pra outra pessoa', async () => {
     const ana = contas.ana.token;
     const eq = await api('POST', '/api/equipe', { nome: 'Time A' }, ana);

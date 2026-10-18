@@ -8,6 +8,8 @@ const Contrato = require('../models/Contrato');
 const Funil = require('../models/Funil');
 const { perguntarIA, chamarIA } = require('../utils/ia');
 const { resumoComissoesDoMes } = require('../utils/comissaoResumo');
+const { carregarFinanceiro } = require('../utils/financeiro');
+const { resumoDoMes, lancamentosDoMes, cartoesObjetivosInvestimentos } = require('../utils/financeiroResumo');
 
 const router = express.Router();
 router.use(auth); // todas as rotas de IA exigem login
@@ -98,9 +100,9 @@ Observações: ${card.obs || 'nenhuma'}`;
 // Descreve o sistema inteiro pro assistente flutuante saber explicar qualquer parte
 // dele e ajudar o usuário a navegar. Mantido aqui (não em arquivo à parte) porque só
 // essa rota usa.
-const SYSTEM_PROMPT_ASSISTENTE = `Você é o assistente de ajuda do CRM do "Livro-Caixa", um sistema de CRM (gestão de vendas) para empresas e profissionais de vendas no Brasil, de qualquer segmento. Seu papel é tirar dúvidas sobre como usar o sistema e ajudar o usuário a encontrar e entender qualquer funcionalidade. Responda sempre em português do Brasil, de forma direta e amigável, sem enrolação. Use no máximo uns 3-4 parágrafos curtos ou uma lista curta — nunca uma resposta gigante.
+const SYSTEM_PROMPT_ASSISTENTE = `Você é o assistente do "Livro-Caixa", um sistema brasileiro com dois aplicativos na mesma conta: o **CRM** (gestão de vendas, para empresas e profissionais de qualquer segmento) e o **Controle financeiro** (dinheiro pessoal e da empresa). Você é o mesmo assistente nos dois: a conversa continua quando a pessoa troca de aplicativo. Seu papel é tirar dúvidas sobre como usar o sistema, ajudar a encontrar qualquer funcionalidade e responder sobre os dados reais da pessoa. Responda sempre em português do Brasil, de forma direta e amigável, sem enrolação. Use no máximo uns 3-4 parágrafos curtos ou uma lista curta — nunca uma resposta gigante.
 
-Estas são as áreas do sistema, acessíveis pela barra lateral:
+Estas são as áreas do CRM, acessíveis pela barra lateral:
 
 - **Dashboard**: métricas do período (novos leads, em negociação, vendido, taxa de conversão), meta de vendas individual e da equipe, gráfico de leads captados, funil por etapa, últimos leads e tarefas abertas. Os painéis podem ser recolhidos clicando na seta ao lado do título.
 - **Pipeline**: o quadro Kanban principal, com colunas que representam etapas do funil de vendas (ex: Leads, Qualificação, Negociação, Fechado, Perdido). Dá pra ter vários funis diferentes (aba "Funil Principal" + "Novo funil"). Os clientes (cards) são arrastados entre colunas — no computador com o mouse, no celular segurando e arrastando o card. Cada card mostra nome, valor, temperatura (frio/morno/quente), telefone com botão de WhatsApp direto. Dentro de cada card tem um botão "Extras" que abre Etiquetas, Anexos, Tarefas e Histórico de contato daquele cliente. Também dá pra filtrar por mês ou ver "Esfriando" (leads parados há mais de 7 dias).
@@ -115,7 +117,53 @@ Estas são as áreas do sistema, acessíveis pela barra lateral:
 - **Trocar de aplicativo** (no fim da barra lateral): o Livro-Caixa tem dois aplicativos com a mesma conta — este CRM e o **Controle financeiro** (receitas, despesas, cartões, investimentos, objetivos e lucro). As vendas fechadas no CRM (ou as comissões, conforme a configuração escolhida no Controle financeiro) entram sozinhas como receitas lá, pra mostrar o lucro de verdade.
 - **Configurações**: perfil (nome, foto, senha, 2FA), integrações (WhatsApp Business, Google Agenda, Instagram, templates de mensagem), aparência (cor de destaque, modo claro/escuro), campos personalizados, e manutenção (backup dos dados).
 
-Se o usuário perguntar algo bem específico dos dados dele (tipo "quantos leads eu tenho" ou "quanto vou receber de comissão"), USE as ferramentas disponíveis pra consultar os dados reais dele antes de responder — nunca invente números. Se a pergunta não tiver nada a ver com o CRM, responda com educação que seu foco é ajudar com o sistema.`;
+E estas são as áreas do Controle financeiro:
+
+- **Painel**: resumo do mês (receitas, despesas, saldo), dica do dia do personagem, objetivos e gráficos. Dá pra filtrar Pessoal / Empresa / Todos e trocar de mês.
+- **Lucro**: junta o financeiro com o CRM. A pessoa escolhe como o CRM entra: "Valor das vendas" (clientes na coluna de ganho viram receita da Empresa no mês da venda, com opção de descontar as comissões como despesa), "Minhas comissões" (as parcelas das comissões viram receita) ou "Não usar o CRM". Mostra receitas, despesas, lucro, margem e os últimos 6 meses.
+- **Lançamentos**: receitas e despesas, cada uma Pessoal ou Empresa, com categoria, forma de pagamento, status e recorrência (único, fixo todo mês ou parcelado). O que vem do CRM aparece com o selo "CRM", só para leitura.
+- **Cartões**: cartões de crédito com limite, dia de vencimento e melhor dia de compra.
+- **Investimentos**: aplicações com valor aplicado e valor atual.
+- **Empresa**: visão só das finanças da empresa.
+- **Objetivos**: metas com valor, quanto já tem e prazo.
+- **Assistente**: alertas automáticos (limite do cartão, metas perto do prazo) e atalhos de perguntas para você (a IA da bolinha).
+- **Meu perfil**: nome, foto, personagem (trocar personagem ou refazer as perguntas do primeiro acesso) e nível de evolução.
+- **Personagens**: no primeiro acesso a pessoa responde perguntas rápidas e recebe um perfil (O Organizado, O Endividado, O Consumista, O Investidor, ou as versões femininas, como A Empresária e A Investidora), com um nome que ela escolhe. O perfil define a cor do painel e o estilo das dicas.
+
+Se o usuário perguntar algo específico dos dados dele (tipo "quantos leads eu tenho", "quanto vou receber de comissão", "quanto gastei esse mês", "qual foi meu lucro"), USE as ferramentas disponíveis pra consultar os dados reais antes de responder — nunca invente números. Valores em reais, no formato brasileiro (R$ 1.234,56). Se a pergunta não tiver nada a ver com o sistema ou com as finanças e vendas da pessoa, responda com educação que seu foco é ajudar com o Livro-Caixa.`;
+
+// Personagens do Controle financeiro (mesmos ids de public/financeiro/script.js)
+const PERSONAGENS = {
+  lily: 'A Empresária', julia: 'A Recomeçando', maria: 'A Consumista', sofia: 'A Investidora',
+  mateus: 'O Organizado', jonathan: 'O Endividado', lucas: 'O Consumista', rafael: 'O Investidor',
+};
+const ESTILO_DO_PERSONAGEM = {
+  lily: 'organizada', mateus: 'organizada', julia: 'endividada', jonathan: 'endividada',
+  maria: 'consumista', lucas: 'consumista', sofia: 'investidora', rafael: 'investidora',
+};
+const DICA_POR_ESTILO = {
+  organizada: 'já tem disciplina: sugira planejamento, orçamento por categoria e automatizar a poupança',
+  endividada: 'está saindo das dívidas: seja acolhedor, priorize quitar juros altos, renegociar e evitar novos parcelamentos',
+  consumista: 'gasta por impulso: sem julgamento, sugira limites para gastos de desejo, esperar 24h antes de comprar e metas divertidas',
+  investidora: 'quer fazer o dinheiro render: fale de reserva de emergência, diversificação e reinvestimento, sem recomendar produtos específicos',
+};
+
+// Parte do system prompt que muda por pessoa: em qual aplicativo ela está e o perfil financeiro
+async function contextoDaPessoa(userId, contexto) {
+  const partes = [`A pessoa está usando agora o ${contexto === 'financeiro' ? 'Controle financeiro' : 'CRM'}.`];
+  try {
+    const { query } = require('../db/pool');
+    const { rows } = await query('SELECT perfil FROM financeiro_perfis WHERE user_id = $1::uuid', [userId]);
+    const perfil = rows[0] && rows[0].perfil;
+    if (perfil && perfil.character && PERSONAGENS[perfil.character]) {
+      const estilo = ESTILO_DO_PERSONAGEM[perfil.character];
+      const nome = perfil.characterName ? ` (personagem chamado ${String(perfil.characterName).slice(0, 40)})` : '';
+      partes.push(`No Controle financeiro, o perfil dela é "${PERSONAGENS[perfil.character]}"${nome}. Ao dar dicas de dinheiro, lembre que essa pessoa ${DICA_POR_ESTILO[estilo]}.`);
+      if (perfil.name) partes.push(`Ela gosta de ser chamada de ${String(perfil.name).slice(0, 40)}.`);
+    }
+  } catch (err) { /* sem perfil financeiro: segue só com o aplicativo atual */ }
+  return partes.join(' ');
+}
 
 // Ferramentas que o assistente pode usar pra consultar os dados de verdade do usuário
 // (a IA decide sozinha quando precisa de cada uma, com base na pergunta)
@@ -133,6 +181,28 @@ const FERRAMENTAS_ASSISTENTE = [
   {
     name: 'resumo_comissoes',
     description: 'Retorna quanto o usuário tem previsto de comissão no mês atual e o total ainda ativo a receber dos contratos em andamento. Use quando perguntarem sobre comissões, quanto vão receber, etc.',
+    input_schema: { type: 'object', properties: {} },
+  },
+  {
+    name: 'resumo_financeiro',
+    description: 'Controle financeiro: totais de um mês (receitas, despesas e saldo no total, no Pessoal e na Empresa), quanto entrou do CRM, as categorias com mais gasto e os lançamentos pendentes. Use para perguntas sobre gastos, saldo, lucro, quanto sobrou, onde está indo o dinheiro.',
+    input_schema: { type: 'object', properties: { mes: { type: 'string', description: 'Mês no formato AAAA-MM. Se não informado, o mês atual.' } } },
+  },
+  {
+    name: 'lancamentos_financeiros',
+    description: 'Controle financeiro: lista os lançamentos de um mês (os 25 maiores), com filtro opcional por tipo (Receita ou Despesa) e por categoria. Use quando a pessoa quiser ver ou conferir lançamentos específicos.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        mes: { type: 'string', description: 'Mês no formato AAAA-MM. Se não informado, o mês atual.' },
+        tipo: { type: 'string', enum: ['Receita', 'Despesa'] },
+        categoria: { type: 'string', description: 'Categoria ou parte do nome (ex.: Alimentação, Moradia)' },
+      },
+    },
+  },
+  {
+    name: 'cartoes_objetivos_investimentos',
+    description: 'Controle financeiro: cartões de crédito (limite, vencimento, melhor dia de compra), objetivos (meta, quanto já tem, prazo, progresso) e investimentos (aplicado e atual).',
     input_schema: { type: 'object', properties: {} },
   },
   {
@@ -183,6 +253,23 @@ async function executarFerramenta(nome, input, userId) {
     return { mes: mesAtual, ...resumo };
   }
 
+  if (nome === 'resumo_financeiro' || nome === 'lancamentos_financeiros' || nome === 'cartoes_objetivos_investimentos') {
+    const dados = await carregarFinanceiro(userId);
+    if (nome === 'cartoes_objetivos_investimentos') return cartoesObjetivosInvestimentos(dados);
+    const mes = /^\d{4}-\d{2}$/.test(String(input && input.mes || '')) ? input.mes : new Date().toISOString().slice(0, 7);
+    const modo = (dados.config && dados.config.integracaoCrm) || 'vendas';
+    const crm = { colunas: [], cards: [], contratos: [] };
+    if (modo === 'vendas') {
+      crm.colunas = await Column.find({ userId, tipo: 'ganho' });
+      crm.cards = crm.colunas.length ? await Card.find({ userId, columnId: { $in: crm.colunas.map((c) => c._id) } }) : [];
+    }
+    if (modo === 'comissoes' || (modo === 'vendas' && dados.config && dados.config.descontarComissoes)) {
+      crm.contratos = await Contrato.find({ userId });
+    }
+    if (nome === 'resumo_financeiro') return resumoDoMes(dados, crm, mes);
+    return lancamentosDoMes(dados, crm, mes, { tipo: input && input.tipo, categoria: input && input.categoria });
+  }
+
   if (nome === 'buscar_lead') {
     const nome_ = (input && input.nome || '').trim();
     if (!nome_) return { encontrados: [] };
@@ -203,6 +290,7 @@ async function executarFerramenta(nome, input, userId) {
 router.post('/assistente', async (req, res) => {
   try {
     const { mensagens } = req.body;
+    const contexto = req.body.contexto === 'financeiro' ? 'financeiro' : 'crm';
     if (!Array.isArray(mensagens) || !mensagens.length) {
       return res.status(400).json({ error: 'Nenhuma mensagem enviada.' });
     }
@@ -212,13 +300,14 @@ router.post('/assistente', async (req, res) => {
       content: String(m.content || '').slice(0, 2000),
     }));
 
+    const systemPrompt = `${SYSTEM_PROMPT_ASSISTENTE}\n\n${await contextoDaPessoa(req.userId, contexto)}`;
     let resposta = '';
     for (let rodada = 0; rodada < 4; rodada++) {
       const data = await chamarIA({
-        system: SYSTEM_PROMPT_ASSISTENTE,
+        system: systemPrompt,
         mensagens: historico,
         tools: FERRAMENTAS_ASSISTENTE,
-        maxTokens: 500,
+        maxTokens: 700,
       });
 
       if (data.stop_reason === 'tool_use') {
@@ -250,3 +339,7 @@ router.post('/assistente', async (req, res) => {
 });
 
 module.exports = router;
+
+// para os testes de integração
+module.exports.executarFerramenta = executarFerramenta;
+module.exports.contextoDaPessoa = contextoDaPessoa;

@@ -37,12 +37,19 @@
 - O resultado escolhe um dos 8 modelos de `CHARACTERS`, mostrado só pela palavra (`title`: "O Organizado", "A Investidora"...). A pessoa dá um nome ao personagem (digitado ou de `NOMES_PRONTOS`), salvo em `perfil.characterName`; respostas em `perfil.quiz`.
 - Meu perfil: "Trocar personagem" (modelos → nome) e "Refazer as perguntas". Perfis antigos sem `characterName` usam o nome original do modelo.
 
+## Assistente de IA (um só para os dois apps)
+- Componente compartilhado: `public/js/assistente-ia.js` + `public/css/assistente-ia.css` (bolinha arrastável no canto inferior direito). Cada app só define as cores em `#assistente-root` (variáveis `--ai-*`): CRM usa a cor de destaque; financeiro usa a cor do personagem.
+- Mesmo nome (localStorage `assistente-nome`, padrão "Assistente do Livro-Caixa") e a mesma conversa (sessionStorage `assistente-conversa`), que continua ao trocar de aplicativo. Botão ↺ começa conversa nova.
+- Rota `POST /api/ai/assistente` recebe `contexto` ('crm' | 'financeiro'); o system prompt descreve os dois apps e inclui o app atual e o perfil/personagem do financeiro (`contextoDaPessoa`).
+- Ferramentas novas do financeiro: `resumo_financeiro`, `lancamentos_financeiros`, `cartoes_objetivos_investimentos` (contas em `server/utils/financeiroResumo.js`, espelhando a aba Lucro, incluindo vendas/comissões do CRM).
+- Aba Assistente do financeiro: alertas + atalhos que mandam a pergunta para a bolinha. O antigo robô de palavras-chave saiu.
+
 ## O que saiu do Livro-Caixa antigo
 - Dados de exemplo (seeds): conta nova começa vazia.
 - A aba "Comissões" de consórcio (fórmula da carta de crédito): as comissões agora vêm do CRM.
 
 ## Pendências
-- **Premium do financeiro ainda é simulado** (a própria pessoa ativa em "Meu perfil"); falta cobrança real e ligar com os planos da página de divulgação.
+- **Plano premium removido por enquanto** (a pedido): todas as abas do financeiro liberadas, sem cadeados, sem tela de bloqueio e sem o cartão "Plano". Refazer depois como sistema de assinatura de verdade (cobrança real, ligado aos planos da página de divulgação). O campo `perfil.plan` de contas antigas fica salvo, mas não é usado.
 - Dados do Livro-Caixa antigo (salvos no navegador) não são importados automaticamente.
 - Trocar `SEU-APP.onrender.com` pelo endereço real (página de divulgação, README, `.env.example`, `utils/email.js`).
 - E-mails de contato em `privacidade.html` e `termos.html` ainda são `SEU-EMAIL-DE-CONTATO-AQUI`.

@@ -61,8 +61,8 @@ financeiro (`controleFinanceiro`).
   `test/integracao.test.js` (cadastro, isolamento entre contas, RLS, comissões, equipe,
   financeiro, backup, webhooks, agendadores). O banco de teste é apagado a cada execução.
 
-O plano Premium do Controle financeiro (Investimentos, Empresa e Assistente) ainda é
-**simulado**: a própria pessoa ativa em "Meu perfil". Falta ligar com a cobrança real.
+Por enquanto o Controle financeiro não tem plano pago: todas as abas ficam liberadas.
+O sistema de assinatura vai ser refeito depois, com cobrança real.
 
 
 ⚠️ **Testes automatizados:** rode `cd server && npm test` pra rodar os testes

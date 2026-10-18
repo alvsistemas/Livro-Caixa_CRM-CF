@@ -56,7 +56,6 @@ const TIPS = {
   ],
 };
 
-const PREMIUM_TABS = ["investimentos", "empresa", "assistente"];
 
 /* ----------------------------------------------------------------------- */
 /* Constantes gerais                                                       */
@@ -133,7 +132,6 @@ const state = {
   config: { integracaoCrm: "vendas", descontarComissoes: false },
   crm: { columns: [], cards: [], contratos: [], carregado: false, erro: null },
   user: null,
-  chatLog: [],
 };
 
 /* Salvamento: cada alteração marca a seção como "pendente" e, depois de uma pausa
@@ -274,7 +272,6 @@ function getCharacter() {
   if (!state.profile || !state.profile.character) return null;
   return CHARACTERS.find((c) => c.id === state.profile.character) || null;
 }
-function isPremium() { return !!(state.profile && state.profile.plan === "premium"); }
 
 /* ----------------------------------------------------------------------- */
 /* Motor de ocorrências (único / fixo / parcelado)                         */
@@ -326,12 +323,6 @@ document.getElementById("nav").addEventListener("click", (e) => {
   const btn = e.target.closest(".nav-item");
   if (!btn) return;
   const tab = btn.dataset.tab;
-  if (PREMIUM_TABS.includes(tab) && !isPremium()) {
-    state.tab = tab;
-    document.querySelectorAll(".nav-item").forEach((b) => b.classList.toggle("active", b === btn));
-    render();
-    return;
-  }
   state.tab = tab;
   document.querySelectorAll(".nav-item").forEach((b) => b.classList.toggle("active", b === btn));
   render();
@@ -340,7 +331,6 @@ document.getElementById("nav").addEventListener("click", (e) => {
 function render() {
   applyTheme();
   const main = document.getElementById("main");
-  if (PREMIUM_TABS.includes(state.tab) && !isPremium()) { main.innerHTML = renderPaywall(state.tab); attachMainEvents(); return; }
   if (state.tab === "dashboard") main.innerHTML = renderDashboard();
   else if (state.tab === "lancamentos") main.innerHTML = renderLancamentos();
   else if (state.tab === "cartoes") main.innerHTML = renderCartoes();
@@ -451,30 +441,6 @@ function occTable(rows) {
 }
 
 /* ----------------------------------------------------------------------- */
-/* Paywall                                                                  */
-/* ----------------------------------------------------------------------- */
-const PAYWALL_INFO = {
-  investimentos: { title: "Investimentos é premium", desc: "Acompanhe seus investimentos, rentabilidade e evolução do patrimônio." },
-  empresa: { title: "Área Empresa é premium", desc: "Separe as finanças do seu CNPJ com painel próprio." },
-  assistente: { title: "Assistente é premium", desc: "Dicas, alertas e respostas personalizadas com base no seu perfil financeiro." },
-};
-function renderPaywall(tab) {
-  const info = PAYWALL_INFO[tab] || { title: "Recurso premium", desc: "Esse recurso faz parte do plano pago." };
-  return `<div class="paywall">
-    <div class="lock-big">🔒</div>
-    <h2>${info.title}</h2>
-    <p>${info.desc}</p>
-    <ul>
-      <li>Investimentos com rentabilidade automática</li>
-      <li>Painel separado da Empresa</li>
-      <li>Assistente com dicas e alertas personalizados</li>
-    </ul>
-    <div><button class="btn char save-btn" id="unlock-premium-btn">Ativar Premium</button></div>
-    <p style="font-size:11px;margin-top:10px">Assinatura simulada — sem cobrança real.</p>
-  </div>`;
-}
-
-/* ----------------------------------------------------------------------- */
 /* Painel (Dashboard)                                                       */
 /* ----------------------------------------------------------------------- */
 function renderDashboard() {
@@ -529,8 +495,8 @@ function renderDashboard() {
 
     <div class="grid grid-3">
       ${statCard("Limite de cartões", fmtBRL(state.cards.reduce((a, c) => a + c.limit, 0)), COLORS.pessoal)}
-      ${isPremium() ? statCard("Total investido", fmtBRL(investTotals.applied), COLORS.pessoal, `Valor atual: ${fmtBRL(investTotals.current)}`) : statCard("Investimentos", "🔒 Premium", COLORS.ink)}
-      ${isPremium() ? statCard("Rentabilidade média", fmtPct(rentMedia), COLORS.gold) : statCard("Assistente & mais", "🔒 Premium", COLORS.ink)}
+      ${statCard("Total investido", fmtBRL(investTotals.applied), COLORS.pessoal, `Valor atual: ${fmtBRL(investTotals.current)}`)}
+      ${statCard("Rentabilidade média", fmtPct(rentMedia), COLORS.gold)}
     </div>
   `;
 }
@@ -769,47 +735,28 @@ function buildAlerts() {
   return alerts;
 }
 
-function answerQuestion(text) {
-  const q = text.toLowerCase();
-  const rows = occurrencesForMonth(state.month);
-  const s = sumsFromOccurrences(rows);
-  const char = getCharacter();
-  if (/lucro|margem/.test(q)) return `Seu lucro em ${monthLabel(state.month)} é ${fmtBRL(s.saldo)}${s.rec > 0 ? ` (margem de ${fmtPct(s.saldo / s.rec)})` : ""}. Veja os detalhes na aba Lucro.`;
-  if (/venda|crm/.test(q)) { const v = totalCrm(rows); return v > 0 ? `Entraram ${fmtBRL(v)} do CRM em ${monthLabel(state.month)}.` : `Nenhuma venda ou comissão do CRM entrou em ${monthLabel(state.month)}.`; }
-  if (/saldo/.test(q)) return `Seu saldo em ${monthLabel(state.month)} é ${fmtBRL(s.saldo)} (receitas ${fmtBRL(s.rec)} − despesas ${fmtBRL(s.desp)}).`;
-  if (/cart[aã]o|fatura/.test(q)) { const u = cardUsage(); return `A fatura estimada dos seus cartões esse mês é de aproximadamente ${fmtBRL(u)} por cartão.`; }
-  if (/comiss/.test(q)) { const c = occurrencesForMonth(state.month).filter((r) => r.tx.category === "Comissão").reduce((a, r) => a + r.value, 0); return `Você tem ${fmtBRL(c)} de comissão prevista para ${monthLabel(state.month)}.`; }
-  if (/meta|objetivo/.test(q)) { const g = state.goals[0]; return g ? `Sua meta "${g.name}" está em ${fmtPct(g.current / g.target)} (${fmtBRL(g.current)} de ${fmtBRL(g.target)}).` : "Você ainda não tem metas cadastradas."; }
-  if (/investir|investimento/.test(q)) return "Considere manter uma reserva de emergência antes de investir em renda variável, e revisite sua carteira a cada trimestre.";
-  if (/economizar|poupar|guardar/.test(q)) return "Uma boa prática é separar um valor fixo assim que a receita entra — mesmo que pequeno, o hábito é o que conta.";
-  if (/d[íi]vida/.test(q)) return "Priorize sempre a dívida com maior juros primeiro, e evite contrair novas enquanto quita as atuais.";
-  const tips = char ? TIPS[char.profile] : TIPS.organizadora;
-  return tips[Math.floor(Math.random() * tips.length)];
-}
-
 function renderAssistente() {
   const char = getCharacter();
   const alerts = buildAlerts();
-  if (state.chatLog.length === 0 && char) {
-    state.chatLog.push({ from: "bot", text: `Oi, ${escapeHtml(state.profile.name || "")}! Eu sou ${escapeHtml(nomeDoPersonagem())}, ${escapeHtml(char.title.toLowerCase())} que vai te acompanhar aqui. Pode me perguntar sobre seu lucro, saldo, vendas do CRM, cartões, metas ou pedir uma dica.` });
-  }
-  const msgs = state.chatLog.map((m) => `<div class="chat-msg ${m.from}">${m.text}</div>`).join("");
+  const perguntas = [
+    ["Meu saldo", "Qual é o meu saldo esse mês?"],
+    ["Meu lucro", "Qual foi meu lucro esse mês e quanto veio do CRM?"],
+    ["Para onde vai meu dinheiro", "Em que categorias eu mais gastei esse mês?"],
+    ["Meus objetivos", "Como estão meus objetivos?"],
+    ["Uma dica", "Me dá uma dica para o meu perfil financeiro."],
+  ];
   return `
     <div class="row-between"><div><h1 class="page-title">Assistente</h1><p class="page-sub">Dicas e alertas baseados nos seus dados${char ? ` · estilo ${escapeHtml(char.title.toLowerCase())}` : ""}</p></div></div>
     <div class="grid grid-2" style="align-items:start">
       <div>
-        <h2 class="section-title" style="border-color:var(--char)">Conversa</h2>
-        <div class="chat-box" id="chat-box">${msgs}</div>
-        <div class="chat-suggestions">
-          <button class="chip ask-chip" data-ask="Qual meu saldo esse mês?">Meu saldo</button>
-          <button class="chip ask-chip" data-ask="Como está meu cartão?">Meu cartão</button>
-          <button class="chip ask-chip" data-ask="Qual meu lucro esse mês?">Meu lucro</button>
-          <button class="chip ask-chip" data-ask="Quanto entrou do CRM?">Vendas do CRM</button>
-          <button class="chip ask-chip" data-ask="Me dá uma dica">Dica rápida</button>
-        </div>
-        <div class="chat-input-row">
-          <input type="text" id="chat-input" placeholder="Pergunte alguma coisa..." />
-          <button id="chat-send">➤</button>
+        <h2 class="section-title" style="border-color:var(--char)">Converse com a IA</h2>
+        <div class="card ia-card">
+          ${iaDisponivel
+            ? `<p>A conversa fica na bolinha <span class="ia-bolinha-mini" aria-hidden="true">💬</span> no canto da tela. É a mesma IA do CRM: ela consulta seus lançamentos, cartões, objetivos e vendas de verdade, e a conversa continua quando você troca de aplicativo.</p>
+               <p class="ia-card-sub">Toque numa pergunta para começar:</p>
+               <div class="chat-suggestions">${perguntas.map(([rotulo, pergunta]) => `<button class="chip ask-chip" data-ask="${escapeHtml(pergunta)}">${escapeHtml(rotulo)}</button>`).join("")}</div>
+               <button class="btn char" id="abrir-ia-btn">Abrir a conversa</button>`
+            : `<p>O assistente de IA não está ligado neste servidor no momento. Os alertas ao lado continuam funcionando.</p>`}
         </div>
       </div>
       <div>
@@ -841,30 +788,21 @@ function renderCadastro() {
   const photo = state.profile && state.profile.photo;
   return `
     <h1 class="page-title">Meu perfil</h1>
-    <p class="page-sub" style="margin-bottom:22px">Suas informações, personagem e plano</p>
+    <p class="page-sub" style="margin-bottom:22px">Suas informações e seu personagem</p>
 
     <div class="profile-header">
       ${photo ? `<img class="profile-photo" src="${photo}" />` : `<div class="profile-photo-placeholder">${(state.profile && state.profile.name ? state.profile.name[0] : "?").toUpperCase()}</div>`}
       <div>
         <h2 style="font-family:Georgia,serif;margin:0 0 4px">${escapeHtml((state.profile && state.profile.name) || "Sem nome")}</h2>
         <p style="margin:0;font-size:13px;color:var(--ink-muted)">${char ? `Personagem: ${escapeHtml(nomeDoPersonagem())} · ${escapeHtml(char.title)}` : "Nenhum personagem escolhido"}</p>
-        <span class="plan-badge ${isPremium() ? "premium" : "gratis"}">${isPremium() ? "Premium" : "Grátis"}</span>
       </div>
     </div>
 
-    <div class="grid grid-2" style="margin-bottom:20px">
-      <div class="card">
-        <h2 class="section-title" style="border-color:var(--char)">Dados</h2>
-        <div class="field"><label>Nome</label><input id="f-profile-name" value="${escapeHtml((state.profile && state.profile.name) || "")}" /></div>
-        <div class="field"><label>Foto</label><input id="f-profile-photo" type="file" accept="image/*" /></div>
-        <button class="btn char save-btn" id="save-profile-btn">Salvar dados</button>
-      </div>
-      <div class="card">
-        <h2 class="section-title" style="border-color:${COLORS.gold}">Plano</h2>
-        <p style="font-size:13px;color:var(--ink-muted);margin-top:0">${isPremium() ? "Você tem acesso completo: Investimentos, Empresa e Assistente." : "No plano grátis, Investimentos, Empresa e Assistente ficam bloqueados."}</p>
-        <button class="btn ${isPremium() ? "ghost" : "gold"} save-btn" id="toggle-plan-btn">${isPremium() ? "Voltar para o plano Grátis" : "Ativar Premium (simulado)"}</button>
-        <p style="font-size:11px;color:var(--ink-muted);margin:10px 0 0">Assinatura simulada — sem cobrança real, apenas para você ver como funciona.</p>
-      </div>
+    <div class="card" style="margin-bottom:20px">
+      <h2 class="section-title" style="border-color:var(--char)">Dados</h2>
+      <div class="field"><label>Nome</label><input id="f-profile-name" value="${escapeHtml((state.profile && state.profile.name) || "")}" /></div>
+      <div class="field"><label>Foto</label><input id="f-profile-photo" type="file" accept="image/*" /></div>
+      <button class="btn char save-btn" id="save-profile-btn">Salvar dados</button>
     </div>
 
     <div class="card" style="margin-bottom:20px">
@@ -893,8 +831,6 @@ function attachMainEvents() {
   document.querySelectorAll("[data-scope]").forEach((btn) => btn.addEventListener("click", () => { state.scopeFilter = btn.dataset.scope; render(); }));
   document.querySelectorAll("[data-monthdelta]").forEach((btn) => btn.addEventListener("click", () => { state.month = addMonths(state.month, parseInt(btn.dataset.monthdelta, 10)); render(); }));
 
-  const unlockBtn = document.getElementById("unlock-premium-btn");
-  if (unlockBtn) unlockBtn.addEventListener("click", () => { state.profile.plan = "premium"; saveProfile(); render(); });
 
   const newTxBtn = document.getElementById("new-tx-btn") || document.getElementById("new-tx-emp-btn");
   if (newTxBtn) newTxBtn.addEventListener("click", () => openTxModal(null, state.tab === "empresa" ? "Empresa" : undefined));
@@ -965,26 +901,10 @@ function attachMainEvents() {
   const descontar = document.getElementById("descontar-comissoes");
   if (descontar) descontar.addEventListener("change", (e) => { state.config = { ...state.config, descontarComissoes: e.target.checked }; saveConfig(); render(); });
 
-  /* Assistente */
-  const chatSend = document.getElementById("chat-send");
-  const chatInput = document.getElementById("chat-input");
-  const sendMsg = () => {
-    if (!chatInput || !chatInput.value.trim()) return;
-    const text = chatInput.value.trim();
-    state.chatLog.push({ from: "user", text: escapeHtml(text) });
-    state.chatLog.push({ from: "bot", text: escapeHtml(answerQuestion(text)) });
-    chatInput.value = "";
-    render();
-    setTimeout(() => { const box = document.getElementById("chat-box"); if (box) box.scrollTop = box.scrollHeight; }, 0);
-  };
-  if (chatSend) chatSend.addEventListener("click", sendMsg);
-  if (chatInput) chatInput.addEventListener("keydown", (e) => { if (e.key === "Enter") sendMsg(); });
-  document.querySelectorAll(".ask-chip").forEach((chip) => chip.addEventListener("click", () => {
-    const text = chip.dataset.ask;
-    state.chatLog.push({ from: "user", text: escapeHtml(text) });
-    state.chatLog.push({ from: "bot", text: escapeHtml(answerQuestion(text)) });
-    render();
-  }));
+  /* Assistente: as perguntas vão para a mesma IA da bolinha */
+  document.querySelectorAll(".ask-chip").forEach((chip) => chip.addEventListener("click", () => { if (window.AssistenteIA) AssistenteIA.perguntar(chip.dataset.ask); }));
+  const abrirIa = document.getElementById("abrir-ia-btn");
+  if (abrirIa) abrirIa.addEventListener("click", () => { if (window.AssistenteIA) AssistenteIA.abrir(); });
 
   /* Cadastro */
   const saveProfileBtn = document.getElementById("save-profile-btn");
@@ -997,11 +917,6 @@ function attachMainEvents() {
     const file = e.target.files[0];
     if (!file) return;
     reduzirFoto(file).then((dataUrl) => { state.profile.photo = dataUrl; saveProfile(); render(); }).catch(() => alert("Não foi possível usar essa imagem."));
-  });
-  const togglePlanBtn = document.getElementById("toggle-plan-btn");
-  if (togglePlanBtn) togglePlanBtn.addEventListener("click", () => {
-    state.profile.plan = isPremium() ? "gratis" : "premium";
-    saveProfile(); render();
   });
   const changeCharBtn = document.getElementById("change-char-btn");
   if (changeCharBtn) changeCharBtn.addEventListener("click", () => openCharacterPicker());
@@ -1377,7 +1292,7 @@ function openQuiz(isRefazer) {
       Object.assign(state.profile, { character: char.id, characterName: nome || char.name, quiz });
       saveProfile(); closeModal(); applyTheme(); render();
     } else {
-      state.profile = { name: primeiroNome() || "Você", character: char.id, characterName: nome || char.name, plan: "gratis", photo: null, quiz };
+      state.profile = { name: primeiroNome() || "Você", character: char.id, characterName: nome || char.name, photo: null, quiz };
       saveProfile();
       startApp();
     }
@@ -1438,6 +1353,19 @@ function startApp() {
   applyTheme();
   render();
   atualizarStatusSalvamento();
+  ligarAssistenteIA();
+}
+// Assistente de IA (bolinha): o mesmo do CRM, em ../js/assistente-ia.js
+let iaDisponivel = true;
+function ligarAssistenteIA() {
+  if (!window.AssistenteIA) { iaDisponivel = false; return; }
+  AssistenteIA.iniciar({ contexto: "financeiro" });
+  fetch(API_BASE + "/config/integracoes").then((r) => (r.ok ? r.json() : null)).then((cfg) => {
+    if (!cfg || cfg.assistenteIA !== false) return;
+    iaDisponivel = false;
+    AssistenteIA.definirHabilitado(false);
+    if (state.tab === "assistente") render();
+  }).catch(() => { /* sem resposta: mantém visível */ });
 }
 function telaDeErro(msg) {
   document.getElementById("onboarding-root").innerHTML = `<div class="carregando"><p>${escapeHtml(msg)}</p><button class="btn char" id="tentar-de-novo">Tentar de novo</button><p><a href="../inicio.html">Voltar</a></p></div>`;

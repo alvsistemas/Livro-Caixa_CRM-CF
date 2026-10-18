@@ -40,7 +40,6 @@ body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", He
 .nav-item:hover { background: rgba(0,0,0,0.03); }
 .nav-item.active { background: var(--ivory); border-left-color: var(--char); color: var(--ink); }
 .nav-ico { font-size: 15px; width: 18px; text-align: center; }
-.lock-ico { margin-left: auto; font-size: 11px; opacity: 0.6; }
 .sidebar-footer { padding: 14px 20px 0; font-size: 12px; color: var(--ink-muted); margin: 0; }
 .nav-bottom { margin-top: auto; padding-top: 14px; border-top: 1px solid var(--rule); margin-left: 12px; margin-right: 12px; padding-left: 0; padding-right: 0; }
 a.nav-item { text-decoration: none; }
@@ -192,35 +191,22 @@ tr:hover td { background: rgba(0,0,0,0.015); }
 .modal-box .onb-grid { grid-template-columns: repeat(2, 1fr); }
 .modal-box .char-desc { min-height: 0; }
 
-/* ===================== Paywall ===================== */
-.paywall { max-width: 480px; margin: 60px auto; text-align: center; background: var(--ivory); border: 1px solid var(--rule); border-radius: 18px; padding: 40px 30px; }
-.paywall .lock-big { font-size: 40px; margin-bottom: 10px; }
-.paywall h2 { font-family: Georgia, serif; font-size: 22px; margin: 0 0 8px; }
-.paywall p { color: var(--ink-muted); font-size: 14px; margin: 0 0 20px; }
-.paywall ul { text-align: left; display: inline-block; margin: 0 0 24px; padding: 0; list-style: none; }
-.paywall li { font-size: 13px; padding: 5px 0; color: var(--ink); }
-.paywall li:before { content: "✓ "; color: var(--pessoal); font-weight: 700; }
 
 /* ===================== Cadastro ===================== */
 .profile-header { display: flex; align-items: center; gap: 18px; margin-bottom: 26px; }
 .profile-photo { width: 84px; height: 84px; border-radius: 50%; object-fit: cover; background: var(--char-soft); border: 3px solid var(--char); }
 .profile-photo-placeholder { width: 84px; height: 84px; border-radius: 50%; background: var(--char); color: #fff; display: flex; align-items: center; justify-content: center; font-size: 30px; font-family: Georgia, serif; border: 3px solid var(--char); }
-.plan-badge { display: inline-block; font-size: 11px; font-weight: 700; padding: 3px 11px; border-radius: 999px; text-transform: uppercase; }
-.plan-badge.gratis { background: var(--rule-soft); color: var(--ink-muted); }
-.plan-badge.premium { background: var(--gold-soft); color: var(--gold); }
 .level-track { display: flex; gap: 6px; margin-top: 6px; }
 .level-dot { width: 26px; height: 26px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; background: var(--rule-soft); color: var(--ink-muted); }
 .level-dot.done { background: var(--char); color: #fff; }
 
 /* ===================== Assistente ===================== */
-.chat-box { background: var(--ivory); border: 1px solid var(--rule); border-radius: 14px; padding: 18px; height: 420px; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; margin-bottom: 14px; }
-.chat-msg { max-width: 78%; padding: 10px 14px; border-radius: 14px; font-size: 13px; line-height: 1.5; }
-.chat-msg.bot { background: var(--char-soft); color: var(--ink); align-self: flex-start; border-bottom-left-radius: 4px; }
-.chat-msg.user { background: var(--char); color: #fff; align-self: flex-end; border-bottom-right-radius: 4px; }
 .chat-suggestions { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
-.chat-input-row { display: flex; gap: 8px; }
-.chat-input-row input { flex: 1; padding: 11px 14px; border-radius: 999px; border: 1px solid var(--rule); font-family: inherit; font-size: 13px; }
-.chat-input-row button { border: none; background: var(--char); color: #fff; width: 42px; height: 42px; border-radius: 50%; cursor: pointer; font-size: 16px; }
+.ia-card p { font-size: 13.5px; line-height: 1.55; color: var(--ink); margin: 0 0 12px; }
+.ia-card .ia-card-sub { font-size: 12.5px; color: var(--ink-muted); margin-bottom: 8px; }
+.ia-bolinha-mini { display: inline-flex; width: 22px; height: 22px; border-radius: 50%; background: var(--char); align-items: center; justify-content: center; font-size: 11px; vertical-align: -5px; }
+/* Bolinha do assistente com as cores do personagem */
+#assistente-root { --ai-cor: var(--char); --ai-cor-texto: #fff; --ai-fundo: var(--page); --ai-linha: var(--rule); --ai-texto: var(--ink); --ai-texto-suave: var(--ink-muted); --ai-balao: var(--char-soft); }
 .alert-item { display: flex; gap: 10px; align-items: flex-start; padding: 12px; border-radius: 10px; margin-bottom: 8px; font-size: 13px; }
 .alert-item.warn { background: var(--red-soft); color: var(--red); }
 .alert-item.info { background: var(--char-soft); color: var(--ink); }
@@ -231,7 +217,6 @@ tr:hover td { background: rgba(0,0,0,0.015); }
   .brand-title, .brand-sub, .nav-label, .sidebar-footer { display: none; }
   .nav-bottom { margin-left: 8px; margin-right: 8px; }
   .nav-item { justify-content: center; }
-  .lock-ico { display: none; }
   .main { padding: 18px; }
 }
 @media (max-width: 480px) {
