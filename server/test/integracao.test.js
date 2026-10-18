@@ -146,6 +146,12 @@ describe('API com PostgreSQL (integração)', { skip: pular }, () => {
     const tg = await api('PUT', `/api/tasks/${tk.dados.id}/toggle`, {}, t);
     assert.equal(tg.status, 200);
     assert.equal(tg.dados.concluida, true);
+    // Do jeito que o site manda: campos vazios ('' vira null na rota) e sem horário
+    const doSite = await api('POST', '/api/tasks', { titulo: 'Tarefa do dia', vencimento: '2026-10-18', prioridade: 'media', leadId: null, descricao: '' }, t);
+    assert.equal(doSite.status, 201, JSON.stringify(doSite.dados));
+    assert.equal(doSite.dados.descricao, '');
+    const editada = await api('PUT', `/api/tasks/${doSite.dados.id}`, { titulo: 'Tarefa do dia', descricao: '', leadId: '' }, t);
+    assert.equal(editada.status, 200, JSON.stringify(editada.dados));
     const hist = await api('POST', '/api/historico-contato', { cardId: card.id, texto: 'Ligou e pediu proposta' }, t);
     assert.ok(hist.status < 300, JSON.stringify(hist.dados));
     const lh = await api('GET', `/api/historico-contato/${card.id}`, undefined, t);

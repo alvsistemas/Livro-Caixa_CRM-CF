@@ -34,6 +34,12 @@ describe('validarSecao — formato dos dados do Controle financeiro', () => {
     assert.equal(validarSecao('perfil', [1]).ok, false);
   });
 
+  test('perfil: nome do personagem escolhido no questionário', () => {
+    assert.equal(validarSecao('perfil', { character: 'mateus', characterName: 'Pedro', quiz: { respostas: [0, 0, 1, 1, 0, 1] } }).ok, true);
+    assert.equal(validarSecao('perfil', { characterName: 'x'.repeat(41) }).ok, false);
+    assert.equal(validarSecao('perfil', { characterName: 42 }).ok, false);
+  });
+
   test('config só aceita modos de integração conhecidos', () => {
     for (const modo of ['vendas', 'comissoes', 'nenhum']) assert.equal(validarSecao('config', { integracaoCrm: modo }).ok, true);
     assert.equal(validarSecao('config', { integracaoCrm: 'tudo' }).ok, false);

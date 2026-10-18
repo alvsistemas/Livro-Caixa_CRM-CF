@@ -61,6 +61,7 @@ router.post('/', async (req, res) => {
     sincronizarTarefaComCalendar(req.userId, task);
     dispararWebhooks(req.userId, 'tarefa.criada', { id: task._id.toString(), titulo: task.titulo, vencimento: task.vencimento, prioridade: task.prioridade });
   } catch (err) {
+    console.error('Erro ao criar tarefa:', err.message);
     res.status(500).json({ error: 'Erro ao criar tarefa.' });
   }
 });

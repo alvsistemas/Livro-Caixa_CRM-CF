@@ -505,7 +505,7 @@ function renderDashboard() {
 
     ${tipOfDay ? `<div class="card" style="margin-bottom:20px;border-color:var(--char);display:flex;gap:12px;align-items:center">
       <div style="width:34px;height:34px;border-radius:50%;background:var(--char);color:#fff;display:flex;align-items:center;justify-content:center;flex-shrink:0">✦</div>
-      <div><div class="stat-label">Dica do dia · ${char.name}</div><div style="font-size:14px;margin-top:2px">${tipOfDay}</div></div>
+      <div><div class="stat-label">Dica do dia · ${escapeHtml(nomeDoPersonagem())}</div><div style="font-size:14px;margin-top:2px">${tipOfDay}</div></div>
     </div>` : ""}
 
     <div class="grid grid-3" style="margin-bottom:20px">
@@ -791,11 +791,11 @@ function renderAssistente() {
   const char = getCharacter();
   const alerts = buildAlerts();
   if (state.chatLog.length === 0 && char) {
-    state.chatLog.push({ from: "bot", text: `Oi, ${escapeHtml(state.profile.name || "")}! Eu sou a assistente do ${char.name}. Pode me perguntar sobre seu lucro, saldo, vendas do CRM, cartões, metas ou pedir uma dica.` });
+    state.chatLog.push({ from: "bot", text: `Oi, ${escapeHtml(state.profile.name || "")}! Eu sou ${escapeHtml(nomeDoPersonagem())}, ${escapeHtml(char.title.toLowerCase())} que vai te acompanhar aqui. Pode me perguntar sobre seu lucro, saldo, vendas do CRM, cartões, metas ou pedir uma dica.` });
   }
   const msgs = state.chatLog.map((m) => `<div class="chat-msg ${m.from}">${m.text}</div>`).join("");
   return `
-    <div class="row-between"><div><h1 class="page-title">Assistente</h1><p class="page-sub">Dicas e alertas baseados nos seus dados${char ? ` · estilo ${char.name}` : ""}</p></div></div>
+    <div class="row-between"><div><h1 class="page-title">Assistente</h1><p class="page-sub">Dicas e alertas baseados nos seus dados${char ? ` · estilo ${escapeHtml(char.title.toLowerCase())}` : ""}</p></div></div>
     <div class="grid grid-2" style="align-items:start">
       <div>
         <h2 class="section-title" style="border-color:var(--char)">Conversa</h2>
@@ -847,7 +847,7 @@ function renderCadastro() {
       ${photo ? `<img class="profile-photo" src="${photo}" />` : `<div class="profile-photo-placeholder">${(state.profile && state.profile.name ? state.profile.name[0] : "?").toUpperCase()}</div>`}
       <div>
         <h2 style="font-family:Georgia,serif;margin:0 0 4px">${escapeHtml((state.profile && state.profile.name) || "Sem nome")}</h2>
-        <p style="margin:0;font-size:13px;color:var(--ink-muted)">${char ? `${char.name} · ${PROFILE_COLORS[char.profile].label}` : "Nenhum personagem escolhido"}</p>
+        <p style="margin:0;font-size:13px;color:var(--ink-muted)">${char ? `Personagem: ${escapeHtml(nomeDoPersonagem())} · ${escapeHtml(char.title)}` : "Nenhum personagem escolhido"}</p>
         <span class="plan-badge ${isPremium() ? "premium" : "gratis"}">${isPremium() ? "Premium" : "Grátis"}</span>
       </div>
     </div>
@@ -869,8 +869,11 @@ function renderCadastro() {
 
     <div class="card" style="margin-bottom:20px">
       <h2 class="section-title" style="border-color:var(--char)">Personagem</h2>
-      ${char ? `<p style="font-size:13px;color:var(--ink-muted)">${escapeHtml(char.desc)}</p>` : ""}
-      <button class="btn char" id="change-char-btn">Trocar personagem</button>
+      ${char ? `<p style="font-size:14px;margin:0 0 4px"><strong>${escapeHtml(nomeDoPersonagem())}</strong> · ${escapeHtml(char.title)}</p><p style="font-size:13px;color:var(--ink-muted);margin-top:0">${escapeHtml(char.desc)}</p>` : ""}
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn char" id="change-char-btn">Trocar personagem</button>
+        <button class="btn ghost" id="redo-quiz-btn">Refazer as perguntas</button>
+      </div>
     </div>
 
     <div class="card">
@@ -1001,7 +1004,9 @@ function attachMainEvents() {
     saveProfile(); render();
   });
   const changeCharBtn = document.getElementById("change-char-btn");
-  if (changeCharBtn) changeCharBtn.addEventListener("click", () => openCharacterPicker(true));
+  if (changeCharBtn) changeCharBtn.addEventListener("click", () => openCharacterPicker());
+  const redoQuizBtn = document.getElementById("redo-quiz-btn");
+  if (redoQuizBtn) redoQuizBtn.addEventListener("click", () => openQuiz(true));
 }
 
 // Reduz a foto pra no máximo 256px (JPEG) antes de salvar na conta
@@ -1177,68 +1182,246 @@ function openGoalModal(existing) {
 }
 
 /* ----------------------------------------------------------------------- */
-/* Onboarding — escolha de personagem                                      */
+/* Onboarding — perguntas rápidas que definem o personagem                 */
 /* ----------------------------------------------------------------------- */
+/* No 1º acesso a pessoa responde perguntas curtas; cada resposta soma pontos
+   para um dos 4 perfis. O perfil vencedor + a preferência (feminino/masculino)
+   escolhe um dos modelos de CHARACTERS, e a pessoa dá um nome ao personagem.
+   Os modelos também aparecem em "Trocar personagem" (Meu perfil), só pela
+   palavra que os representa ("O Organizado", "A Investidora"...). */
+const QUIZ = [
+  {
+    pergunta: "Quando o dinheiro cai na conta, o que costuma acontecer?",
+    opcoes: [
+      { texto: "Já está tudo planejado", pontos: { organizadora: 2 } },
+      { texto: "Pago as contas e o resto vai embora", pontos: { consumista: 2 } },
+      { texto: "Boa parte já está comprometida com dívidas", pontos: { recomeco: 2 } },
+      { texto: "Separo uma parte para investir", pontos: { investidora: 2 } },
+    ],
+  },
+  {
+    pergunta: "Como estão suas dívidas hoje?",
+    opcoes: [
+      { texto: "Não tenho, ou estão sob controle", pontos: { organizadora: 1, investidora: 1 } },
+      { texto: "Tenho algumas parcelas, mas dou conta", pontos: { consumista: 1 } },
+      { texto: "Estão me apertando", pontos: { recomeco: 3 } },
+    ],
+  },
+  {
+    pergunta: "Aparece uma promoção imperdível. Você…",
+    opcoes: [
+      { texto: "Compra na hora", pontos: { consumista: 3 } },
+      { texto: "Só compra se já estava nos planos", pontos: { organizadora: 2 } },
+      { texto: "Pensa em quanto aquilo renderia investido", pontos: { investidora: 2 } },
+      { texto: "Nem olha: o orçamento não permite", pontos: { recomeco: 2 } },
+    ],
+  },
+  {
+    pergunta: "Você tem dinheiro guardado ou investido?",
+    opcoes: [
+      { texto: "Tenho investimentos e acompanho", pontos: { investidora: 3 } },
+      { texto: "Tenho uma reserva para emergências", pontos: { organizadora: 2 } },
+      { texto: "Pouco ou nada", pontos: { consumista: 1, recomeco: 1 } },
+      { texto: "Não, estou no vermelho", pontos: { recomeco: 2 } },
+    ],
+  },
+  {
+    pergunta: "Qual é o seu principal objetivo agora?",
+    opcoes: [
+      { texto: "Organizar as contas", pontos: { organizadora: 3 } },
+      { texto: "Sair das dívidas", pontos: { recomeco: 3 } },
+      { texto: "Gastar com mais consciência", pontos: { consumista: 3 } },
+      { texto: "Fazer o dinheiro render", pontos: { investidora: 3 } },
+    ],
+    desempate: true, // em caso de empate, vale o perfil do objetivo
+  },
+  {
+    pergunta: "Como você prefere o seu personagem?",
+    opcoes: [
+      { texto: "Feminino", genero: "f" },
+      { texto: "Masculino", genero: "m" },
+    ],
+  },
+];
+
+const NOMES_PRONTOS = {
+  f: ["Lily", "Júlia", "Maria", "Sofia", "Ana", "Clara", "Helena", "Laura"],
+  m: ["Mateus", "Jonathan", "Lucas", "Rafael", "Pedro", "Gabriel", "Davi", "Miguel"],
+};
+
+// Resultado do questionário: { perfil, genero, character } a partir das respostas (índices).
+function resultadoDoQuiz(respostas) {
+  const placar = { organizadora: 0, recomeco: 0, consumista: 0, investidora: 0 };
+  let genero = "f";
+  let desempate = null;
+  QUIZ.forEach((q, i) => {
+    const op = q.opcoes[respostas[i]];
+    if (!op) return;
+    if (op.genero) genero = op.genero;
+    if (op.pontos) for (const [p, n] of Object.entries(op.pontos)) placar[p] += n;
+    if (q.desempate && op.pontos) desempate = Object.keys(op.pontos)[0];
+  });
+  const maior = Math.max(...Object.values(placar));
+  const empatados = Object.keys(placar).filter((p) => placar[p] === maior);
+  const perfil = empatados.includes(desempate) ? desempate : empatados[0];
+  const character = CHARACTERS.find((c) => c.profile === perfil && c.gender === genero) || CHARACTERS[0];
+  return { perfil, genero, character };
+}
+
+// Nome do personagem: o que a pessoa escolheu, ou o nome original do modelo.
+function nomeDoPersonagem() {
+  const char = getCharacter();
+  if (!char) return "";
+  return (state.profile && state.profile.characterName) || char.name;
+}
+
+function escolhaDeNomeHtml(char, nomeAtual) {
+  const prontos = [char.name, ...NOMES_PRONTOS[char.gender].filter((n) => n !== char.name)];
+  return `
+    <div class="nome-personagem">
+      <label class="nome-personagem-label" for="onb-char-name">Dê um nome ao seu personagem</label>
+      <input id="onb-char-name" class="onb-name-input" maxlength="30" placeholder="Digite um nome" value="${escapeHtml(nomeAtual)}" />
+      <p class="nome-personagem-ou">ou escolha um pronto</p>
+      <div class="nomes-prontos">${prontos.map((n) => `<button type="button" class="nome-pronto ${n === nomeAtual ? "selected" : ""}" data-nome="${escapeHtml(n)}">${escapeHtml(n)}</button>`).join("")}</div>
+    </div>`;
+}
+function ligarEscolhaDeNome(root) {
+  const input = root.querySelector("#onb-char-name");
+  const marcar = () => root.querySelectorAll(".nome-pronto").forEach((b) => b.classList.toggle("selected", b.dataset.nome === input.value.trim()));
+  root.querySelectorAll(".nome-pronto").forEach((b) => b.addEventListener("click", () => { input.value = b.dataset.nome; marcar(); }));
+  input.addEventListener("input", marcar);
+  return () => input.value.trim();
+}
+
 function renderCharacterCard(c, selectedId) {
   const colors = PROFILE_COLORS[c.profile];
-  const initial = c.name[0];
-  const selected = c.id === selectedId;
-  return `<div class="char-card ${selected ? "selected" : ""}" data-char="${c.id}" style="--sel-color:${colors.primary};--sel-color-soft:${colors.soft}">
-    <div class="char-avatar" style="background:${colors.primary}">${initial}</div>
-    <p class="char-name">${c.name}</p>
-    <p class="char-title">${c.title}</p>
-    <p class="char-desc">${c.desc}</p>
-    <span class="char-badge" style="background:${colors.soft};color:${colors.primary}">${colors.label}</span>
-  </div>`;
+  const palavra = c.title.split(" ").slice(1).join(" ");
+  return `<button type="button" class="char-card ${c.id === selectedId ? "selected" : ""}" data-char="${c.id}" style="--sel-color:${colors.primary};--sel-color-soft:${colors.soft}">
+    <div class="char-avatar" style="background:${colors.primary}">${escapeHtml(palavra[0] || "?")}</div>
+    <p class="char-name">${escapeHtml(c.title)}</p>
+    <p class="char-desc">${escapeHtml(c.desc)}</p>
+  </button>`;
 }
-function openCharacterPicker(isChange) {
-  let selectedId = isChange && state.profile ? state.profile.character : null;
-  const females = CHARACTERS.filter((c) => c.gender === "f");
-  const males = CHARACTERS.filter((c) => c.gender === "m");
-  const root = isChange ? document.getElementById("modal-root") : document.getElementById("onboarding-root");
-  const draw = () => {
-    const html = `
-      <div class="onb-wrap">
-        <div class="onb-head"><h1>Escolha seu personagem</h1><p>As dicas financeiras e a cor do painel vão acompanhar o perfil escolhido.</p></div>
-        <div class="onb-groups">
-          <div><p class="onb-group-title">Personagens femininas</p><div class="onb-grid">${females.map((c) => renderCharacterCard(c, selectedId)).join("")}</div></div>
-          <div><p class="onb-group-title">Personagens masculinos</p><div class="onb-grid">${males.map((c) => renderCharacterCard(c, selectedId)).join("")}</div></div>
-        </div>
-        <div class="onb-footer">
-          ${!isChange ? `<input id="onb-name" class="onb-name-input" placeholder="Como podemos te chamar?" value="${escapeHtml(primeiroNome())}" />` : ""}
-          <button class="btn char save-btn" id="onb-confirm" style="max-width:280px" ${!selectedId ? "disabled" : ""}>${isChange ? "Trocar personagem" : "Começar"}</button>
-        </div>
-      </div>`;
-    if (isChange) { openModal("Trocar personagem", html.replace('<div class="onb-wrap">', "").replace(/<\/div>\s*$/, "")); }
-    else { root.innerHTML = html; }
-    root.querySelectorAll("[data-char]").forEach((card) => card.addEventListener("click", () => {
-      const nomeDigitado = document.getElementById("onb-name");
-      if (nomeDigitado) nomeRascunho = nomeDigitado.value;
-      selectedId = card.dataset.char; draw();
+
+// Questionário (1º acesso em tela cheia; "Refazer as perguntas" abre em janela).
+function openQuiz(isRefazer) {
+  const root = isRefazer ? null : document.getElementById("onboarding-root");
+  const respostas = [];
+  let passo = 0;
+  let resultado = null;
+
+  const montar = (html) => {
+    if (isRefazer) {
+      openModal("Refazer as perguntas", `<div class="quiz quiz-modal">${html}</div>`);
+      return document.getElementById("modal-root");
+    }
+    root.innerHTML = `<div class="onb-wrap quiz">${html}</div>`;
+    return root;
+  };
+
+  const desenharPergunta = () => {
+    const q = QUIZ[passo];
+    const el = montar(`
+      ${!isRefazer && passo === 0 ? `<div class="onb-head"><h1>Vamos montar seu perfil</h1><p>Responda ${QUIZ.length} perguntas rápidas. As dicas e a cor do painel vão acompanhar o seu jeito de lidar com dinheiro.</p></div>` : ""}
+      <div class="quiz-card">
+        <div class="quiz-progresso" aria-hidden="true">${QUIZ.map((_, i) => `<span class="${i < passo ? "feito" : i === passo ? "atual" : ""}"></span>`).join("")}</div>
+        <p class="quiz-contador">Pergunta ${passo + 1} de ${QUIZ.length}</p>
+        <h2 class="quiz-pergunta">${escapeHtml(q.pergunta)}</h2>
+        <div class="quiz-opcoes">${q.opcoes.map((o, i) => `<button type="button" class="quiz-opcao ${respostas[passo] === i ? "selected" : ""}" data-opcao="${i}">${escapeHtml(o.texto)}</button>`).join("")}</div>
+        ${passo > 0 ? `<button type="button" class="quiz-voltar" id="quiz-voltar">← Voltar</button>` : ""}
+      </div>`);
+    el.querySelectorAll("[data-opcao]").forEach((b) => b.addEventListener("click", () => {
+      respostas[passo] = parseInt(b.dataset.opcao, 10);
+      if (passo < QUIZ.length - 1) { passo++; desenharPergunta(); }
+      else { resultado = resultadoDoQuiz(respostas); desenharResultado(resultado.character); }
     }));
-    const confirmBtn = document.getElementById("onb-confirm");
-    if (confirmBtn) confirmBtn.addEventListener("click", () => {
-      if (!selectedId) return;
-      if (isChange) {
-        state.profile.character = selectedId; saveProfile(); closeModal(); render();
-      } else {
-        const nameInput = document.getElementById("onb-name");
-        const name = nameInput ? nameInput.value.trim() : "";
-        state.profile = { name: name || primeiroNome() || "Você", character: selectedId, plan: "gratis", photo: null };
-        saveProfile();
-        startApp();
-      }
+    const voltar = el.querySelector("#quiz-voltar");
+    if (voltar) voltar.addEventListener("click", () => { passo--; desenharPergunta(); });
+  };
+
+  const desenharResultado = (char) => {
+    const colors = PROFILE_COLORS[char.profile];
+    const nomeAtual = isRefazer && state.profile && state.profile.character === char.id ? nomeDoPersonagem() : char.name;
+    const el = montar(`
+      <div class="quiz-card quiz-resultado" style="--sel-color:${colors.primary};--sel-color-soft:${colors.soft}">
+        <p class="quiz-contador">Seu perfil</p>
+        <h2 class="quiz-perfil" style="color:${colors.primary}">${escapeHtml(char.title)}</h2>
+        <p class="quiz-perfil-desc">${escapeHtml(char.desc)}</p>
+        ${escolhaDeNomeHtml(char, nomeAtual)}
+        <button class="btn char save-btn" id="quiz-confirmar" style="background:${colors.primary};border-color:${colors.primary}">${isRefazer ? "Usar este personagem" : "Começar"}</button>
+        <div class="quiz-links">
+          <button type="button" class="quiz-voltar" id="quiz-refazer">Refazer as perguntas</button>
+          <button type="button" class="quiz-voltar" id="quiz-outro">Prefiro escolher outro</button>
+        </div>
+      </div>`);
+    const lerNome = ligarEscolhaDeNome(el);
+    el.querySelector("#quiz-refazer").addEventListener("click", () => { respostas.length = 0; passo = 0; desenharPergunta(); });
+    el.querySelector("#quiz-outro").addEventListener("click", () => desenharModelos(char.id));
+    el.querySelector("#quiz-confirmar").addEventListener("click", () => concluir(char, lerNome()));
+  };
+
+  const desenharModelos = (selecionado) => {
+    const el = montar(`
+      <div class="quiz-card quiz-card-largo">
+        <h2 class="quiz-pergunta">Escolha o personagem</h2>
+        <div class="onb-grid">${CHARACTERS.map((c) => renderCharacterCard(c, selecionado)).join("")}</div>
+        <button type="button" class="quiz-voltar" id="quiz-voltar-resultado">← Voltar para o resultado</button>
+      </div>`);
+    el.querySelectorAll("[data-char]").forEach((b) => b.addEventListener("click", () => desenharResultado(CHARACTERS.find((c) => c.id === b.dataset.char))));
+    el.querySelector("#quiz-voltar-resultado").addEventListener("click", () => desenharResultado(resultado.character));
+  };
+
+  const concluir = (char, nome) => {
+    const quiz = { respostas: respostas.slice(), perfilSugerido: resultado.perfil, respondidoEm: todayISO() };
+    if (isRefazer) {
+      Object.assign(state.profile, { character: char.id, characterName: nome || char.name, quiz });
+      saveProfile(); closeModal(); applyTheme(); render();
+    } else {
+      state.profile = { name: primeiroNome() || "Você", character: char.id, characterName: nome || char.name, plan: "gratis", photo: null, quiz };
+      saveProfile();
+      startApp();
+    }
+  };
+
+  desenharPergunta();
+}
+
+// "Trocar personagem": modelos pela palavra que os representa; depois, o nome.
+function openCharacterPicker() {
+  let selectedId = state.profile ? state.profile.character : null;
+  const desenharModelos = () => {
+    openModal("Trocar personagem", `
+      <p class="quiz-modal-sub">Escolha o personagem que mais combina com você agora.</p>
+      <div class="onb-grid">${CHARACTERS.map((c) => renderCharacterCard(c, selectedId)).join("")}</div>`);
+    document.querySelectorAll("#modal-root [data-char]").forEach((b) => b.addEventListener("click", () => { selectedId = b.dataset.char; desenharNome(); }));
+  };
+  const desenharNome = () => {
+    const char = CHARACTERS.find((c) => c.id === selectedId);
+    const colors = PROFILE_COLORS[char.profile];
+    const nomeAtual = state.profile.character === char.id ? nomeDoPersonagem() : char.name;
+    openModal("Trocar personagem", `
+      <div class="quiz-resultado" style="--sel-color:${colors.primary};--sel-color-soft:${colors.soft}">
+        <h2 class="quiz-perfil" style="color:${colors.primary}">${escapeHtml(char.title)}</h2>
+        <p class="quiz-perfil-desc">${escapeHtml(char.desc)}</p>
+        ${escolhaDeNomeHtml(char, nomeAtual)}
+        <button class="btn char save-btn" id="troca-confirmar" style="background:${colors.primary};border-color:${colors.primary}">Trocar personagem</button>
+        <div class="quiz-links"><button type="button" class="quiz-voltar" id="troca-voltar">← Escolher outro</button></div>
+      </div>`);
+    const root = document.getElementById("modal-root");
+    const lerNome = ligarEscolhaDeNome(root);
+    root.querySelector("#troca-voltar").addEventListener("click", desenharModelos);
+    root.querySelector("#troca-confirmar").addEventListener("click", () => {
+      Object.assign(state.profile, { character: char.id, characterName: lerNome() || char.name });
+      saveProfile(); closeModal(); applyTheme(); render();
     });
   };
-  draw();
+  desenharModelos();
 }
 
 /* ----------------------------------------------------------------------- */
 /* Inicialização                                                            */
 /* ----------------------------------------------------------------------- */
-let nomeRascunho = null;
 function primeiroNome() {
-  if (nomeRascunho !== null) return nomeRascunho;
   const nome = state.user && state.user.nome ? String(state.user.nome).trim() : "";
   return nome ? nome.split(/\s+/)[0] : "";
 }
@@ -1279,7 +1462,7 @@ async function iniciar() {
   }
   document.getElementById("onboarding-root").innerHTML = "";
   if (state.profile && state.profile.character) startApp();
-  else { document.getElementById("app-root").style.display = "none"; openCharacterPicker(false); }
+  else { document.getElementById("app-root").style.display = "none"; openQuiz(false); }
 }
 document.getElementById("logout-btn").addEventListener("click", () => {
   if (salvamento.pendentes.size || salvamento.salvando) { if (!confirm("Ainda há alterações sendo salvas. Sair mesmo assim?")) return; }

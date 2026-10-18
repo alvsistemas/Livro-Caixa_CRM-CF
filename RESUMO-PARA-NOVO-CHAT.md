@@ -23,12 +23,19 @@
 - **Row-Level Security**: em requisição logada, toda consulta roda com `app.user_id` e papel `livro_app` (sem BYPASSRLS); o banco só mostra as linhas do dono. Trechos de equipe que leem dados de outra pessoa usam `comoSistema` depois de conferir a permissão.
 - No SQL Editor do Neon, rode `SET app.bypass = 'on';` antes de consultar (senão não aparece nada).
 - Importação de backup aceita os arquivos antigos do MongoDB (IDs de 24 caracteres viram UUID).
+- Campo com valor padrão é NOT NULL no banco: se a rota mandar null (ex.: texto vazio), a camada grava o padrão (`nuloViraPadrao` em `db/modelo.js`). Sem isso, criar tarefa pelo site dava erro 500.
+- Modal do dia na Agenda: seção fixa **Tarefas do dia** (sem horário) no topo, com adicionar rápido; os horários vêm abaixo como detalhe.
 - Correção no caminho: trocar a coluna pela ficha do cliente para "ganho" agora gera a comissão (antes só arrastando).
 
 ## Back-end novo
 - Controle financeiro em tabelas: `financeiro_lancamentos`, `financeiro_cartoes`, `financeiro_investimentos`, `financeiro_objetivos`, `financeiro_perfis`.
 - Rotas `GET /api/financeiro` e `PUT /api/financeiro/:secao` (validação em `server/utils/financeiro.js`).
 - Backup/restauração incluem o Controle financeiro. A importação aceita backups do CRM de consórcio antigo (converte `tipoCarta`→`tipoProduto` e `creditoValor`→`valorVenda`).
+
+## Personagens do Controle financeiro
+- 1º acesso: questionário de 6 perguntas (`QUIZ` em `public/financeiro/script.js`); cada resposta soma pontos para um dos 4 perfis (organizadora, recomeco, consumista, investidora); a última pergunta escolhe feminino/masculino; empate decide pelo "objetivo principal".
+- O resultado escolhe um dos 8 modelos de `CHARACTERS`, mostrado só pela palavra (`title`: "O Organizado", "A Investidora"...). A pessoa dá um nome ao personagem (digitado ou de `NOMES_PRONTOS`), salvo em `perfil.characterName`; respostas em `perfil.quiz`.
+- Meu perfil: "Trocar personagem" (modelos → nome) e "Refazer as perguntas". Perfis antigos sem `characterName` usam o nome original do modelo.
 
 ## O que saiu do Livro-Caixa antigo
 - Dados de exemplo (seeds): conta nova começa vazia.

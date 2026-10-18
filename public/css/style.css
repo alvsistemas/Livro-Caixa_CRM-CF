@@ -687,6 +687,16 @@ tr.membro-supervisor-destaque td:last-child{ border-right:1px solid var(--gold);
 .agenda-dia-item-titulo{ font-size:13px; font-weight:500; color:var(--ink); }
 .agenda-dia-item-titulo.concluida{ text-decoration:line-through; opacity:.6; }
 .agenda-dia-item-hora{ font-size:11.5px; color:var(--ink-soft); margin-top:2px; }
+/* "Tarefas do dia" — parte principal do modal do dia; os horários são os detalhes */
+.agenda-dia-tarefas{ border:1px solid var(--line); border-radius:10px; padding:12px 14px; margin-bottom:12px; }
+.agenda-dia-tarefas-head{ display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:6px; }
+.agenda-dia-tarefas-progresso{ font-size:11.5px; color:var(--ink-soft); white-space:nowrap; }
+.agenda-dia-tarefas-vazio{ font-size:12.5px; color:var(--ink-soft); margin:6px 0 4px; }
+.agenda-dia-tarefa-rapida{ display:flex; gap:8px; margin-top:10px; }
+.agenda-dia-tarefa-rapida input{ flex:1; min-width:0; padding:9px 12px; border:1px solid var(--line); border-radius:8px; font-size:13px; background:var(--paper); color:var(--ink); }
+.agenda-dia-tarefa-rapida input:focus{ outline:none; border-color:var(--ink); }
+.agenda-dia-tarefa-rapida .btn-outline{ padding:8px 14px; min-height:auto; }
+.agenda-dia-modal .agenda-dia-timeline{ max-height:36vh; }
 
 @media (max-width: 640px){
   .agenda-cell{ min-height:64px; padding:5px; }

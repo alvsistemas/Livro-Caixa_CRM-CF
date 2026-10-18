@@ -32,6 +32,9 @@ function validarSecao(secao, valor) {
     if (valor.photo != null && !(typeof valor.photo === 'string' && /^data:image\/(png|jpeg|jpg|webp|gif);base64,/.test(valor.photo))) {
       return { ok: false, erro: 'Foto inválida.' };
     }
+    if (valor.characterName != null && !(typeof valor.characterName === 'string' && valor.characterName.length <= 40)) {
+      return { ok: false, erro: 'Nome do personagem inválido.' };
+    }
     return { ok: true, valor };
   }
 

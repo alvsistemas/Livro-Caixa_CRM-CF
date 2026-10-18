@@ -5710,6 +5710,31 @@ function renderAgendaDiaModalPreservandoScroll(){
     if(timelineEl2) timelineEl2.scrollTop = scrollAnterior;
   }
 }
+// "Tarefas do dia": cria na hora uma tarefa sem horário (só a data) direto do modal do
+// dia, sem abrir o formulário completo. Os horários continuam sendo os detalhes.
+let salvandoTarefaRapida = false;
+async function adicionarTarefaRapidaDoDia(diaISO){
+  const input = document.getElementById('agenda-dia-tarefa-rapida-input');
+  const titulo = input ? input.value.trim() : '';
+  if(!titulo || salvandoTarefaRapida) return;
+  salvandoTarefaRapida = true;
+  if(input) input.disabled = true;
+  try{
+    const nova = await apiRequest('POST', '/tasks', { titulo, vencimento: diaISO, prioridade:'media', leadId:null, descricao:'' });
+    tasks.push(nova);
+    atualizarTarefaNaAgendaLocal(nova);
+    salvandoTarefaRapida = false;
+    renderApp();
+    if(agendaDiaSelecionado) renderAgendaDiaModalPreservandoScroll();
+    const novoInput = document.getElementById('agenda-dia-tarefa-rapida-input');
+    if(novoInput) novoInput.focus();
+  }catch(e){
+    salvandoTarefaRapida = false;
+    if(input){ input.disabled = false; input.focus(); }
+    errorMsg = 'Não foi possível adicionar a tarefa.';
+    renderApp();
+  }
+}
 function renderAgendaDiaModal(){
   const root = document.getElementById('modal-root');
   if(!agendaDiaSelecionado){ root.innerHTML=''; return; }
@@ -5768,17 +5793,25 @@ function renderAgendaDiaModal(){
               <button class="icon-btn" data-action="cancelar-tarefa-copiada" title="Cancelar cópia">✕</button>
             </div>
           ` : ''}
-          ${(tarefasSemHora.length || eventosSemHora.length) ? `
-            <div class="settings-page-subtitle">Sem horário definido</div>
+          <div class="agenda-dia-tarefas">
+            <div class="agenda-dia-tarefas-head">
+              <div class="settings-page-subtitle" style="margin:0;">Tarefas do dia</div>
+              ${(tarefasSemHora.length + eventosSemHora.length) ? `<span class="agenda-dia-tarefas-progresso">${tarefasSemHora.filter(t=>t.concluida).length + eventosSemHora.filter(e=>e.concluida).length} de ${tarefasSemHora.length + eventosSemHora.length} concluída${(tarefasSemHora.length + eventosSemHora.length)===1?'':'s'}</span>` : ''}
+            </div>
             ${eventosSemHora.map(e=>`
               <div class="agenda-dia-item" data-copiar-evento="${e.id}" data-editar-evento="${e.id}">
                 <span class="check-circle ${e.concluida?'checked':''}" data-evento-toggle="${e.id}">${e.concluida?ICON_CHECK:''}</span>
-                <div class="agenda-dia-item-titulo" style="flex:1;">${esc(e.titulo)}</div>
+                <div class="agenda-dia-item-titulo ${e.concluida?'concluida':''}" style="flex:1;">${esc(e.titulo)}</div>
               </div>
             `).join('')}
             ${tarefasSemHora.map(renderTarefaMini).join('')}
-            <div class="settings-sep-line"></div>
-          ` : ''}
+            ${(tarefasSemHora.length + eventosSemHora.length) ? '' : `<p class="agenda-dia-tarefas-vazio">Nenhuma tarefa para este dia ainda. Anote abaixo o que precisa ser feito.</p>`}
+            <form class="agenda-dia-tarefa-rapida" id="agenda-dia-tarefa-rapida" autocomplete="off">
+              <input type="text" id="agenda-dia-tarefa-rapida-input" maxlength="200" placeholder="+ Adicionar tarefa do dia" aria-label="Adicionar tarefa do dia" />
+              <button type="submit" class="btn-outline">Adicionar</button>
+            </form>
+          </div>
+          <div class="settings-page-subtitle" style="margin:0 0 8px;">Horários</div>
           <div class="agenda-dia-timeline" id="agenda-dia-timeline">
             ${porHora.map((conteudo, h)=>{
               const horaStr = `${String(h).padStart(2,'0')}:00`;
@@ -5819,6 +5852,11 @@ function renderAgendaDiaModal(){
     if(tarefaCopiada){ colarTarefaEm(diaISO); return; }
     closeAgendaDiaModal();
     openNewTask(diaISO);
+  });
+  const tarefaRapidaForm = document.getElementById('agenda-dia-tarefa-rapida');
+  if(tarefaRapidaForm) tarefaRapidaForm.addEventListener('submit', (ev)=>{
+    ev.preventDefault();
+    adicionarTarefaRapidaDoDia(diaISO);
   });
   const toggleSelecaoBtn = root.querySelector('[data-action="toggle-selecao-multipla"]');
   if(toggleSelecaoBtn) toggleSelecaoBtn.addEventListener('click', ()=>{

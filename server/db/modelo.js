@@ -34,6 +34,16 @@ function aplicarPadrao(folha) {
   return typeof folha.default === 'function' ? folha.default() : (ehObjetoSimples(folha.default) ? { ...folha.default } : folha.default);
 }
 
+// Campo com valor padrão é NOT NULL no banco. Quando a rota manda null (ex.: campo de
+// texto vazio que vira null), grava o padrão em vez de quebrar a gravação — o MongoDB
+// aceitava null nesses campos. Datas e textos gerados por função (ex.: colunaDesde)
+// ficam de fora: neles null pode ser intencional.
+function nuloViraPadrao(folha, v) {
+  if (v !== null || folha.default === undefined || folha.default === null) return v;
+  if (typeof folha.default === 'function' && folha.type !== 'json' && !TIPOS_ARRAY.has(folha.type)) return v;
+  return aplicarPadrao(folha);
+}
+
 function getCaminho(obj, caminho) {
   const partes = caminho.split('.');
   let atual = obj;
@@ -351,7 +361,7 @@ function definirModelo(nome, definicao) {
       }
       const f = r.folha;
       if (f.caminho === '_id') continue;
-      const v = converter(f, valorBruto);
+      const v = converter(f, nuloViraPadrao(f, valorBruto));
       validar(f, v, { exigirObrigatorio: false });
       sets.push(`"${f.coluna}" = ${p.add(paraParametro(f, v), CAST[f.type])}`);
     }
@@ -412,7 +422,7 @@ function definirModelo(nome, definicao) {
       if (f.caminho === 'createdAt' || f.caminho === 'updatedAt') continue;
       let v = getCaminho(doc, f.caminho);
       if (v === undefined) { v = aplicarPadrao(f); setCaminho(doc, f.caminho, v); }
-      v = converter(f, v);
+      v = converter(f, nuloViraPadrao(f, v));
       validar(f, v, { exigirObrigatorio: true });
       setCaminho(doc, f.caminho, v);
       cols.push(`"${f.coluna}"`);
@@ -487,7 +497,7 @@ function definirModelo(nome, definicao) {
       if (!alterados.length) return this;
       const p = new Parametros();
       const sets = alterados.map((f) => {
-        const v = converter(f, getCaminho(this, f.caminho));
+        const v = converter(f, nuloViraPadrao(f, getCaminho(this, f.caminho)));
         validar(f, v, { exigirObrigatorio: true });
         return `"${f.coluna}" = ${p.add(paraParametro(f, v), CAST[f.type])}`;
       });
