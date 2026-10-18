@@ -7,7 +7,7 @@
 TELAS.aparencia = {
   ordemNoPerfil: 20,
   noPerfil() {
-    const escolha = (state.config && state.config.corDestaque) || "personagem";
+    const escolha = (state.config && state.config.corDestaque) || "crm";
     const char = getCharacter();
     const corPersonagem = (char ? PROFILE_COLORS[char.profile] : PROFILE_COLORS.organizadora).primary;
     let corCrm = ACCENT_PRESETS[0];

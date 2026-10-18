@@ -4738,6 +4738,7 @@ function renderAppPreservandoScroll(){
 }
 
 function renderApp(){
+  if(window.AssistenteIA && loaded) AssistenteIA.atualizarAlertas();
   const app = document.getElementById('app');
   if(!loaded){ app.innerHTML = '<div class="loading">Carregando painel…</div>'; return; }
 
@@ -10777,7 +10778,25 @@ function closeConfirm(){ confirmState = null; document.getElementById('confirm-r
 
 /* ---------- start ---------- */
 if(getToken()){
-  if(window.AssistenteIA) AssistenteIA.iniciar({ contexto:'crm' });
+  if(window.AssistenteIA) AssistenteIA.iniciar({
+    contexto:'crm',
+    // carrossel de perguntas prontas, embaixo da conversa
+    sugestoes: [
+      { texto:'Como está meu funil?', pergunta:'Como está meu funil de vendas agora?' },
+      { texto:'Tarefas atrasadas', pergunta:'Quais tarefas estão atrasadas ou vencem hoje?' },
+      { texto:'Comissões do mês', pergunta:'Quanto vou receber de comissão este mês?' },
+      { texto:'Buscar um cliente', preencher:'Me mostra os dados do cliente ' },
+      { texto:'Criar um fluxo', pergunta:'Como eu crio um fluxo automático de mensagens?' },
+      { texto:'Importar planilha', pergunta:'Como importo meus leads de uma planilha?' },
+      { texto:'Ver meu lucro', pergunta:'Qual foi meu lucro este mês no Controle financeiro?' },
+    ],
+    // sininho do painel: as mesmas notificações do sino do topo
+    alertas: ()=> computarNotificacoes().slice(0, 20).map(n=>({
+      tipo:'info',
+      texto:n.texto,
+      acao: n.cardId ? ()=> openEditCard(n.cardId) : null,
+    })),
+  });
   tratarRetornoDoGoogle();
   loadBoard();
   loadFunis();

@@ -848,7 +848,7 @@ tr.membro-supervisor-destaque td:last-child{ border-right:1px solid var(--gold);
 
 /* ---------- Assistente flutuante: o visual fica em css/assistente-ia.css (compartilhado
    com o Controle financeiro); aqui só as cores do CRM ---------- */
-#assistente-root{ --ai-cor:var(--accent); --ai-cor-texto:var(--paper); --ai-fundo:var(--paper); --ai-linha:var(--line); --ai-texto:var(--ink); --ai-texto-suave:var(--ink-soft); --ai-balao:var(--col-bg); }
+#assistente-root{ --ai-cor:var(--accent); --ai-cor-texto:#fff; --ai-fundo:var(--paper); --ai-linha:var(--line); --ai-texto:var(--ink); --ai-texto-suave:var(--ink-soft); --ai-balao:var(--col-bg); }
 
 .pipeline-ordenar-row{ display:flex; align-items:center; gap:10px; margin:0 0 16px; font-size:13px; color:var(--ink-soft); }
 

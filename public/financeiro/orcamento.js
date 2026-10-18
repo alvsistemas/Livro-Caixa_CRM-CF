@@ -36,8 +36,8 @@ function alertasDeOrcamento(mes) {
   state.orcamentos.forEach((o) => {
     if (!(o.limite > 0)) return;
     const pct = (gastos[o.category] || 0) / o.limite;
-    if (pct >= 1) out.push({ type: "warn", text: `<b>${escapeHtml(o.category)}</b> passou do orçamento: ${fmtBRL(gastos[o.category])} de ${fmtBRL(o.limite)}.` });
-    else if (pct >= 0.8) out.push({ type: "info", text: `<b>${escapeHtml(o.category)}</b> já usou ${fmtPct(pct)} do orçamento do mês.` });
+    if (pct >= 1) out.push({ type: "warn", text: `${o.category} passou do orçamento: ${fmtBRL(gastos[o.category])} de ${fmtBRL(o.limite)}.` });
+    else if (pct >= 0.8) out.push({ type: "info", text: `${o.category} já usou ${fmtPct(pct)} do orçamento do mês.` });
   });
   return out;
 }

@@ -61,6 +61,12 @@
 - Livro-Caixa antigo: versão com botão "Exportar meus dados" em `livro-caixa-antigo-com-exportar.zip`; no novo, Meu perfil → Importar dados.
 - Login que voltava pra tela de login: erro do banco no `middleware/auth.js` virava 401 (agora 503 + "tentarDeNovo"); senha atual/código 2FA errados em rotas logadas também davam 401 (agora 400). O site repete sozinho em 502/503/504. `db/pool.js` repete a consulta só quando a conexão caiu antes de rodar e descarta conexões quebradas.
 
+## Layout do financeiro igual ao CRM + bolinha nova (versão 20261110)
+- Financeiro com a mesma estrutura do CRM: barra lateral fixa (avatar + "Olá, nome", ícones em SVG, rodapé com Trocar de aplicativo / Meu perfil / Sair), fontes Fraunces + IBM Plex, mesmos tons claro/escuro, gaveta com botão de menu abaixo de 1024px. Cor de destaque padrão = a do CRM (config.corDestaque, "personagem" continua como opção).
+- Aba Assistente removida do financeiro (quem abria a aba vai pro Painel).
+- Bolinha (`js/assistente-ia.js`): sininho no lugar do X do cabeçalho (fecha pela própria bolinha); alertas com contador na bolinha e no sininho (opção `alertas`), clique no alerta abre a tela certa; carrossel de perguntas acima do campo (opção `sugestoes`: `{texto, pergunta}` envia, `{texto, preencher}` só escreve no campo); ícones em SVG brancos (X, enviar). `AssistenteIA.atualizarAlertas()` só redesenha quando os alertas mudam e preserva o que está sendo digitado.
+- Financeiro: alertas = `buildAlerts()` (mês atual, texto simples + `goto`); sugestões = `SUGESTOES_IA`. CRM: alertas = `computarNotificacoes()`, sugestões próprias.
+
 ## O que saiu do Livro-Caixa antigo
 - Dados de exemplo (seeds): conta nova começa vazia.
 - A aba "Comissões" de consórcio (fórmula da carta de crédito): as comissões agora vêm do CRM.

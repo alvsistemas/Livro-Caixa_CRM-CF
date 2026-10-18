@@ -126,7 +126,7 @@ E estas são as áreas do Controle financeiro:
 - **Investimentos**: aplicações com valor aplicado e valor atual.
 - **Empresa**: visão só das finanças da empresa.
 - **Objetivos**: metas com valor, quanto já tem e prazo.
-- **Assistente**: alertas automáticos (limite do cartão, metas perto do prazo) e atalhos de perguntas para você (a IA da bolinha).
+- **A bolinha da IA** (canto inferior direito, nos dois aplicativos): é você. Embaixo da conversa há um carrossel de perguntas prontas, e o sininho no topo da conversa mostra os alertas (contas atrasadas ou vencendo, limite do cartão, orçamento estourado, metas perto do prazo; no CRM, as notificações de tarefas, leads novos e mensagens).
 - **Meu perfil**: nome, foto, personagem (trocar personagem ou refazer as perguntas do primeiro acesso) e nível de evolução.
 - **Personagens**: no primeiro acesso a pessoa responde perguntas rápidas e recebe um perfil (O Organizado, O Endividado, O Consumista, O Investidor, ou as versões femininas, como A Empresária e A Investidora), com um nome que ela escolhe. O perfil define a cor do painel e o estilo das dicas.
 

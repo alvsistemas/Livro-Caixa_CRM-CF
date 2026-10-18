@@ -4,13 +4,24 @@
    (rota /api/ai/assistente), mesmo nome e a mesma conversa — ela continua
    quando a pessoa troca de aplicativo (fica guardada na aba do navegador).
 
-   Uso:  AssistenteIA.iniciar({ contexto: 'crm' | 'financeiro', saudacao })
+   Uso:  AssistenteIA.iniciar({ contexto: 'crm' | 'financeiro', saudacao,
+           sugestoes: [{ texto, pergunta } | { texto, preencher }],  // carrossel embaixo
+           alertas: () => [{ tipo: 'aviso'|'info'|'ok', texto, acao? }] })   // sininho
          AssistenteIA.definirHabilitado(true/false)   // servidor sem chave de IA
+         AssistenteIA.atualizarAlertas()               // quando os dados do app mudam
    ======================================================================= */
 (function () {
   const NOME_PADRAO = 'Assistente do Livro-Caixa';
   const NOMES_ANTIGOS = ['Assistente do CRM']; // nome padrão de antes: vira o novo
   const CHAVE_CONVERSA = 'assistente-conversa';
+  const svg = (d, t = 18) => `<svg width="${t}" height="${t}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
+  const ICONE_FECHAR = svg('<path d="M18 6 6 18"/><path d="m6 6 12 12"/>', 24);
+  const ICONE_ENVIAR = svg('<path d="M22 2 11 13"/><path d="M22 2 15 22l-4-9-9-4 20-7Z"/>', 17);
+  const ICONE_SINO = svg('<path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/>', 17);
+  const ICONE_VOLTAR = svg('<path d="m15 18-6-6 6-6"/>', 16);
+  const ICONE_NOVA = svg('<path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/>', 16);
+  const ICONE_SETA_ESQ = svg('<path d="m15 18-6-6 6-6"/>', 15);
+  const ICONE_SETA_DIR = svg('<path d="m9 18 6-6-6-6"/>', 15);
   const ICONE_EDITAR = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>';
 
   const lerLocal = (k) => { try { return localStorage.getItem(k); } catch (e) { return null; } };
@@ -29,6 +40,10 @@
     editandoNome: false,
     nome: NOME_PADRAO,
     mensagens: [],
+    sugestoes: [],
+    alertas: null, // função do app que devolve os alertas (sininho)
+    vendoAlertas: false,
+    alertasVistos: '', // assinatura dos alertas já vistos (pra o contador sumir)
     bolhaX: null, // null = posição padrão (canto inferior direito) até a pessoa arrastar
     bolhaY: null,
     drag: null,
@@ -70,32 +85,61 @@
       : `Oi! Eu sou ${quem}. Pode perguntar qualquer coisa sobre como usar o CRM — Pipeline, Agenda, Rotina, Comissões, Fluxos — e também sobre o Controle financeiro.`;
   }
 
+  function listaDeAlertas() {
+    if (typeof st.alertas !== 'function') return [];
+    try { return (st.alertas() || []).filter((a) => a && a.texto); } catch (e) { return []; }
+  }
+  const assinatura = (lista) => lista.filter((a) => a.tipo !== 'ok').map((a) => a.texto).join('|');
+  const ICONE_TIPO = { aviso: '⚠️', info: 'ℹ️', ok: '✅' };
+  function htmlAlertas(lista) {
+    if (!lista.length) return '<div class="assistente-vazio">Nenhum alerta no momento. ✅</div>';
+    return lista.map((a, i) => `<${a.acao ? 'button type="button"' : 'div'} class="assistente-alerta ${a.tipo || 'info'}" data-alerta="${i}"><span>${ICONE_TIPO[a.tipo] || ICONE_TIPO.info}</span><span>${esc(a.texto)}</span>${a.acao ? '<span class="assistente-alerta-ir">›</span>' : ''}</${a.acao ? 'button' : 'div'}>`).join('');
+  }
+  function htmlSugestoes() {
+    if (!st.sugestoes.length || st.vendoAlertas) return '';
+    return `<div class="assistente-sugestoes">
+      <button type="button" class="assistente-sug-seta" data-rolar="-1" aria-label="Sugestões anteriores">${ICONE_SETA_ESQ}</button>
+      <div class="assistente-sug-trilho" id="assistente-sug-trilho">${st.sugestoes.map((s, i) => `<button type="button" class="assistente-sug" data-sug="${i}" ${st.enviando ? 'disabled' : ''}>${esc(s.texto)}</button>`).join('')}</div>
+      <button type="button" class="assistente-sug-seta" data-rolar="1" aria-label="Mais sugestões">${ICONE_SETA_DIR}</button>
+    </div>`;
+  }
+
   function render() {
     const el = root();
     if (!token() || !st.habilitado) { el.innerHTML = ''; return; }
+    // preserva o que está sendo digitado (o painel pode ser redesenhado a qualquer momento)
+    const antes = document.getElementById('assistente-input');
+    const digitado = antes ? { valor: antes.value, foco: document.activeElement === antes, pos: antes.selectionStart } : null;
+    const alertas = listaDeAlertas();
+    const novos = typeof st.alertas === 'function' && assinatura(alertas) !== st.alertasVistos ? alertas.filter((a) => a.tipo !== 'ok').length : 0;
+    if (st.vendoAlertas) st.alertasVistos = assinatura(alertas);
     const posBolha = st.bolhaX != null ? `left:${st.bolhaX}px; top:${st.bolhaY}px; right:auto; bottom:auto;` : '';
     el.innerHTML = `
-      <button id="assistente-bolha" class="assistente-bolha" style="${posBolha}" title="${esc(st.nome)}" aria-label="${st.aberto ? 'Fechar' : 'Abrir'} ${esc(st.nome)}">${st.aberto ? '✕' : '💬'}</button>
+      <button id="assistente-bolha" class="assistente-bolha ${st.aberto ? 'aberta' : ''}" style="${posBolha}" title="${st.aberto ? 'Fechar' : esc(st.nome)}" aria-label="${st.aberto ? 'Fechar' : 'Abrir'} ${esc(st.nome)}">${st.aberto ? ICONE_FECHAR : '💬'}${!st.aberto && novos ? `<span class="assistente-bolha-badge">${novos}</span>` : ''}</button>
       ${st.aberto ? `
         <div class="assistente-painel${st.animando ? ' ' + st.animando : ''}" id="assistente-painel" role="dialog" aria-label="${esc(st.nome)}">
           <div class="assistente-painel-head">
-            ${st.editandoNome
+            ${st.vendoAlertas
+              ? `<button type="button" class="assistente-voltar" id="assistente-voltar">${ICONE_VOLTAR}<span>Alertas</span></button>`
+              : st.editandoNome
               ? `<span class="assistente-nome-edit">✨ <input type="text" id="assistente-nome-input" maxlength="30" value="${esc(st.nome)}" aria-label="Nome do assistente" /></span>`
               : `<span class="assistente-nome">✨ <span class="assistente-nome-txt">${esc(st.nome)}</span><button id="assistente-editar-nome" class="assistente-editar-nome" title="Editar nome" aria-label="Editar nome do assistente">${ICONE_EDITAR}</button></span>`}
             <span class="assistente-head-acoes">
-              ${st.mensagens.length ? `<button id="assistente-limpar" title="Começar uma conversa nova" aria-label="Começar uma conversa nova">↺</button>` : ''}
-              <button id="assistente-fechar" title="Fechar" aria-label="Fechar">✕</button>
+              ${st.mensagens.length && !st.vendoAlertas ? `<button id="assistente-limpar" title="Começar uma conversa nova" aria-label="Começar uma conversa nova">${ICONE_NOVA}</button>` : ''}
+              ${typeof st.alertas === 'function' ? `<button id="assistente-sino" class="assistente-sino ${st.vendoAlertas ? 'ativo' : ''}" title="Alertas" aria-label="Alertas${novos ? ` (${novos} novos)` : ''}" aria-pressed="${st.vendoAlertas}">${ICONE_SINO}${novos && !st.vendoAlertas ? `<span class="assistente-sino-badge">${novos}</span>` : ''}</button>` : ''}
             </span>
           </div>
+          ${st.vendoAlertas ? `<div class="assistente-mensagens assistente-alertas" id="assistente-alertas">${htmlAlertas(alertas)}</div>` : `
           <div class="assistente-mensagens" id="assistente-mensagens-lista">
             ${!st.mensagens.length ? `<div class="assistente-msg assistente-msg-assistant">${esc(saudacao())}</div>` : ''}
             ${st.mensagens.map((m) => `<div class="assistente-msg assistente-msg-${m.role === 'user' ? 'user' : 'assistant'}">${esc(m.content)}</div>`).join('')}
             ${st.enviando ? '<div class="assistente-msg assistente-msg-assistant assistente-digitando">Digitando…</div>' : ''}
           </div>
+          ${htmlSugestoes()}
           <div class="assistente-input-row">
             <input type="text" id="assistente-input" placeholder="Pergunte algo…" maxlength="2000" ${st.enviando ? 'disabled' : ''} />
-            <button id="assistente-enviar" ${st.enviando ? 'disabled' : ''} title="Enviar" aria-label="Enviar">➤</button>
-          </div>
+            <button id="assistente-enviar" ${st.enviando ? 'disabled' : ''} title="Enviar" aria-label="Enviar">${ICONE_ENVIAR}</button>
+          </div>`}
         </div>` : ''}`;
     if (st.aberto) posicionarPainel();
     ligarEventos();
@@ -103,7 +147,15 @@
     if (st.editandoNome) { const ni = document.getElementById('assistente-nome-input'); if (ni) { ni.focus(); ni.select(); } }
     const lista = document.getElementById('assistente-mensagens-lista');
     if (lista) lista.scrollTop = lista.scrollHeight;
-    if (st.aberto && !st.enviando && !st.editandoNome) { const inp = document.getElementById('assistente-input'); if (inp && window.matchMedia('(pointer:fine)').matches) inp.focus(); }
+    const trilho = document.getElementById('assistente-sug-trilho');
+    if (trilho) { trilho.scrollLeft = st.rolagemSugestoes || 0; atualizarSetas(); }
+    const novoInput = document.getElementById('assistente-input');
+    if (digitado && novoInput && digitado.valor && !novoInput.value) {
+      novoInput.value = digitado.valor;
+      if (digitado.foco) { novoInput.focus(); try { novoInput.setSelectionRange(digitado.pos, digitado.pos); } catch (e) { /* ignora */ } }
+      return;
+    }
+    if (st.aberto && !st.enviando && !st.editandoNome && !st.vendoAlertas) { const inp = document.getElementById('assistente-input'); if (inp && window.matchMedia('(pointer:fine)').matches) inp.focus(); }
   }
 
   // Abre o painel perto de onde a bolinha estiver (ela pode ter sido arrastada), sempre inteiro na tela.
@@ -158,6 +210,7 @@
     const texto = input.value.trim();
     if (!texto || st.enviando) return;
     st.mensagens.push({ role: 'user', content: texto });
+    input.value = '';
     guardarConversa();
     st.enviando = true;
     render();
@@ -222,8 +275,28 @@
       bolha.addEventListener('pointercancel', () => { st.drag = null; });
       bolha.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); alternar(); } });
     }
-    const fechar = document.getElementById('assistente-fechar');
-    if (fechar) fechar.addEventListener('click', alternar);
+    const sino = document.getElementById('assistente-sino');
+    if (sino) sino.addEventListener('click', () => { st.vendoAlertas = !st.vendoAlertas; render(); });
+    const voltar = document.getElementById('assistente-voltar');
+    if (voltar) voltar.addEventListener('click', () => { st.vendoAlertas = false; render(); });
+    document.querySelectorAll('[data-alerta]').forEach((b) => b.addEventListener('click', () => {
+      const a = listaDeAlertas()[+b.dataset.alerta];
+      if (a && typeof a.acao === 'function') { st.vendoAlertas = false; alternar(); try { a.acao(); } catch (e) { /* ignora */ } }
+    }));
+    const trilho = document.getElementById('assistente-sug-trilho');
+    if (trilho) trilho.addEventListener('scroll', () => { st.rolagemSugestoes = trilho.scrollLeft; atualizarSetas(); }, { passive: true });
+    document.querySelectorAll('[data-rolar]').forEach((b) => b.addEventListener('click', () => {
+      const t = document.getElementById('assistente-sug-trilho');
+      if (t) t.scrollBy({ left: +b.dataset.rolar * Math.max(160, t.clientWidth * 0.7), behavior: 'smooth' });
+    }));
+    document.querySelectorAll('[data-sug]').forEach((b) => b.addEventListener('click', () => {
+      const sug = st.sugestoes[+b.dataset.sug];
+      const input = document.getElementById('assistente-input');
+      if (!sug || !input || st.enviando) return;
+      if (sug.preencher) { input.value = sug.preencher; input.focus(); input.setSelectionRange(input.value.length, input.value.length); return; }
+      input.value = sug.pergunta || sug.texto;
+      enviar();
+    }));
     const limpar = document.getElementById('assistente-limpar');
     if (limpar) limpar.addEventListener('click', () => { st.mensagens = []; guardarConversa(); render(); });
     const editar = document.getElementById('assistente-editar-nome');
@@ -243,6 +316,14 @@
     if (input) input.addEventListener('keydown', (e) => { if (e.key === 'Enter') enviar(); });
   }
 
+  // Setas do carrossel: some a da esquerda no começo e a da direita no fim
+  function atualizarSetas() {
+    const t = document.getElementById('assistente-sug-trilho');
+    if (!t) return;
+    const [esq, dir] = document.querySelectorAll('[data-rolar]');
+    if (esq) esq.disabled = t.scrollLeft <= 2;
+    if (dir) dir.disabled = t.scrollLeft + t.clientWidth >= t.scrollWidth - 2;
+  }
   window.addEventListener('resize', () => { if (st.aberto) posicionarPainel(); });
 
   window.AssistenteIA = {
@@ -250,11 +331,26 @@
       st.contexto = opcoes.contexto === 'financeiro' ? 'financeiro' : 'crm';
       st.saudacao = opcoes.saudacao || null;
       st.antesDeEnviar = opcoes.antesDeEnviar || null;
+      st.sugestoes = Array.isArray(opcoes.sugestoes) ? opcoes.sugestoes : [];
+      st.alertas = typeof opcoes.alertas === 'function' ? opcoes.alertas : null;
       st.depoisDeAlterar = opcoes.depoisDeAlterar || null;
       carregarPreferencias();
       render();
     },
     definirHabilitado(sim) { st.habilitado = !!sim; render(); },
+    // os dados do app mudaram: redesenha (contador de alertas do sininho) sem mexer na conversa
+    atualizarAlertas() {
+      if (st.editandoNome || typeof st.alertas !== 'function') return;
+      const agora = assinatura(listaDeAlertas());
+      if (agora === st.ultimaAssinatura) return; // nada mudou: não mexe na tela
+      st.ultimaAssinatura = agora;
+      const t = document.getElementById('assistente-sug-trilho'); if (t) st.rolagemSugestoes = t.scrollLeft;
+      const lista = document.getElementById('assistente-mensagens-lista');
+      const rolagem = lista ? lista.scrollTop : null;
+      render();
+      const nova = document.getElementById('assistente-mensagens-lista');
+      if (nova && rolagem !== null) nova.scrollTop = rolagem;
+    },
     render,
     abrir() { if (!st.aberto) alternar(); },
     // Abre a conversa e já manda uma pergunta (ex.: atalhos da aba Assistente do financeiro)

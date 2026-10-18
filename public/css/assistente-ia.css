@@ -17,7 +17,7 @@
 .assistente-bolha:hover{ box-shadow:0 6px 20px rgba(0,0,0,.32); transform:scale(1.04); }
 .assistente-bolha:active{ cursor:grabbing; }
 .assistente-painel{
-  position:fixed; width:336px; height:460px; background:var(--ai-fundo); border:1px solid var(--ai-linha);
+  position:fixed; width:356px; height:500px; background:var(--ai-fundo); border:1px solid var(--ai-linha);
   border-radius:16px; box-shadow:0 8px 32px rgba(0,0,0,.28); display:flex; flex-direction:column;
   overflow:hidden; z-index:120;
 }
@@ -54,3 +54,40 @@
 .assistente-head-acoes{ display:inline-flex; align-items:center; gap:10px; }
 .assistente-painel-head button#assistente-limpar{ font-size:16px; line-height:1; }
 .assistente-bolha:focus-visible, .assistente-painel-head button:focus-visible, .assistente-input-row button:focus-visible{ outline:2px solid var(--ai-cor); outline-offset:2px; }
+
+/* ícones em SVG (ficam na cor do texto: branco sobre a cor de destaque) */
+.assistente-bolha svg, .assistente-input-row button svg { display:block; }
+.assistente-input-row button{ display:flex; align-items:center; justify-content:center; }
+/* no tema escuro a bolinha escura precisa de um contorno pra não sumir no fundo */
+[data-theme="dark"] .assistente-bolha{ box-shadow:0 0 0 1px rgba(255,255,255,.22), 0 4px 16px rgba(0,0,0,.5); }
+[data-theme="dark"] .assistente-input-row button{ box-shadow:0 0 0 1px rgba(255,255,255,.18); }
+.assistente-bolha-badge, .assistente-sino-badge{ position:absolute; top:-3px; right:-3px; min-width:18px; height:18px; padding:0 5px; border-radius:999px; background:#E5484D; color:#fff; font-size:11px; font-weight:700; display:flex; align-items:center; justify-content:center; line-height:1; box-shadow:0 0 0 2px var(--ai-fundo); }
+.assistente-sino-badge{ top:-6px; right:-8px; min-width:16px; height:16px; font-size:10px; }
+
+/* cabeçalho: sininho no lugar do X (quem fecha é a própria bolinha) */
+.assistente-painel-head .assistente-head-acoes button{ display:inline-flex; align-items:center; justify-content:center; width:30px; height:30px; border-radius:8px; color:var(--ai-texto-suave); position:relative; }
+.assistente-painel-head .assistente-head-acoes button:hover{ background:var(--ai-balao); color:var(--ai-texto); }
+.assistente-sino.ativo{ background:var(--ai-balao) !important; color:var(--ai-texto) !important; }
+.assistente-voltar{ display:inline-flex; align-items:center; gap:6px; border:none; background:none; font:inherit; font-weight:600; font-size:14px; color:var(--ai-texto); cursor:pointer; padding:0; }
+
+/* alertas */
+.assistente-alertas{ gap:8px; }
+.assistente-alerta{ display:flex; align-items:flex-start; gap:9px; width:100%; text-align:left; padding:10px 12px; border-radius:10px; border:1px solid var(--ai-linha); background:var(--ai-fundo); color:var(--ai-texto); font:inherit; font-size:13px; line-height:1.45; }
+button.assistente-alerta{ cursor:pointer; }
+button.assistente-alerta:hover{ background:var(--ai-balao); }
+.assistente-alerta.aviso{ border-color:rgba(229,72,77,.45); }
+.assistente-alerta > span:nth-child(2){ flex:1; }
+.assistente-alerta-ir{ color:var(--ai-texto-suave); font-size:18px; line-height:1; }
+.assistente-vazio{ text-align:center; color:var(--ai-texto-suave); font-size:13px; padding:30px 10px; }
+
+/* carrossel de sugestões, logo acima do campo de digitar */
+.assistente-sugestoes{ display:flex; align-items:center; gap:4px; padding:8px 8px 0; border-top:1px solid var(--ai-linha); }
+.assistente-sug-trilho{ flex:1; display:flex; gap:6px; overflow-x:auto; scroll-snap-type:x mandatory; scrollbar-width:none; padding:2px 0 6px; }
+.assistente-sug-trilho::-webkit-scrollbar{ display:none; }
+.assistente-sug{ flex-shrink:0; scroll-snap-align:start; padding:7px 12px; border-radius:999px; border:1px solid var(--ai-linha); background:var(--ai-balao); color:var(--ai-texto); font:inherit; font-size:12.5px; cursor:pointer; white-space:nowrap; }
+.assistente-sug:hover:not(:disabled){ border-color:var(--ai-cor); }
+.assistente-sug:disabled{ opacity:.5; cursor:default; }
+.assistente-sug-seta{ flex-shrink:0; width:26px; height:26px; margin-bottom:4px; border-radius:50%; border:1px solid var(--ai-linha); background:var(--ai-fundo); color:var(--ai-texto); display:flex; align-items:center; justify-content:center; cursor:pointer; padding:0; }
+.assistente-sug-seta:disabled{ opacity:.3; cursor:default; }
+.assistente-sugestoes + .assistente-input-row{ border-top:none; padding-top:8px; }
+@media (pointer:coarse){ .assistente-sug-seta{ display:none; } }

@@ -311,7 +311,8 @@ function definirModoEscuro(ligado) {
   document.documentElement.setAttribute("data-theme", ligado ? "dark" : "light");
 }
 function corDeDestaque() {
-  const escolha = (state.config && state.config.corDestaque) || "personagem";
+  // padrão: a mesma cor do CRM (os dois aplicativos ficam com a mesma cara)
+  const escolha = (state.config && state.config.corDestaque) || "crm";
   if (escolha === "crm") { try { return localStorage.getItem("accentColor") || ACCENT_PRESETS[0]; } catch (e) { return ACCENT_PRESETS[0]; } }
   if (/^#[0-9a-f]{6}$/i.test(escolha)) return escolha;
   const char = getCharacter();
@@ -392,20 +393,36 @@ function dadosParaCalculo() { return { transacoes: state.txs, cartoes: state.car
 /* ----------------------------------------------------------------------- */
 /* Navegação                                                                */
 /* ----------------------------------------------------------------------- */
-document.getElementById("nav").addEventListener("click", (e) => {
-  const btn = e.target.closest(".nav-item");
+["nav", "nav-rodape"].forEach((id) => document.getElementById(id).addEventListener("click", (e) => {
+  const btn = e.target.closest(".nav-item[data-tab]");
   if (!btn) return;
-  const tab = btn.dataset.tab;
-  state.tab = tab;
-  document.querySelectorAll(".nav-item").forEach((b) => b.classList.toggle("active", b === btn));
+  state.tab = btn.dataset.tab;
+  document.querySelectorAll(".nav-item[data-tab]").forEach((b) => b.classList.toggle("active", b === btn));
+  fecharMenu();
   render();
-});
+  window.scrollTo(0, 0);
+}));
+// No celular a barra lateral vira uma gaveta aberta pelo botão de menu (igual ao CRM)
+function fecharMenu() { document.getElementById("app-root").classList.remove("sidebar-open"); }
+document.getElementById("abrir-menu").addEventListener("click", () => document.getElementById("app-root").classList.add("sidebar-open"));
+document.getElementById("menu-fundo").addEventListener("click", fecharMenu);
+// "Olá, Nome" e a foto no topo da barra lateral
+function atualizarCabecalho() {
+  const nome = (state.profile && state.profile.name) || primeiroNome() || "";
+  document.getElementById("sidebar-nome").textContent = nome || "você";
+  const av = document.getElementById("sidebar-avatar");
+  const foto = state.profile && state.profile.photo;
+  if (foto) av.innerHTML = `<img src="${foto}" alt="" />`;
+  else av.textContent = nome.split(/\s+/).filter(Boolean).slice(0, 2).map((p) => p[0]).join("").toUpperCase() || "?";
+}
 
 // Telas que ficam em arquivos próprios (contas.js, cartoes.js, orcamento.js...) se
 // registram aqui: TELAS.nome = { render, ligar }
 const TELAS = {};
 function render() {
+  if (state.tab === "assistente") state.tab = "dashboard"; // a aba Assistente virou só a bolinha
   applyTheme();
+  atualizarCabecalho();
   const main = document.getElementById("main");
   if (TELAS[state.tab]) main.innerHTML = TELAS[state.tab].render();
   else if (state.tab === "dashboard") main.innerHTML = renderDashboard();
@@ -414,10 +431,10 @@ function render() {
   else if (state.tab === "empresa") main.innerHTML = renderEmpresa();
   else if (state.tab === "objetivos") main.innerHTML = renderObjetivos();
   else if (state.tab === "lucro") main.innerHTML = renderLucro();
-  else if (state.tab === "assistente") main.innerHTML = renderAssistente();
   else if (state.tab === "cadastro") main.innerHTML = renderCadastro();
   attachMainEvents();
   if (typeof atualizarBadgeAPagar === "function") atualizarBadgeAPagar();
+  if (window.AssistenteIA) AssistenteIA.atualizarAlertas();
 }
 
 /* ----------------------------------------------------------------------- */
@@ -856,66 +873,47 @@ function renderLucro() {
 /* ----------------------------------------------------------------------- */
 /* Assistente (baseado em regras + dados reais)                            */
 /* ----------------------------------------------------------------------- */
+// Alertas do sininho da bolinha de IA. Sempre sobre o mês atual (não o mês em tela).
+// Texto simples (a bolinha escapa o HTML); "goto" = aba que abre ao clicar no alerta.
 function buildAlerts() {
   const alerts = [];
-  const rows = occurrencesForMonth(state.month);
+  const mes = mesAtual();
+  const rows = occurrencesForMonth(mes);
   const s = sumsFromOccurrences(rows);
-  if (s.saldo < 0) alerts.push({ type: "warn", text: `Seu saldo em ${monthLabel(state.month)} está negativo: ${fmtBRL(s.saldo)}. Vale revisar os gastos do mês.` });
-  state.cards.forEach((c) => {
-    const pct = c.limit ? limiteUsadoDoCartao(c) / c.limit : 0;
-    if (pct > 0.8) alerts.push({ type: "warn", text: `O cartão ${escapeHtml(c.name)} está com ${fmtPct(pct)} do limite comprometido.` });
-  });
   const pendencias = Calculos.aPagarEReceber(dadosParaCalculo(), { dias: 7 });
   const atrasadas = pendencias.filter((p) => p.atrasado && p.tipo === "pagar");
-  if (atrasadas.length) alerts.push({ type: "warn", text: `${atrasadas.length} conta${atrasadas.length > 1 ? "s" : ""} em atraso, somando ${fmtBRL(atrasadas.reduce((a, p) => a + p.valor, 0))}. <a href="#" data-goto="apagar">Ver contas a pagar</a>` });
+  if (atrasadas.length) alerts.push({ type: "warn", text: `${atrasadas.length} conta${atrasadas.length > 1 ? "s" : ""} em atraso, somando ${fmtBRL(atrasadas.reduce((a, p) => a + p.valor, 0))}.`, goto: "apagar" });
   const semana = pendencias.filter((p) => !p.atrasado && p.tipo === "pagar");
-  if (semana.length) alerts.push({ type: "info", text: `${semana.length} conta${semana.length > 1 ? "s vencem" : " vence"} nos próximos 7 dias (${fmtBRL(semana.reduce((a, p) => a + p.valor, 0))}).` });
-  if (window.alertasDeOrcamento) alertasDeOrcamento(state.month).forEach((a) => alerts.push(a));
+  if (semana.length) alerts.push({ type: "info", text: `${semana.length} conta${semana.length > 1 ? "s vencem" : " vence"} nos próximos 7 dias (${fmtBRL(semana.reduce((a, p) => a + p.valor, 0))}).`, goto: "apagar" });
+  if (s.saldo < 0) alerts.push({ type: "warn", text: `O mês está no vermelho: ${fmtBRL(s.saldo)}. Vale revisar os gastos.`, goto: "lucro" });
+  state.cards.forEach((c) => {
+    const pct = c.limit ? limiteUsadoDoCartao(c) / c.limit : 0;
+    if (pct > 0.8) alerts.push({ type: "warn", text: `O cartão ${c.name} está com ${fmtPct(pct)} do limite comprometido.`, goto: "cartoes" });
+  });
+  if (window.alertasDeOrcamento) alertasDeOrcamento(mes).forEach((a) => alerts.push({ ...a, goto: "orcamento" }));
   state.goals.forEach((g) => {
     const pct = g.target ? g.current / g.target : 0;
     const diasRestantes = (new Date(g.deadline) - new Date()) / 86400000;
-    if (pct < 1 && diasRestantes >= 0 && diasRestantes <= 30) alerts.push({ type: "warn", text: `A meta "${g.name}" vence em breve e está em ${fmtPct(pct)}.` });
-    if (pct >= 1) alerts.push({ type: "ok", text: `Meta "${g.name}" concluída! 🎉` });
+    if (pct < 1 && diasRestantes >= 0 && diasRestantes <= 30) alerts.push({ type: "warn", text: `A meta "${g.name}" vence em breve e está em ${fmtPct(pct)}.`, goto: "objetivos" });
+    if (pct >= 1) alerts.push({ type: "ok", text: `Meta "${g.name}" concluída! 🎉`, goto: "objetivos" });
   });
-  const comissaoMes = occurrencesForMonth(state.month).filter((r) => r.tx.category === "Comissão").reduce((a, r) => a + r.value, 0);
-  if (comissaoMes > 0) alerts.push({ type: "info", text: `Você tem ${fmtBRL(comissaoMes)} de comissão prevista para ${monthLabel(state.month)}.` });
+  const comissaoMes = rows.filter((r) => r.tx.category === "Comissão").reduce((a, r) => a + r.value, 0);
+  if (comissaoMes > 0) alerts.push({ type: "info", text: `Você tem ${fmtBRL(comissaoMes)} de comissão prevista para ${monthLabel(mes)}.`, goto: "lucro" });
   const crmMes = totalCrm(rows);
-  if (crmMes > 0) alerts.push({ type: "info", text: `Entraram ${fmtBRL(crmMes)} do CRM em ${monthLabel(state.month)}.` });
-  if (alerts.length === 0) alerts.push({ type: "ok", text: "Tudo tranquilo por aqui! Nenhum alerta no momento." });
+  if (crmMes > 0) alerts.push({ type: "info", text: `Entraram ${fmtBRL(crmMes)} do CRM em ${monthLabel(mes)}.`, goto: "lucro" });
   return alerts;
 }
-
-function renderAssistente() {
-  const char = getCharacter();
-  const alerts = buildAlerts();
-  const perguntas = [
-    ["Meu saldo", "Qual é o meu saldo esse mês?"],
-    ["Meu lucro", "Qual foi meu lucro esse mês e quanto veio do CRM?"],
-    ["Para onde vai meu dinheiro", "Em que categorias eu mais gastei esse mês?"],
-    ["Meus objetivos", "Como estão meus objetivos?"],
-    ["Uma dica", "Me dá uma dica para o meu perfil financeiro."],
-  ];
-  return `
-    <div class="row-between"><div><h1 class="page-title">Assistente</h1><p class="page-sub">Dicas e alertas baseados nos seus dados${char ? ` · estilo ${escapeHtml(char.title.toLowerCase())}` : ""}</p></div></div>
-    <div class="grid grid-2" style="align-items:start">
-      <div>
-        <h2 class="section-title" style="border-color:var(--char)">Converse com a IA</h2>
-        <div class="card ia-card">
-          ${iaDisponivel
-            ? `<p>A conversa fica na bolinha <span class="ia-bolinha-mini" aria-hidden="true">💬</span> no canto da tela. É a mesma IA do CRM: ela consulta seus lançamentos, cartões, objetivos e vendas de verdade, e a conversa continua quando você troca de aplicativo.</p>
-               <p class="ia-card-sub">Toque numa pergunta para começar:</p>
-               <div class="chat-suggestions">${perguntas.map(([rotulo, pergunta]) => `<button class="chip ask-chip" data-ask="${escapeHtml(pergunta)}">${escapeHtml(rotulo)}</button>`).join("")}</div>
-               <button class="btn char" id="abrir-ia-btn">Abrir a conversa</button>`
-            : `<p>O assistente de IA não está ligado neste servidor no momento. Os alertas ao lado continuam funcionando.</p>`}
-        </div>
-      </div>
-      <div>
-        <h2 class="section-title" style="border-color:${COLORS.red}">Alertas &amp; notificações</h2>
-        ${alerts.map((a) => `<div class="alert-item ${a.type}">${a.type === "warn" ? "⚠️" : a.type === "ok" ? "✅" : "ℹ️"} <span>${a.text}</span></div>`).join("")}
-      </div>
-    </div>
-  `;
-}
+// Perguntas prontas do carrossel da bolinha
+const SUGESTOES_IA = [
+  { texto: "✏️ Lançar um gasto", preencher: "Gastei R$ " },
+  { texto: "Meu saldo", pergunta: "Qual é o meu saldo este mês?" },
+  { texto: "Meu lucro", pergunta: "Qual foi meu lucro este mês e quanto veio do CRM?" },
+  { texto: "Para onde vai meu dinheiro", pergunta: "Em que categorias eu mais gastei este mês?" },
+  { texto: "Contas a pagar", pergunta: "Quais contas vencem nos próximos dias?" },
+  { texto: "Meus cartões", pergunta: "Como estão as faturas e o limite dos meus cartões?" },
+  { texto: "Meus objetivos", pergunta: "Como estão meus objetivos?" },
+  { texto: "Uma dica", pergunta: "Me dá uma dica para o meu perfil financeiro." },
+];
 
 /* ----------------------------------------------------------------------- */
 /* Cadastro                                                                 */
@@ -1031,11 +1029,6 @@ function attachMainEvents() {
   }));
   const descontar = document.getElementById("descontar-comissoes");
   if (descontar) descontar.addEventListener("change", (e) => { state.config = { ...state.config, descontarComissoes: e.target.checked }; saveConfig(); render(); });
-
-  /* Assistente: as perguntas vão para a mesma IA da bolinha */
-  document.querySelectorAll(".ask-chip").forEach((chip) => chip.addEventListener("click", () => { if (window.AssistenteIA) AssistenteIA.perguntar(chip.dataset.ask); }));
-  const abrirIa = document.getElementById("abrir-ia-btn");
-  if (abrirIa) abrirIa.addEventListener("click", () => { if (window.AssistenteIA) AssistenteIA.abrir(); });
 
   /* Cadastro */
   const saveProfileBtn = document.getElementById("save-profile-btn");
@@ -1613,6 +1606,8 @@ function ligarAssistenteIA() {
   if (!window.AssistenteIA) { iaDisponivel = false; return; }
   AssistenteIA.iniciar({
     contexto: "financeiro",
+    sugestoes: SUGESTOES_IA,
+    alertas: () => buildAlerts().map((a) => ({ tipo: a.type === "warn" ? "aviso" : a.type, texto: a.text, acao: a.goto ? () => irParaAba(a.goto) : null })),
     antesDeEnviar: salvarTudoAgora,
     // a IA criou um lançamento: busca os dados de novo e redesenha
     depoisDeAlterar: async () => {
@@ -1629,7 +1624,6 @@ function ligarAssistenteIA() {
     if (!cfg || cfg.assistenteIA !== false) return;
     iaDisponivel = false;
     AssistenteIA.definirHabilitado(false);
-    if (state.tab === "assistente") render();
   }).catch(() => { /* sem resposta: mantém visível */ });
 }
 function telaDeErro(msg) {
