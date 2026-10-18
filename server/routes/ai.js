@@ -136,7 +136,7 @@ Se o usuário perguntar algo específico dos dados dele (tipo "quantos leads eu 
 
 // Personagens do Controle financeiro (mesmos ids de public/financeiro/script.js)
 const PERSONAGENS = {
-  lily: 'A Empresária', julia: 'A Recomeçando', maria: 'A Consumista', sofia: 'A Investidora',
+  lily: 'A Empresária', julia: 'A Endividada', maria: 'A Consumista', sofia: 'A Investidora',
   mateus: 'O Organizado', jonathan: 'O Endividado', lucas: 'O Consumista', rafael: 'O Investidor',
 };
 const ESTILO_DO_PERSONAGEM = {

@@ -461,3 +461,13 @@ tr:hover td { background: rgba(0,0,0,0.015); }
   .g-eixo { font-size: 17px; }
   .g-ponto { r: 7; }
 }
+
+.save-status-wrap[hidden] { display: none; }
+
+/* Trocar personagem: Feminino / Masculino e as 4 opções do gênero escolhido */
+.genero-escolha { display: inline-flex; padding: 4px; border-radius: 999px; background: var(--chip-neutro); border: 1px solid var(--rule); margin: 0 auto 16px; }
+.quiz-card .genero-escolha, .modal-box .genero-escolha { display: flex; width: fit-content; }
+.genero-opcao { border: none; background: none; padding: 8px 22px; border-radius: 999px; font: inherit; font-size: 14px; font-weight: 600; color: var(--ink-muted); cursor: pointer; }
+.genero-opcao.ativo { background: var(--ivory); color: var(--ink); box-shadow: 0 1px 4px rgba(0,0,0,.12); }
+.genero-opcao:focus-visible { outline: 2px solid var(--char); outline-offset: 2px; }
+.modelos-grid { grid-template-columns: repeat(2, 1fr) !important; }

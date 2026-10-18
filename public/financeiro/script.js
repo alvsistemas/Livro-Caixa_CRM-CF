@@ -16,7 +16,7 @@ const PROFILE_COLORS = {
 
 const CHARACTERS = [
   { id: "lily",     name: "Lily",     title: "A Empresária",    profile: "organizadora", gender: "f", desc: "Organizada e estratégica, constrói seu negócio e o futuro com inteligência." },
-  { id: "julia",    name: "Júlia",    title: "A Recomeçando",   profile: "recomeco",     gender: "f", desc: "Batalhadora e determinada, está reescrevendo sua história e saindo das dívidas." },
+  { id: "julia",    name: "Júlia",    title: "A Endividada",    profile: "recomeco",     gender: "f", desc: "Batalhadora e determinada, está reescrevendo sua história e saindo das dívidas." },
   { id: "maria",    name: "Maria",    title: "A Consumista",    profile: "consumista",   gender: "f", desc: "Apaixonada por compras e experiências, aprendendo a equilibrar desejos e prioridades." },
   { id: "sofia",    name: "Sofia",    title: "A Investidora",   profile: "investidora",  gender: "f", desc: "Focada e visionária, investe com estratégia para conquistar liberdade financeira." },
   { id: "mateus",   name: "Mateus",   title: "O Organizado",    profile: "organizadora", gender: "m", desc: "Disciplinado e planejador, faz o dinheiro trabalhar por seus sonhos." },
@@ -196,9 +196,11 @@ async function enviarPendentes() {
 function atualizarStatusSalvamento() {
   const el = document.getElementById("save-status");
   if (!el) return;
-  if (salvamento.erro && salvamento.pendentes.size) { el.textContent = "⚠ Não foi possível salvar — tentando de novo…"; el.className = "save-status erro"; }
-  else if (salvamento.salvando || salvamento.pendentes.size) { el.textContent = "Salvando…"; el.className = "save-status"; }
-  else { el.textContent = "✓ Tudo salvo na sua conta"; el.className = "save-status ok"; }
+  // só aparece quando algo deu errado (salvar é automático e não precisa de aviso)
+  const comErro = !!(salvamento.erro && salvamento.pendentes.size);
+  el.textContent = comErro ? "⚠ Não foi possível salvar — tentando de novo…" : "";
+  el.className = comErro ? "save-status erro" : "save-status";
+  el.parentElement.hidden = !comErro;
 }
 window.addEventListener("beforeunload", (e) => {
   if (salvamento.pendentes.size || salvamento.salvando) { e.preventDefault(); e.returnValue = ""; }
@@ -1463,6 +1465,21 @@ function renderCharacterCard(c, selectedId) {
   </button>`;
 }
 
+// Seletor de modelos: primeiro Feminino ou Masculino, depois só as 4 opções daquele gênero.
+function seletorDeModelos(genero, selecionado) {
+  const lista = CHARACTERS.filter((c) => c.gender === genero);
+  return `<div class="genero-escolha" role="radiogroup" aria-label="Personagem feminino ou masculino">
+      <button type="button" class="genero-opcao ${genero === "f" ? "ativo" : ""}" data-genero="f" role="radio" aria-checked="${genero === "f"}">Feminino</button>
+      <button type="button" class="genero-opcao ${genero === "m" ? "ativo" : ""}" data-genero="m" role="radio" aria-checked="${genero === "m"}">Masculino</button>
+    </div>
+    <div class="onb-grid modelos-grid">${lista.map((c) => renderCharacterCard(c, selecionado)).join("")}</div>`;
+}
+// Liga o seletor: trocar o gênero redesenha; escolher um modelo chama aoEscolher(personagem)
+function ligarSeletorDeModelos(root, redesenhar, aoEscolher) {
+  root.querySelectorAll("[data-genero]").forEach((b) => b.addEventListener("click", () => redesenhar(b.dataset.genero)));
+  root.querySelectorAll("[data-char]").forEach((b) => b.addEventListener("click", () => aoEscolher(CHARACTERS.find((c) => c.id === b.dataset.char))));
+}
+
 // Questionário (1º acesso em tela cheia; "Refazer as perguntas" abre em janela).
 function openQuiz(isRefazer) {
   const root = isRefazer ? null : document.getElementById("onboarding-root");
@@ -1520,14 +1537,16 @@ function openQuiz(isRefazer) {
     el.querySelector("#quiz-confirmar").addEventListener("click", () => concluir(char, lerNome()));
   };
 
-  const desenharModelos = (selecionado) => {
+  const desenharModelos = (selecionado, genero) => {
+    const sel = CHARACTERS.find((c) => c.id === selecionado);
+    const g = genero || (sel ? sel.gender : resultado.genero) || "f";
     const el = montar(`
-      <div class="quiz-card quiz-card-largo">
+      <div class="quiz-card">
         <h2 class="quiz-pergunta">Escolha o personagem</h2>
-        <div class="onb-grid">${CHARACTERS.map((c) => renderCharacterCard(c, selecionado)).join("")}</div>
+        ${seletorDeModelos(g, selecionado)}
         <button type="button" class="quiz-voltar" id="quiz-voltar-resultado">← Voltar para o resultado</button>
       </div>`);
-    el.querySelectorAll("[data-char]").forEach((b) => b.addEventListener("click", () => desenharResultado(CHARACTERS.find((c) => c.id === b.dataset.char))));
+    ligarSeletorDeModelos(el, (novo) => desenharModelos(selecionado, novo), (c) => desenharResultado(c));
     el.querySelector("#quiz-voltar-resultado").addEventListener("click", () => desenharResultado(resultado.character));
   };
 
@@ -1549,11 +1568,13 @@ function openQuiz(isRefazer) {
 // "Trocar personagem": modelos pela palavra que os representa; depois, o nome.
 function openCharacterPicker() {
   let selectedId = state.profile ? state.profile.character : null;
+  const atual = CHARACTERS.find((c) => c.id === selectedId);
+  let genero = atual ? atual.gender : "f";
   const desenharModelos = () => {
     openModal("Trocar personagem", `
       <p class="quiz-modal-sub">Escolha o personagem que mais combina com você agora.</p>
-      <div class="onb-grid">${CHARACTERS.map((c) => renderCharacterCard(c, selectedId)).join("")}</div>`);
-    document.querySelectorAll("#modal-root [data-char]").forEach((b) => b.addEventListener("click", () => { selectedId = b.dataset.char; desenharNome(); }));
+      ${seletorDeModelos(genero, selectedId)}`);
+    ligarSeletorDeModelos(document.getElementById("modal-root"), (g) => { genero = g; desenharModelos(); }, (c) => { selectedId = c.id; desenharNome(); });
   };
   const desenharNome = () => {
     const char = CHARACTERS.find((c) => c.id === selectedId);
