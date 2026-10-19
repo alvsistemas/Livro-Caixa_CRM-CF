@@ -173,7 +173,7 @@ aparece "Painel do dono" na tela inicial. Outros donos você adiciona no própri
 ## 6. Depois que estiver no ar
 
 - **Página de divulgação:** no `index.html` da pasta `pagina-divulgacao`, troque `SEU-APP.onrender.com` pelo seu endereço (links de Privacidade e Termos no rodapé).
-- **Privacidade e Termos:** em `public/privacidade.html` e `public/termos.html`, troque `SEU-EMAIL-DE-CONTATO-AQUI` pelo seu e-mail de contato.
+- **Privacidade e Termos:** o e-mail de contato (alvsistemas.1710@gmail.com) já está em `public/privacidade.html` e `public/termos.html`. Se mudar, troque nos dois.
 - **Trazer os dados do CRM antigo (opcional):** no CRM antigo, vá em *Configurações → Manutenção → Backup → Exportar*. No Livro-Caixa, use *Importar* na mesma tela. Os clientes, comissões e regras antigas entram na conta nova.
 
 ## 7. Como publicar atualizações

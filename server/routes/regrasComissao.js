@@ -56,6 +56,7 @@ router.post('/', async (req, res) => {
       nome: nome.trim(),
       blocos,
       mesIndependente: !!mesIndependente,
+      base: req.body.base === 'negociado' ? 'negociado' : 'final',
       padrao: false,
       ordem: ultima ? ultima.ordem + 1 : 0,
     });
@@ -83,6 +84,7 @@ router.put('/:id', async (req, res) => {
       updates.blocos = blocos;
     }
     if (typeof req.body.mesIndependente === 'boolean') updates.mesIndependente = req.body.mesIndependente;
+    if (req.body.base === 'final' || req.body.base === 'negociado') updates.base = req.body.base;
     if (Number.isFinite(req.body.ordem)) updates.ordem = req.body.ordem;
 
     const regra = await RegraComissao.findOneAndUpdate(
@@ -113,3 +115,4 @@ router.delete('/:id', async (req, res) => {
 });
 
 module.exports = router;
+module.exports.validarBlocos = validarBlocos;

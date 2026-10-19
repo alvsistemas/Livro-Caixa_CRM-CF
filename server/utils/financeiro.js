@@ -174,9 +174,10 @@ async function carregarFinanceiro(userId) {
 // - um que já não existe no banco não volta (o fechamento foi refeito no CRM).
 async function salvarSecaoFinanceiro(userId, secao, valor, opcoes = {}) {
   if (SECOES_OBJETO.includes(secao)) {
-    // config: preserva a marca que o servidor grava (dia do último lembrete enviado)
+    // config: preserva o que o servidor grava (dia do último lembrete enviado, taxas da venda)
     const novo = secao === 'config'
-      ? `EXCLUDED.config || COALESCE(jsonb_strip_nulls(jsonb_build_object('lembreteEnviadoEm', financeiro_perfis.config->'lembreteEnviadoEm')), '{}'::jsonb)`
+      // taxasVenda: só muda pela rota do fechamento (CRM ou aba Lucro), nunca por uma tela velha
+      ? `(EXCLUDED.config - 'taxasVenda') || COALESCE(jsonb_strip_nulls(jsonb_build_object('lembreteEnviadoEm', financeiro_perfis.config->'lembreteEnviadoEm', 'taxasVenda', financeiro_perfis.config->'taxasVenda')), '{}'::jsonb)`
       : `EXCLUDED.${secao}`;
     await query(
       `INSERT INTO financeiro_perfis (user_id, ${secao}) VALUES ($1::uuid, $2::jsonb)

@@ -305,7 +305,7 @@ describe('API com PostgreSQL (integração)', { skip: pular }, () => {
     const ganho = board.dados.columns.find((c) => c.tipo === 'ganho');
     // modo: ainda não perguntado
     let modo = await api('GET', '/api/financeiro/fechamento/modo', undefined, t);
-    assert.deepEqual(modo.dados, { modo: 'vendas', perguntado: false });
+    assert.deepEqual(modo.dados, { modo: 'vendas', perguntado: false, taxas: {}, descontarComissoes: false });
     // a tela do financeiro abre ANTES da venda (vai ficar velha)
     const telaVelha = await api('GET', '/api/financeiro', undefined, t);
     assert.ok(telaVelha.dados.carregadoEm);
@@ -389,6 +389,220 @@ describe('API com PostgreSQL (integração)', { skip: pular }, () => {
     fin = await api('GET', '/api/financeiro', undefined, t);
     assert.equal(fin.dados.dados.config.descontarComissoes, true);
     assert.equal(fin.dados.dados.config.integracaoCrm, 'comissoes');
+  });
+
+  test('custos da venda: despesas ligadas, taxa guardada, comissão sobre o valor final', async () => {
+    const reg = await api('POST', '/api/auth/register', { nome: 'Fabi', email: 'fabi.custos@teste.com', senha: 'senha123' });
+    const t = reg.dados.token;
+    const board = await api('GET', '/api/board', undefined, t);
+    const leads = board.dados.columns.find((c) => c.tipo === 'aberto');
+    const ganho = board.dados.columns.find((c) => c.tipo === 'ganho');
+    const c = await api('POST', '/api/cards', { cliente: 'Maria Souza', columnId: leads.id, valor: 10000 }, t);
+    await api('PUT', `/api/cards/${c.dados.id}/move`, { columnId: ganho.id }, t);
+    await new Promise((ok) => setTimeout(ok, 400)); // comissão gerada pelo Pipeline (5% de 10.000)
+    let com = await api('GET', '/api/comissoes', undefined, t);
+    assert.equal(com.dados.contratos.find((x) => x.cardId === c.dados.id).value, 500);
+    // a janela recebe a regra da comissão
+    const ver = await api('GET', `/api/financeiro/fechamento/${c.dados.id}`, undefined, t);
+    assert.deepEqual(ver.dados.regra, { nome: 'Padrão', base: 'final', percentualTotal: 0.05 });
+    // taxa fora da faixa
+    assert.equal((await api('PUT', '/api/financeiro/fechamento/taxas', { credito: 50 }, t)).status, 400);
+    assert.equal((await api('PUT', '/api/financeiro/fechamento/taxas', { inventada: 1 }, t)).status, 400);
+    await api('PUT', '/api/financeiro/fechamento/taxas', { debito: 1.5 }, t);
+    // a tela do financeiro abre antes (vai salvar a config sem as taxas)
+    const telaVelha = await api('GET', '/api/financeiro', undefined, t);
+    const r = await api('POST', `/api/financeiro/fechamento/${c.dados.id}`, {
+      descontoPct: 5, forma: 'parcelado', parcelas: 3, primeiraData: '2026-12-15', meio: 'credito',
+      custos: { produto: 6000, frete: 300, taxaPct: 4.99, impostoPct: 6 },
+    }, t);
+    assert.equal(r.status, 200, JSON.stringify(r.dados));
+    assert.equal(r.dados.fechamento.custos.total, 7344.05);
+    assert.equal(r.dados.fechamento.comissao, 475); // 5% de 9.500 (valor final)
+    assert.equal(r.dados.lancamentos, 7); // 3 receitas + produto, frete, taxa, imposto
+    com = await api('GET', '/api/comissoes', undefined, t);
+    const ct = com.dados.contratos.find((x) => x.cardId === c.dados.id);
+    assert.equal(ct.valorVenda, 9500);
+    assert.equal(ct.value, 475);
+    // os % usados ficam guardados (e o que já estava, também)
+    let modo = await api('GET', '/api/financeiro/fechamento/modo', undefined, t);
+    assert.deepEqual(modo.dados.taxas, { debito: 1.5, creditoParcelado: 4.99, imposto: 6 });
+    // a tela velha salva a config: as taxas continuam
+    await api('PUT', '/api/financeiro/config', { valor: { ...telaVelha.dados.dados.config, descontarComissoes: true } }, t);
+    modo = await api('GET', '/api/financeiro/fechamento/modo', undefined, t);
+    assert.equal(modo.dados.taxas.imposto, 6);
+    assert.equal(modo.dados.descontarComissoes, true);
+    // apagar uma taxa guardada
+    await api('PUT', '/api/financeiro/fechamento/taxas', { debito: null }, t);
+    modo = await api('GET', '/api/financeiro/fechamento/modo', undefined, t);
+    assert.equal(modo.dados.taxas.debito, undefined);
+    // despesas no financeiro, ligadas ao cliente
+    let fin = await api('GET', '/api/financeiro', undefined, t);
+    const desp = fin.dados.dados.transacoes.filter((x) => x.crmFechamento && x.type === 'Despesa');
+    assert.deepEqual(desp.map((x) => [x.crmFechamento.tipo, x.value]).sort(), [['frete', 300], ['imposto', 570], ['produto', 6000], ['taxa', 474.05]]);
+    // a pessoa paga o imposto no financeiro; refazer sem frete: frete some, imposto continua pago
+    const marcado = fin.dados.dados.transacoes.map((x) => (x.crmFechamento && x.crmFechamento.tipo === 'imposto' ? { ...x, status: 'Pago' } : x));
+    await api('PUT', '/api/financeiro/transacoes', { valor: marcado, carregadoEm: fin.dados.carregadoEm }, t);
+    await api('POST', `/api/financeiro/fechamento/${c.dados.id}`, {
+      descontoPct: 5, forma: 'parcelado', parcelas: 3, primeiraData: '2026-12-15', meio: 'credito',
+      custos: { produto: 6000, taxaPct: 4.99, impostoPct: 6 },
+    }, t);
+    fin = await api('GET', '/api/financeiro', undefined, t);
+    const d2 = fin.dados.dados.transacoes.filter((x) => x.crmFechamento && x.type === 'Despesa');
+    assert.equal(d2.some((x) => x.crmFechamento.tipo === 'frete'), false);
+    assert.equal(d2.find((x) => x.crmFechamento.tipo === 'imposto').status, 'Pago');
+    // regra sobre o valor negociado: a comissão volta a usar o valor do card
+    const regras = await api('GET', '/api/regras-comissao', undefined, t);
+    const padrao = (regras.dados.regras || regras.dados).find((x) => x.chave === 'padrao');
+    const mud = await api('PUT', `/api/regras-comissao/${padrao.id}`, { base: 'negociado' }, t);
+    assert.equal(mud.dados.base, 'negociado');
+    const r3 = await api('POST', `/api/financeiro/fechamento/${c.dados.id}`, { descontoPct: 5, forma: 'avista', primeiraData: '2026-12-15', meio: 'pix' }, t);
+    assert.equal(r3.dados.fechamento.comissao, 500);
+    // card ganho sem valor (sem comissão do Pipeline): o fechamento cria a comissão pelo valor final
+    const semValor = await api('POST', '/api/cards', { cliente: 'Sem valor no card', columnId: leads.id, valor: 0 }, t);
+    await api('PUT', `/api/cards/${semValor.dados.id}/move`, { columnId: ganho.id }, t);
+    await api('PUT', `/api/regras-comissao/${padrao.id}`, { base: 'final' }, t);
+    const r4 = await api('POST', `/api/financeiro/fechamento/${semValor.dados.id}`, { valorFinal: 2000, forma: 'avista', primeiraData: '2026-12-15', meio: 'pix' }, t);
+    assert.equal(r4.dados.fechamento.comissao, 100);
+  });
+
+  test('venda desfeita, devolução e cliente excluído', async () => {
+    const reg = await api('POST', '/api/auth/register', { nome: 'Gabi', email: 'gabi.desfeita@teste.com', senha: 'senha123' });
+    const t = reg.dados.token;
+    const board = await api('GET', '/api/board', undefined, t);
+    const leads = board.dados.columns.find((c) => c.tipo === 'aberto');
+    const ganho = board.dados.columns.find((c) => c.tipo === 'ganho');
+    const perdido = board.dados.columns.find((c) => c.tipo === 'perdido');
+    const c = await api('POST', '/api/cards', { cliente: 'Cliente Desistiu', columnId: leads.id, valor: 3000 }, t);
+    await api('PUT', `/api/cards/${c.dados.id}/move`, { columnId: ganho.id }, t);
+    await new Promise((ok) => setTimeout(ok, 400));
+    await api('POST', `/api/financeiro/fechamento/${c.dados.id}`, { valorFinal: 3000, forma: 'parcelado', parcelas: 3, primeiraData: '2026-10-10', meio: 'pix', recebido: true, custos: { produto: 1000, impostoPct: 5 } }, t);
+    // devolução pela ficha: não passa do valor da venda
+    assert.equal((await api('POST', `/api/financeiro/fechamento/${c.dados.id}/devolucao`, { valor: 3500 }, t)).status, 400);
+    const dev = await api('POST', `/api/financeiro/fechamento/${c.dados.id}/devolucao`, { valor: 200, motivo: 'peça com defeito' }, t);
+    assert.equal(dev.status, 201, JSON.stringify(dev.dados));
+    // refazer o fechamento não apaga a devolução
+    await api('POST', `/api/financeiro/fechamento/${c.dados.id}`, { valorFinal: 3000, forma: 'parcelado', parcelas: 3, primeiraData: '2026-10-10', meio: 'pix', recebido: true, custos: { produto: 1000, impostoPct: 5 } }, t);
+    let fin = await api('GET', '/api/financeiro', undefined, t);
+    let lig = fin.dados.dados.transacoes.filter((x) => x.crmFechamento);
+    const devs = lig.filter((x) => x.crmFechamento.tipo === 'devolucao');
+    assert.equal(devs.length, 1);
+    assert.equal(devs[0].category, 'Devoluções');
+    assert.equal(devs[0].desc, 'Devolução — Cliente Desistiu (peça com defeito)');
+    // ainda em Ganho: não dá pra desfazer
+    assert.equal((await api('POST', `/api/financeiro/fechamento/${c.dados.id}/cancelar`, {}, t)).status, 400);
+    // sai de Ganho: apaga o que falta receber/pagar (parcelas 2 e 3 e o imposto); fica a 1ª parcela, o produto e a devolução
+    await api('PUT', `/api/cards/${c.dados.id}/move`, { columnId: perdido.id }, t);
+    await new Promise((ok) => setTimeout(ok, 400)); // a comissão é cortada logo depois de responder
+    // devolução maior que o recebido é recusada
+    assert.equal((await api('POST', `/api/financeiro/fechamento/${c.dados.id}/cancelar`, { devolucao: { valor: 1500 } }, t)).status, 400);
+    // recebido 1.000 menos os 200 já devolvidos: no máximo 800
+    assert.equal((await api('POST', `/api/financeiro/fechamento/${c.dados.id}/cancelar`, { devolucao: { valor: 801 } }, t)).status, 400);
+    const canc = await api('POST', `/api/financeiro/fechamento/${c.dados.id}/cancelar`, { devolucao: { valor: 800 } }, t);
+    assert.equal(canc.status, 200, JSON.stringify(canc.dados));
+    assert.equal(canc.dados.cancelado.aReceberCancelado, 2000);
+    assert.equal(canc.dados.cancelado.recebidoMantido, 1000);
+    assert.equal(canc.dados.cancelado.devolvido, 800);
+    assert.ok(canc.dados.card.fechamento.cancelado);
+    assert.equal((await api('POST', `/api/financeiro/fechamento/${c.dados.id}/cancelar`, {}, t)).status, 400); // só uma vez
+    fin = await api('GET', '/api/financeiro', undefined, t);
+    lig = fin.dados.dados.transacoes.filter((x) => x.crmFechamento);
+    assert.deepEqual(lig.map((x) => [x.crmFechamento.tipo, x.value, x.status]).sort(), [
+      ['devolucao', 200, 'Pago'], ['devolucao', 800, 'Pago'], ['produto', 1000, 'Pago'], ['receita', 1000, 'Pago'],
+    ]);
+    // a comissão foi cortada ao ir para Perdido
+    const com = await api('GET', '/api/comissoes', undefined, t);
+    assert.ok(com.dados.contratos.find((x) => x.cardId === c.dados.id).canceladoNoMes);
+    // voltou para Ganho: refazer conta como venda nova e limpa o "desfeita"
+    await api('PUT', `/api/cards/${c.dados.id}/move`, { columnId: ganho.id }, t);
+    const refeita = await api('POST', `/api/financeiro/fechamento/${c.dados.id}`, { valorFinal: 1000, forma: 'avista', primeiraData: '2026-10-10', meio: 'pix' }, t);
+    assert.equal(refeita.dados.fechamento.cancelado, undefined);
+    // excluir o card: os lançamentos ficam, marcados
+    assert.equal((await api('DELETE', `/api/cards/${c.dados.id}`, undefined, t)).status, 204);
+    fin = await api('GET', '/api/financeiro', undefined, t);
+    lig = fin.dados.dados.transacoes.filter((x) => x.crmFechamento);
+    assert.ok(lig.length >= 3);
+    assert.ok(lig.every((x) => x.crmFechamento.clienteExcluido === true && x.crmFechamento.clienteNome === 'Cliente Desistiu'));
+  });
+
+  test('permissões da equipe: gestor e dono do sistema escolhem; o servidor aplica', async () => {
+    const antes = process.env.DONOS_EMAILS;
+    process.env.DONOS_EMAILS = 'suporte.perm@teste.com';
+    try {
+      const reg = async (nome, email) => (await api('POST', '/api/auth/register', { nome, email, senha: 'senha123' })).dados;
+      const gestor = await reg('Gestora', 'gestora.perm@teste.com');
+      const membro = await reg('Vendedor', 'vendedor.perm@teste.com');
+      const suporte = await reg('Suporte', 'suporte.perm@teste.com');
+      const eq = await api('POST', '/api/equipe', { nome: 'Time Permissões' }, gestor.token);
+      assert.equal((await api('POST', '/api/equipe/entrar', { codigo: eq.dados.codigoConvite }, membro.token)).status, 204);
+      // padrão: tudo liberado
+      let ver = await api('GET', '/api/equipe', undefined, membro.token);
+      assert.equal(ver.dados.minhasPermissoes.restrito, true);
+      assert.equal(ver.dados.minhasPermissoes.funcoes.excluirClientes, true);
+      assert.equal(ver.dados.equipe.catalogoPermissoes.abas.length, 9);
+      // membro não muda permissões; chave desconhecida é recusada
+      assert.equal((await api('PUT', '/api/equipe/permissoes', { funcoes: { excluirClientes: false } }, membro.token)).status, 403);
+      assert.equal((await api('PUT', '/api/equipe/permissoes', { funcoes: { voar: false } }, gestor.token)).status, 400);
+      const put = await api('PUT', '/api/equipe/permissoes', { abas: { automacoes: false, financeiro: false }, funcoes: { excluirClientes: false, fechamentoVenda: false, editarFunis: false } }, gestor.token);
+      assert.equal(put.status, 200, JSON.stringify(put.dados));
+      // o membro fica sem; a gestora continua com tudo
+      const bm = await api('GET', '/api/board', undefined, membro.token);
+      const col = bm.dados.columns[0];
+      const card = await api('POST', '/api/cards', { cliente: 'Lead do vendedor', columnId: col.id, valor: 100 }, membro.token);
+      const del = await api('DELETE', `/api/cards/${card.dados.id}`, undefined, membro.token);
+      assert.equal(del.status, 403);
+      assert.match(del.dados.error, /Excluir clientes/);
+      assert.equal((await api('GET', '/api/automacoes', undefined, membro.token)).status, 403);
+      assert.equal((await api('GET', '/api/financeiro', undefined, membro.token)).status, 403);
+      assert.equal((await api('GET', '/api/financeiro/fechamento/modo', undefined, membro.token)).status, 200); // o CRM precisa saber o modo
+      assert.equal((await api('POST', `/api/financeiro/fechamento/${card.dados.id}`, { valorFinal: 1, forma: 'avista', primeiraData: '2026-10-19', meio: 'pix' }, membro.token)).status, 403);
+      assert.equal((await api('POST', '/api/columns', { nome: 'Nova', funilId: col.funilId }, membro.token)).status, 403);
+      assert.equal((await api('GET', '/api/regras-comissao', undefined, membro.token)).status, 200); // ler a lista fica liberado
+      assert.equal((await api('GET', '/api/automacoes', undefined, gestor.token)).status, 200);
+      ver = await api('GET', '/api/equipe', undefined, membro.token);
+      assert.equal(ver.dados.minhasPermissoes.abas.automacoes, false);
+      // a gestora vira gestora também do vendedor? Não: promover o vendedor a gestor libera tudo pra ele
+      await api('PUT', `/api/equipe/membro/${membro.user.id}/papel`, { papel: 'supervisor' }, gestor.token);
+      assert.equal((await api('GET', '/api/automacoes', undefined, membro.token)).status, 200);
+      await api('PUT', `/api/equipe/membro/${membro.user.id}/papel`, { papel: 'membro' }, gestor.token);
+      assert.equal((await api('GET', '/api/automacoes', undefined, membro.token)).status, 403);
+
+      // dono do sistema: vê as equipes e libera de novo (fica na auditoria da gestora)
+      assert.equal((await api('GET', '/api/dono/equipes', undefined, membro.token)).status, 403);
+      const eqs = await api('GET', '/api/dono/equipes', undefined, suporte.token);
+      assert.equal(eqs.status, 200, JSON.stringify(eqs.dados));
+      const minha = eqs.dados.equipes.find((e) => e.nome === 'Time Permissões');
+      assert.equal(minha.membros, 2);
+      assert.equal(minha.permissoes.abas.automacoes, false);
+      assert.equal((await api('PUT', `/api/dono/equipes/${minha.id}/permissoes`, { abas: {}, funcoes: {} }, suporte.token)).status, 200);
+      assert.equal((await api('GET', '/api/automacoes', undefined, membro.token)).status, 200);
+      const aud = await api('GET', '/api/auditoria', undefined, gestor.token);
+      const lista = aud.dados.logs || aud.dados.auditoria || aud.dados;
+      assert.ok(JSON.stringify(lista).includes('pelo suporte do Livro-Caixa (suporte.perm@teste.com)'));
+
+      // regras de comissão de um cliente, pelo Painel do dono
+      const rg = await api('GET', `/api/dono/clientes/${membro.user.id}/regras`, undefined, suporte.token);
+      assert.equal(rg.status, 200, JSON.stringify(rg.dados));
+      const padrao = rg.dados.regras.find((r) => r.chave === 'padrao');
+      assert.equal(padrao.descricao, '1x 5%, sobre o valor final');
+      assert.equal((await api('PUT', `/api/dono/clientes/${membro.user.id}/regras/${padrao.id}`, { blocos: [] }, suporte.token)).status, 400);
+      const ed = await api('PUT', `/api/dono/clientes/${membro.user.id}/regras/${padrao.id}`, { blocos: [{ parcelas: 2, percentual: 1.5 }], base: 'negociado' }, suporte.token);
+      assert.equal(ed.status, 200, JSON.stringify(ed.dados));
+      assert.equal(ed.dados.descricao, '2x 1,5%, sobre o valor do card');
+      const nova = await api('POST', `/api/dono/clientes/${membro.user.id}/regras`, { nome: 'Consórcio', blocos: [{ parcelas: 1, percentual: 3 }] }, suporte.token);
+      assert.equal(nova.status, 201, JSON.stringify(nova.dados));
+      // o cliente vê as regras novas e o registro na auditoria dele
+      const doCliente = await api('GET', '/api/regras-comissao', undefined, membro.token);
+      assert.equal(doCliente.dados.regras.length, 2);
+      assert.equal(doCliente.dados.regras.find((r) => r.chave === 'padrao').blocos[0].percentual, 0.015);
+      const audC = await api('GET', '/api/auditoria', undefined, membro.token);
+      const txt = JSON.stringify(audC.dados);
+      assert.ok(txt.includes('Antes: 1x 5%, sobre o valor final. Depois: 2x 1,5%, sobre o valor do card.'));
+      assert.ok(txt.includes('Regra de comissão \\"Consórcio\\" criada pelo suporte'));
+      // quem não é dono não mexe
+      assert.equal((await api('GET', `/api/dono/clientes/${membro.user.id}/regras`, undefined, gestor.token)).status, 403);
+    } finally {
+      if (antes === undefined) delete process.env.DONOS_EMAILS; else process.env.DONOS_EMAILS = antes;
+    }
   });
 
   test('equipe: gestor vê o resumo dos membros e passa um lead pra outra pessoa', async () => {

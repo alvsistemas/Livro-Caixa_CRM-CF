@@ -64,3 +64,21 @@
 .sr-only{ position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap; }
 .dono-tabela .acao{ white-space:nowrap; width:1%; }
 .dono-tabela td, .dono-tabela th{ padding-left:12px; padding-right:12px; }
+
+/* equipes e regras de comissão */
+.dono-acoes-linha{ display:flex; gap:6px; justify-content:flex-end; flex-wrap:wrap; }
+.dono-lista-equipes, .dono-regras{ list-style:none; margin:0; padding:0; }
+.dono-lista-equipes li, .dono-regras li{ display:flex; justify-content:space-between; align-items:center; gap:12px; padding:10px 0; border-top:1px solid var(--line); }
+.dono-lista-equipes li:first-child, .dono-regras li:first-child{ border-top:none; }
+.dono-modal-largo{ max-width:620px; max-height:calc(100vh - 32px); overflow-y:auto; }
+.dono-perm-colunas{ display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+.dono-perm-grupo{ border:1px solid var(--line); border-radius:10px; padding:6px 12px 10px; margin:0; min-width:0; }
+.dono-perm-grupo legend{ font-size:12px; font-weight:700; padding:0 4px; }
+.dono-check{ display:flex; gap:8px; align-items:flex-start; padding:6px 0; font-size:14px; cursor:pointer; }
+.dono-check input{ width:18px; height:18px; margin-top:2px; flex-shrink:0; }
+.dono-check small{ display:block; font-size:12px; opacity:.7; }
+.dono-aviso-consent{ font-size:13px; padding:10px 12px; border-radius:10px; background:var(--col-bg, rgba(0,0,0,.05)); margin:0 0 8px; }
+.dono-regra-form{ border-top:1px solid var(--line); margin-top:8px; padding-top:8px; }
+.dono-h3{ font-size:15px; margin:4px 0 8px; }
+.dono-bloco{ display:grid; grid-template-columns:1fr 1fr auto; gap:8px; align-items:end; }
+@media (max-width:560px){ .dono-perm-colunas{ grid-template-columns:1fr; } }

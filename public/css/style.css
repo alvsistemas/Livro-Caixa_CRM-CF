@@ -895,3 +895,31 @@ tr.membro-supervisor-destaque td:last-child{ border-right:1px solid var(--gold);
 .fech-selo:hover{ filter:brightness(.95); }
 @media (max-width:480px){ .fech-modal .field-row{ grid-template-columns:1fr; } }
 #fechamento-root .overlay{ z-index:150; }
+/* custos da venda (etapa 2) */
+.fech-custos{ border:1px solid var(--line); border-radius:10px; padding:0 12px; }
+.fech-custos[open]{ padding-bottom:12px; }
+.fech-custos summary{ cursor:pointer; padding:12px 0; font-size:12px; font-weight:600; color:var(--ink); list-style-position:inside; }
+.fech-custos summary span{ font-weight:400; color:var(--ink-soft); }
+.fech-custos > .field, .fech-custos > .fech-custo-linha:first-of-type{ margin-top:10px; }
+.fech-custos .field-row .field{ margin-top:0; }
+.fech-custo-linha{ display:flex; justify-content:space-between; gap:12px; font-size:12px; color:var(--ink); margin-top:10px; }
+.fech-link{ background:none; border:none; padding:4px 0; min-height:28px; color:var(--ink-soft); font-size:12px; text-decoration:underline; cursor:pointer; font-family:inherit; display:block; }
+.fech-link:hover{ color:var(--ink); }
+.fech-sobra{ display:flex; flex-wrap:wrap; gap:6px 16px; justify-content:space-between; padding:10px 20px; border-top:1px solid var(--line); background:var(--col-bg); font-size:12px; color:var(--ink-soft); }
+.fech-sobra:empty{ display:none; }
+.fech-sobra b{ color:var(--ink); }
+.fech-sobra small{ color:var(--ink-soft); }
+.fech-neg b{ color:var(--danger); }
+
+/* Equipe → Permissões */
+.perm-card{ max-width:860px; }
+.perm-colunas{ display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-top:12px; }
+.perm-grupo{ border:1px solid var(--line); border-radius:12px; padding:8px 14px 12px; margin:0; min-width:0; }
+.perm-grupo legend{ font-size:12px; font-weight:700; color:var(--ink-soft); padding:0 6px; text-transform:uppercase; letter-spacing:.04em; }
+.perm-item{ display:flex; gap:10px; align-items:flex-start; padding:8px 0; cursor:pointer; font-size:13px; color:var(--ink); }
+.perm-item + .perm-item{ border-top:1px solid var(--line); }
+.perm-item input{ width:18px; height:18px; margin-top:1px; accent-color:var(--accent); flex-shrink:0; }
+.perm-item small{ display:block; color:var(--ink-soft); font-size:11px; margin-top:2px; }
+.perm-acoes{ display:flex; gap:8px; justify-content:flex-end; margin-top:14px; flex-wrap:wrap; }
+.perm-msg{ margin-top:12px; }
+@media (max-width:720px){ .perm-colunas{ grid-template-columns:1fr; } }

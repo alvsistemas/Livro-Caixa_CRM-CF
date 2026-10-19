@@ -1339,6 +1339,8 @@ async function loadEquipe(){
   try{
     const data = await apiRequest('GET', '/equipe');
     equipe = data.equipe;
+    permForm = null; // tela de permissões recomeça do que está salvo
+    if(typeof definirMinhasPermissoes === 'function') definirMinhasPermissoes(data.minhasPermissoes);
   }catch(e){
     equipe = null;
   }
@@ -2529,7 +2531,9 @@ function visibleCards(){
 }
 function cardsOf(colId){ return visibleCards().filter(c=>c.columnId===colId).sort((a,b)=> (a.ordem||0) - (b.ordem||0)); }
 // valor de uma venda ganha: o valor final do fechamento (com desconto), se já foi feito
-function valorVendido(c){ return c.fechamento && Number.isFinite(Number(c.fechamento.valorFinal)) ? Number(c.fechamento.valorFinal) : (Number(c.valor)||0); }
+function valorVendido(c){ return c.fechamento && !c.fechamento.cancelado && Number.isFinite(Number(c.fechamento.valorFinal)) ? Number(c.fechamento.valorFinal) : (Number(c.valor)||0); }
+// o valor do card mudou depois do fechamento (a venda continua valendo)
+function valorMudouDepoisDoFechamento(c){ return !!(c && c.fechamento && !c.fechamento.cancelado && Math.round((Number(c.valor)||0)*100) !== Math.round((Number(c.fechamento.valorOriginal)||0)*100)); }
 function sumByTipo(tipo){
   return visibleCards().reduce((s,c)=>{
     const col = board.columns.find(k=>k.id===c.columnId);
@@ -4039,6 +4043,8 @@ function renderApp(){
   let pageHtml = '';
   // páginas que saíram com a integração do WhatsApp/Instagram: volta pro Dashboard
   if(['conversas', 'disparos', 'agendamentos'].includes(currentPage)) currentPage = 'dashboard';
+  // aba que o gestor da equipe não liberou: vai pro Pipeline
+  if(typeof paginaBloqueada === 'function' && currentPage !== 'pipeline' && paginaBloqueada(currentPage)) currentPage = 'pipeline';
   if(currentPage === 'dashboard') pageHtml = renderDashboardPage();
   else if(currentPage === 'pipeline') pageHtml = renderPipelinePage();
   else if(currentPage === 'leads') pageHtml = renderLeadsPage();
@@ -4722,13 +4728,15 @@ function renderCard(card){
             <span class="temp-badge" style="color:${temp.color};background:${temp.bg}">${temp.emoji} ${temp.label}</span>
           </div>
           <div class="card-value-row">
-            ${card.fechamento && Number(card.fechamento.valorFinal) !== Number(card.valor)
+            ${card.fechamento && !card.fechamento.cancelado && Number(card.fechamento.valorFinal) !== Number(card.valor)
               ? `<span class="card-value" title="Valor final do fechamento (no card: ${fmtBRL(card.valor)})">${fmtBRL(card.fechamento.valorFinal)}</span>`
               : `<span class="card-value">${fmtBRL(card.valor)}</span>`}
             ${showMonth ? `<span class="month-badge">${monthLabel(card.mesInicioContato)}</span>` : ''}
           </div>
-          ${!card.fechamento && card.fechamentoPendente && (board.columns.find(c=>c.id===card.columnId)||{}).tipo==='ganho'
+          ${(!card.fechamento || card.fechamento.cancelado) && card.fechamentoPendente && (board.columns.find(c=>c.id===card.columnId)||{}).tipo==='ganho'
             ? `<button type="button" class="fech-selo" data-action="abrir-fechamento" data-card-id="${card.id}" title="Informar o valor final e as parcelas">Falta o fechamento</button>` : ''}
+          ${valorMudouDepoisDoFechamento(card) && (board.columns.find(c=>c.id===card.columnId)||{}).tipo==='ganho'
+            ? `<button type="button" class="fech-selo" data-action="abrir-fechamento" data-card-id="${card.id}" title="No fechamento, o valor do card era ${fmtBRL(card.fechamento.valorOriginal)}">Valor mudou · refazer fechamento?</button>` : ''}
           ${(card.telefone || card.obs) ? `
             <div class="card-extra">
               ${card.telefone ? `
@@ -7450,9 +7458,13 @@ function renderModal(){
               ${!f.__isNew ? `<button type="button" class="ai-btn" id="f-ver-historico">🕘 Ver histórico</button>` : ''}
               ${!f.__isNew ? `<button type="button" class="ai-btn" id="f-gerar-proposta">📄 Gerar proposta</button>` : ''}
               ${!f.__isNew && (board.columns.find(c=>c.id===((board.cards.find(k=>k.id===f.id)||{}).columnId))||{}).tipo==='ganho' && typeof abrirFechamento === 'function'
-                ? `<button type="button" class="ai-btn" id="f-fechamento">💰 ${f.fechamento ? 'Fechamento: ' + fmtBRL(f.fechamento.valorFinal) : 'Fechamento da venda'}</button>` : ''}
+                ? `<button type="button" class="ai-btn" id="f-fechamento">💰 ${f.fechamento && !f.fechamento.cancelado ? 'Fechamento: ' + fmtBRL(f.fechamento.valorFinal) : 'Fechamento da venda'}</button>` : ''}
+              ${!f.__isNew && f.fechamento && !f.fechamento.cancelado && typeof abrirDevolucao === 'function'
+                ? `<button type="button" class="ai-btn" id="f-devolucao">↩ Devolução</button>` : ''}
               ${!f.__isNew ? `<button type="button" class="ai-btn" id="f-toggle-arquivar">${f.arquivado?'📦 Desarquivar':'📦 Arquivar'}</button>` : ''}
             </div>
+            ${!f.__isNew && valorMudouDepoisDoFechamento(board.cards.find(k=>k.id===f.id))
+              ? `<p class="settings-page-note fech-aviso-valor">O valor do card mudou depois do fechamento (era ${fmtBRL(f.fechamento.valorOriginal)}). Os lançamentos no financeiro não mudam sozinhos. <button type="button" class="fech-link" id="f-refazer-fechamento" style="display:inline">Refazer o fechamento?</button></p>` : ''}
             <div class="ai-result" id="f-ai-mensagem-result" style="display:none;"></div>
             <div class="wa-conversa" id="f-historico" style="display:none;"></div>
           </div>
@@ -7518,6 +7530,10 @@ function renderModal(){
   if(verHistoricoBtn) verHistoricoBtn.addEventListener('click', abrirHistoricoCard);
   const fechamentoBtn = document.getElementById('f-fechamento');
   if(fechamentoBtn) fechamentoBtn.addEventListener('click', ()=>{ const id = modalForm.id; closeModal(); abrirFechamento(id); });
+  const refazerFechBtn = document.getElementById('f-refazer-fechamento');
+  if(refazerFechBtn) refazerFechBtn.addEventListener('click', ()=>{ const id = modalForm.id; closeModal(); abrirFechamento(id); });
+  const devolucaoBtn = document.getElementById('f-devolucao');
+  if(devolucaoBtn) devolucaoBtn.addEventListener('click', ()=>{ const id = modalForm.id; closeModal(); abrirDevolucao(id); });
   const gerarPropostaBtn = document.getElementById('f-gerar-proposta');
   if(gerarPropostaBtn) gerarPropostaBtn.addEventListener('click', abrirPropostaModal);
   const toggleArquivarBtn = document.getElementById('f-toggle-arquivar');
@@ -8193,6 +8209,7 @@ function renderEquipePage(){
   }
   const abas = [['chat','Chat']];
   if(equipe.souSupervisor) abas.push(['supervisao','Gestão']);
+  if(equipe.souSupervisor && typeof renderPermissoesEquipe === 'function') abas.push(['permissoes','Permissões']);
   if(equipe.souSupervisorDeDados) abas.push(['monitoramento','Monitoramento']);
   return `
     <div class="page-head">
@@ -8208,6 +8225,7 @@ function renderEquipePage(){
     ` : ''}
     ${equipeSubTab==='chat' ? renderChatInternoConteudo() : ''}
     ${equipeSubTab==='supervisao' && equipe.souSupervisor ? renderSupervisaoConteudo() : ''}
+    ${equipeSubTab==='permissoes' && equipe.souSupervisor && typeof renderPermissoesEquipe === 'function' ? renderPermissoesEquipe() : ''}
     ${equipeSubTab==='monitoramento' && equipe.souSupervisorDeDados ? renderMonitoramentoConteudo() : ''}
   `;
 }
@@ -8676,14 +8694,14 @@ function closeRegrasComissaoModal(){
   renderApp(); // a lista de contratos usa as regras pra mostrar nome/blocos — garante que reflita qualquer alteração
 }
 function abrirNovaRegra(){
-  regraEditForm = { __isNew:true, id:null, nome:'', mesIndependente:false, blocos:[{ parcelas:1, percentual:0 }] };
+  regraEditForm = { __isNew:true, id:null, nome:'', mesIndependente:false, base:'final', blocos:[{ parcelas:1, percentual:0 }] };
   renderRegrasModal();
 }
 function abrirEditarRegra(id){
   const r = regrasComissao.find(x=>x.id===id);
   if(!r) return;
   regraEditForm = {
-    __isNew:false, id:r.id, nome:r.nome, mesIndependente:!!r.mesIndependente,
+    __isNew:false, id:r.id, nome:r.nome, mesIndependente:!!r.mesIndependente, base: r.base==='negociado' ? 'negociado' : 'final',
     // o back-end guarda percentual como fração (0.016); no formulário mostramos "humano" (1.6)
     blocos: (r.blocos||[]).map(b=>({ parcelas:b.parcelas, percentual: Math.round(b.percentual*100*1000000)/1000000 })),
   };
@@ -8778,6 +8796,14 @@ function htmlRegraEditor(){
             <label class="checkbox-item"><input type="checkbox" id="re-mes-independente" ${f.mesIndependente?'checked':''} /> Mês da comissão independente do mês do lead (pra pagamentos que demoram a acontecer de verdade)</label>
           </div>
           <div class="field">
+            <label for="re-base">Calcular sobre</label>
+            <select id="re-base">
+              <option value="final" ${f.base!=='negociado'?'selected':''}>Valor final da venda (com desconto) — recomendado</option>
+              <option value="negociado" ${f.base==='negociado'?'selected':''}>Valor do card (antes do desconto)</option>
+            </select>
+            <p class="settings-page-note">O valor final é o que você informa no fechamento da venda. Sem fechamento, vale o valor do card.</p>
+          </div>
+          <div class="field">
             <label>Blocos de parcelas</label>
             <div class="regra-blocos-cabecalho">
               <span>Parcelas</span><span>% da venda (por parcela)</span><span></span>
@@ -8847,6 +8873,7 @@ function ligarBindingsRegrasModal(){
 
   document.getElementById('re-nome').addEventListener('input', (e)=> regraEditForm.nome = e.target.value);
   document.getElementById('re-mes-independente').addEventListener('change', (e)=> regraEditForm.mesIndependente = e.target.checked);
+  document.getElementById('re-base').addEventListener('change', (e)=> regraEditForm.base = e.target.value);
   document.querySelectorAll('.regra-bloco-parcelas').forEach(inp=>{
     inp.addEventListener('input', (e)=>{
       regraEditForm.blocos[parseInt(e.target.dataset.idx,10)].parcelas = e.target.value;
@@ -8903,7 +8930,7 @@ async function salvarRegraComissao(){
     return;
   }
   const blocos = f.blocos.map(b=>({ parcelas: parseInt(b.parcelas,10)||1, percentual: parseFloat(b.percentual)||0 }));
-  const payload = { nome: f.nome.trim(), mesIndependente: !!f.mesIndependente, blocos };
+  const payload = { nome: f.nome.trim(), mesIndependente: !!f.mesIndependente, base: f.base==='negociado' ? 'negociado' : 'final', blocos };
   const saveBtn = document.getElementById('re-save');
   if(saveBtn){ saveBtn.disabled = true; saveBtn.textContent = 'Salvando…'; }
   try{

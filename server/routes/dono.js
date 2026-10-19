@@ -9,7 +9,12 @@
    PUT    /promocao       { ativa, percentual, meses|null, validaAte|null }
    GET    /donos          lista de donos
    POST   /donos          { email } adiciona um dono
-   DELETE /donos/:email   remove um dono (os fixos não) */
+   DELETE /donos/:email   remove um dono (os fixos não)
+   GET    /equipes        equipes com gestor, membros e permissões
+   PUT    /equipes/:id/permissoes   { abas, funcoes } (fica na auditoria do gestor)
+   GET    /clientes/:id/regras      regras de comissão de um cliente
+   POST   /clientes/:id/regras      { nome, blocos, base, mesIndependente } cria uma regra
+   PUT    /clientes/:id/regras/:regraId   edita (fica na auditoria do cliente: "alterado pelo suporte") */
 const express = require('express');
 const auth = require('../middleware/auth');
 const User = require('../models/User');
@@ -252,6 +257,129 @@ router.delete('/donos/:email', async (req, res) => {
     res.json({ donos: await D.listarDonos(), eu: D.normalizar(req.emailDoDono) });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.status ? err.message : 'Não foi possível remover.' });
+  }
+});
+
+/* ---------- Equipes: permissões ---------- */
+const Equipe = require('../models/Equipe');
+const RegraComissao = require('../models/RegraComissao');
+const P = require('../utils/permissoes');
+const { registrarAuditoria } = require('../utils/auditoria');
+const { obterRegrasDoUsuario, gerarChaveUnica } = require('../utils/regrasComissao');
+const { validarBlocos } = require('./regrasComissao');
+const UUID = /^[0-9a-f-]{36}$/i;
+
+router.get('/equipes', async (req, res) => {
+  try {
+    const { rows } = await comoSistema(() => query(
+      `SELECT e.id, e.nome, e.permissoes, d.email AS dono_email, d.nome AS dono_nome,
+              (SELECT count(*)::int FROM usuarios u WHERE u.equipe_id = e.id) AS membros
+         FROM equipes e LEFT JOIN usuarios d ON d.id = e.dono_id ORDER BY e.created_at DESC`));
+    res.json({
+      equipes: rows.map((r) => ({ id: r.id, nome: r.nome, dono: r.dono_nome || r.dono_email || '', donoEmail: r.dono_email || '', membros: r.membros, permissoes: P.normalizar(r.permissoes) })),
+      catalogo: { abas: P.ABAS, funcoes: P.FUNCOES },
+    });
+  } catch (err) {
+    console.error('Painel do dono (equipes):', err.message);
+    res.status(500).json({ error: 'Erro ao carregar as equipes.' });
+  }
+});
+
+router.put('/equipes/:id/permissoes', async (req, res) => {
+  try {
+    if (!UUID.test(req.params.id)) return res.status(400).json({ error: 'Equipe inválida.' });
+    let permissoes;
+    try { permissoes = P.validar(req.body); } catch (e) { return res.status(400).json({ error: e.message }); }
+    const equipe = await comoSistema(() => Equipe.findById(req.params.id));
+    if (!equipe) return res.status(404).json({ error: 'Equipe não encontrada.' });
+    equipe.permissoes = permissoes;
+    await comoSistema(() => equipe.save());
+    P.limparCache();
+    const tirados = [...P.ABAS, ...P.FUNCOES].filter((x) => !(permissoes.abas[x.chave] ?? permissoes.funcoes[x.chave])).map((x) => x.nome);
+    await comoSistema(() => registrarAuditoria(equipe.donoId, 'permissoes_equipe_suporte',
+      `Permissões da equipe "${equipe.nome}" alteradas pelo suporte do Livro-Caixa (${req.emailDoDono})${tirados.length ? `. Sem acesso para membros: ${tirados.join(', ')}` : ': tudo liberado'}`));
+    res.json({ permissoes: P.normalizar(permissoes) });
+  } catch (err) {
+    console.error('Painel do dono (permissões):', err.message);
+    res.status(500).json({ error: 'Erro ao salvar as permissões.' });
+  }
+});
+
+/* ---------- Regras de comissão de um cliente (ajuda do suporte) ---------- */
+const descreverRegra = (r) => `${(r.blocos || []).map((b) => `${b.parcelas}x ${String(Math.round(Number(b.percentual) * 100 * 10000) / 10000).replace('.', ',')}%`).join(' + ')}, sobre o valor ${r.base === 'negociado' ? 'do card' : 'final'}${r.mesIndependente ? ', mês independente' : ''}`;
+
+async function clienteExiste(id) {
+  const r = await comoSistema(() => query('SELECT email FROM usuarios WHERE id = $1', [id]));
+  return r.rows[0] || null;
+}
+
+router.get('/clientes/:id/regras', async (req, res) => {
+  try {
+    if (!UUID.test(req.params.id)) return res.status(400).json({ error: 'Cliente inválido.' });
+    const cliente = await clienteExiste(req.params.id);
+    if (!cliente) return res.status(404).json({ error: 'Cliente não encontrado.' });
+    const regras = await comoSistema(() => obterRegrasDoUsuario(req.params.id));
+    res.json({ email: cliente.email, regras: regras.map((r) => ({ ...(r.toJSON ? r.toJSON() : r), descricao: descreverRegra(r) })) });
+  } catch (err) {
+    console.error('Painel do dono (regras):', err.message);
+    res.status(500).json({ error: 'Erro ao carregar as regras.' });
+  }
+});
+
+function lerRegra(body, parcial) {
+  const out = {};
+  if (!parcial || body.nome !== undefined) {
+    if (typeof body.nome !== 'string' || !body.nome.trim()) throw new Error('Dê um nome pra essa regra de comissão.');
+    out.nome = body.nome.trim().slice(0, 80);
+  }
+  if (!parcial || body.blocos !== undefined) {
+    const { blocos, erro } = validarBlocos(body.blocos);
+    if (erro) throw new Error(erro);
+    out.blocos = blocos;
+  }
+  if (body.base !== undefined) out.base = body.base === 'negociado' ? 'negociado' : 'final';
+  if (body.mesIndependente !== undefined) out.mesIndependente = !!body.mesIndependente;
+  return out;
+}
+
+router.post('/clientes/:id/regras', async (req, res) => {
+  try {
+    if (!UUID.test(req.params.id)) return res.status(400).json({ error: 'Cliente inválido.' });
+    if (!(await clienteExiste(req.params.id))) return res.status(404).json({ error: 'Cliente não encontrado.' });
+    let dados;
+    try { dados = lerRegra(req.body || {}, false); } catch (e) { return res.status(400).json({ error: e.message }); }
+    const regra = await comoSistema(async () => {
+      const chave = await gerarChaveUnica(req.params.id, dados.nome);
+      const ultima = await RegraComissao.findOne({ userId: req.params.id }).sort({ ordem: -1 }).select('ordem');
+      return RegraComissao.create({ userId: req.params.id, chave, base: 'final', mesIndependente: false, ...dados, padrao: false, ordem: ultima ? ultima.ordem + 1 : 0 });
+    });
+    await comoSistema(() => registrarAuditoria(req.params.id, 'regra_comissao_suporte',
+      `Regra de comissão "${regra.nome}" criada pelo suporte do Livro-Caixa (${req.emailDoDono}): ${descreverRegra(regra)}`));
+    res.status(201).json({ ...regra.toJSON(), descricao: descreverRegra(regra) });
+  } catch (err) {
+    console.error('Painel do dono (criar regra):', err.message);
+    res.status(500).json({ error: 'Erro ao criar a regra.' });
+  }
+});
+
+router.put('/clientes/:id/regras/:regraId', async (req, res) => {
+  try {
+    if (!UUID.test(req.params.id) || !UUID.test(req.params.regraId)) return res.status(400).json({ error: 'Regra inválida.' });
+    let dados;
+    try { dados = lerRegra(req.body || {}, true); } catch (e) { return res.status(400).json({ error: e.message }); }
+    const regra = await comoSistema(() => RegraComissao.findOne({ _id: req.params.regraId, userId: req.params.id }));
+    if (!regra) return res.status(404).json({ error: 'Regra não encontrada.' });
+    const antes = descreverRegra(regra);
+    const nomeAntes = regra.nome;
+    Object.assign(regra, dados);
+    await comoSistema(() => regra.save());
+    const depois = descreverRegra(regra);
+    await comoSistema(() => registrarAuditoria(req.params.id, 'regra_comissao_suporte',
+      `Regra de comissão "${nomeAntes}"${regra.nome !== nomeAntes ? ` (agora "${regra.nome}")` : ''} alterada pelo suporte do Livro-Caixa (${req.emailDoDono}). Antes: ${antes}. Depois: ${depois}.`));
+    res.json({ ...regra.toJSON(), descricao: depois });
+  } catch (err) {
+    console.error('Painel do dono (editar regra):', err.message);
+    res.status(500).json({ error: 'Erro ao salvar a regra.' });
   }
 });
 

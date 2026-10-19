@@ -11,18 +11,22 @@ const MetaVendasEquipe = require('../models/MetaVendasEquipe');
 const MetaVendas = require('../models/MetaVendas');
 const Task = require('../models/Task');
 const { registrarAuditoria } = require('../utils/auditoria');
+const P = require('../utils/permissoes');
 
 const router = express.Router();
 router.use(auth); // todas as rotas de equipe exigem login
+// mudou equipe, papel ou membro: as permissões de todo mundo são recalculadas
+router.use((req, res, next) => { if (req.method !== 'GET') res.on('finish', P.limparCache); next(); });
 
 // GET /api/equipe -> dados da equipe do usuário logado (null se ele não fizer parte de nenhuma)
 router.get('/', async (req, res) => {
   try {
     const user = await User.findById(req.userId);
-    if (!user || !user.equipeId) return res.json({ equipe: null });
+    const minhasPermissoes = await P.permissoesDe(req.userId);
+    if (!user || !user.equipeId) return res.json({ equipe: null, minhasPermissoes });
 
     const equipe = await Equipe.findById(user.equipeId);
-    if (!equipe) return res.json({ equipe: null });
+    if (!equipe) return res.json({ equipe: null, minhasPermissoes });
 
     const membros = await User.find({ equipeId: equipe._id }).select('nome email papelEquipe supervisorDeDados');
     const souSupervisor = user.papelEquipe === 'supervisor';
@@ -43,10 +47,33 @@ router.get('/', async (req, res) => {
           supervisorDeDados: !!m.supervisorDeDados,
           souEu: m._id.toString() === req.userId,
         })),
+        // o que os membros podem usar (gestores têm tudo); o catálogo vem junto pra montar a tela
+        permissoes: P.normalizar(equipe.permissoes),
+        catalogoPermissoes: { abas: P.ABAS, funcoes: P.FUNCOES },
       },
+      minhasPermissoes,
     });
   } catch (err) {
     res.status(500).json({ error: 'Erro ao carregar a equipe.' });
+  }
+});
+
+// PUT /api/equipe/permissoes { abas: {chave: bool}, funcoes: {chave: bool} } -> só gestor
+router.put('/permissoes', async (req, res) => {
+  try {
+    const user = await User.findById(req.userId);
+    if (!user.equipeId || user.papelEquipe !== 'supervisor') return res.status(403).json({ error: 'Só o gestor da equipe pode mudar as permissões.' });
+    let permissoes;
+    try { permissoes = P.validar(req.body); } catch (e) { return res.status(400).json({ error: e.message }); }
+    const equipe = await Equipe.findById(user.equipeId);
+    if (!equipe) return res.status(404).json({ error: 'Equipe não encontrada.' });
+    equipe.permissoes = permissoes;
+    await equipe.save();
+    const tirados = [...P.ABAS, ...P.FUNCOES].filter((x) => !(permissoes.abas[x.chave] ?? permissoes.funcoes[x.chave])).map((x) => x.nome);
+    registrarAuditoria(req.userId, 'permissoes_equipe', `Permissões da equipe "${equipe.nome}" alteradas${tirados.length ? `. Sem acesso para membros: ${tirados.join(', ')}` : ': tudo liberado'}`);
+    res.json({ permissoes: P.normalizar(permissoes) });
+  } catch (err) {
+    res.status(500).json({ error: 'Erro ao salvar as permissões.' });
   }
 });
 

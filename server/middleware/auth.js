@@ -2,6 +2,7 @@ const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 const { comoUsuario } = require('../db/contexto');
 const { situacaoDe } = require('../utils/assinatura');
+const { permissoesDe, regraDoCaminho, NOMES } = require('../utils/permissoes');
 
 // Com a assinatura vencida, só estes caminhos continuam abertos: login, a própria tela de
 // assinatura, exportar os dados (os dados são da pessoa, sempre) e desligar notificações.
@@ -59,6 +60,14 @@ module.exports = async function auth(req, res, next) {
     const recurso = recursoDoCaminho(caminho);
     if (recurso && !assinatura.recursos[recurso]) {
       return res.status(403).json({ error: `${NOME_DO_RECURSO[recurso]} faz parte do plano Completo.`, recurso, planoNecessario: 'completo' });
+    }
+    // Permissões da equipe: o gestor pode tirar abas e funções dos membros
+    const regra = regraDoCaminho(req.method, caminho);
+    if (regra) {
+      const p = await permissoesDe(req.userId);
+      if (p.restrito && !p[regra.grupo][regra.chave]) {
+        return res.status(403).json({ error: `O gestor da sua equipe não liberou: ${NOMES[regra.chave]}.`, permissao: regra.chave });
+      }
     }
     // daqui em diante, toda consulta ao banco nesta requisição roda como este usuário
     // (o PostgreSQL só deixa ver e gravar as linhas dele — Row-Level Security)

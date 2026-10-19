@@ -111,10 +111,11 @@
         <td>${c.plano ? `${esc(nomeDoPlano(c.plano))}${c.ciclo === 'anual' ? ' anual' : ''}` : '—'}${c.desconto ? `<br><span class="dono-desc">${esc(textoDesc(c.desconto))}</span>` : ''}</td>
         <td class="num">${esc(ate(c))}</td>
         <td class="num">${c.proximoVencimento && c.situacao !== 'cancelou' ? data(c.proximoVencimento) : '—'}</td>
-        <td class="acao">${podeDesconto(c) ? `<button type="button" class="ass-btn dono-btn-mini" data-desconto="${esc(c.id)}" aria-label="${c.desconto ? 'Mudar o desconto' : 'Dar desconto'} de ${esc(c.nome || c.email)}">Desconto</button>` : ''}</td>
+        <td class="acao"><div class="dono-acoes-linha">${podeDesconto(c) ? `<button type="button" class="ass-btn dono-btn-mini" data-desconto="${esc(c.id)}" aria-label="${c.desconto ? 'Mudar o desconto' : 'Dar desconto'} de ${esc(c.nome || c.email)}">Desconto</button>` : ''}<button type="button" class="ass-btn dono-btn-mini" data-regras="${esc(c.id)}" aria-label="Regras de comissão de ${esc(c.nome || c.email)}">Regras</button></div></td>
       </tr>`).join('') : `<tr><td colspan="7" class="dono-vazio">Nenhum cliente neste filtro.</td></tr>`
     }</tbody>`;
     document.querySelectorAll('[data-desconto]').forEach((b) => b.addEventListener('click', () => abrirDesconto(resumo.clientes.find((c) => c.id === b.dataset.desconto))));
+    document.querySelectorAll('[data-regras]').forEach((b) => b.addEventListener('click', () => abrirRegras(resumo.clientes.find((c) => c.id === b.dataset.regras))));
     $('dono-tabela-rodape').textContent = `${lista.length} ${lista.length === 1 ? 'cliente' : 'clientes'}${resumo.clientes.length >= 500 ? ' (mostrando os 500 cadastros mais recentes)' : ''}.`;
   }
 
@@ -248,13 +249,114 @@
     catch(err){ erro.textContent = err.message; erro.hidden = false; }
   });
 
+  /* ---------- equipes: permissões ---------- */
+  let equipes = null;
+  let catalogo = null;
+  let equipeAberta = null;
+  function desenharEquipes(r){
+    equipes = r.equipes; catalogo = r.catalogo;
+    const tiradas = (p) => [...catalogo.abas.filter((a) => p.abas[a.chave] === false), ...catalogo.funcoes.filter((f) => p.funcoes[f.chave] === false)].map((x) => x.nome);
+    $('dono-equipes').innerHTML = equipes.length ? equipes.map((e) => {
+      const t = tiradas(e.permissoes);
+      return `<li><div><b>${esc(e.nome)}</b> <span class="ass-miudo">· gestor: ${esc(e.dono || '—')} · ${e.membros} ${e.membros === 1 ? 'pessoa' : 'pessoas'}</span>
+        <div class="ass-miudo">${t.length ? `Membros sem: ${esc(t.join(', '))}` : 'Membros com tudo liberado'}</div></div>
+        <button type="button" class="ass-btn dono-btn-mini" data-equipe="${esc(e.id)}">Permissões</button></li>`;
+    }).join('') : '<li class="ass-miudo">Nenhuma equipe criada ainda.</li>';
+    document.querySelectorAll('[data-equipe]').forEach((b) => b.addEventListener('click', () => abrirPermissoes(equipes.find((e) => e.id === b.dataset.equipe))));
+  }
+  function abrirPermissoes(e){
+    equipeAberta = e;
+    $('perm-quem').textContent = `${e.nome} · gestor: ${e.dono || '—'}. Vale para os membros; gestores sempre têm tudo.`;
+    const grupo = (titulo, g, lista) => `<fieldset class="dono-perm-grupo"><legend>${titulo}</legend>${lista.map((x) => `<label class="dono-check"><input type="checkbox" data-pg="${g}" data-pk="${esc(x.chave)}" ${e.permissoes[g][x.chave] !== false ? 'checked' : ''} /> <span>${esc(x.nome)}${x.dica ? `<small>${esc(x.dica)}</small>` : ''}</span></label>`).join('')}</fieldset>`;
+    $('perm-campos').innerHTML = grupo('Abas', 'abas', catalogo.abas) + grupo('Funções', 'funcoes', catalogo.funcoes);
+    $('perm-erro').hidden = true;
+    $('perm-modal').hidden = false;
+  }
+  $('perm-fechar').addEventListener('click', () => { $('perm-modal').hidden = true; });
+  $('perm-form').addEventListener('submit', async (ev) => {
+    ev.preventDefault();
+    const corpo = { abas: {}, funcoes: {} };
+    document.querySelectorAll('#perm-campos [data-pg]').forEach((i) => { corpo[i.dataset.pg][i.dataset.pk] = i.checked; });
+    $('perm-salvar').disabled = true;
+    try{
+      await api('PUT', `/equipes/${equipeAberta.id}/permissoes`, corpo);
+      $('perm-modal').hidden = true;
+      desenharEquipes(await api('GET', '/equipes'));
+    }catch(err){ $('perm-erro').textContent = err.message; $('perm-erro').hidden = false; }
+    finally{ $('perm-salvar').disabled = false; }
+  });
+
+  /* ---------- regras de comissão de um cliente ---------- */
+  let clienteDasRegras = null;
+  let regras = [];
+  let regraEditando = null; // null = nova
+  async function abrirRegras(c){
+    clienteDasRegras = c;
+    $('regras-quem').textContent = `${c.nome || '(sem nome)'} · ${c.email}`;
+    $('regras-lista').innerHTML = '<li class="ass-miudo">Carregando…</li>';
+    $('regra-form').hidden = true;
+    $('regras-modal').hidden = false;
+    try{ regras = (await api('GET', `/clientes/${c.id}/regras`)).regras; desenharRegras(); }
+    catch(err){ $('regras-lista').innerHTML = `<li class="ass-erro">${esc(err.message)}</li>`; }
+  }
+  function desenharRegras(){
+    $('regras-lista').innerHTML = regras.map((r) => `<li><div><b>${esc(r.nome)}</b><div class="ass-miudo">${esc(r.descricao)}</div></div>
+      <button type="button" class="ass-btn dono-btn-mini" data-editar-regra="${esc(r.id)}">Editar</button></li>`).join('');
+    document.querySelectorAll('[data-editar-regra]').forEach((b) => b.addEventListener('click', () => editarRegra(regras.find((r) => r.id === b.dataset.editarRegra))));
+  }
+  function linhaBloco(b){
+    return `<div class="dono-bloco"><label class="ass-campo">Parcelas<input type="number" min="1" step="1" class="bl-parcelas" value="${esc(b.parcelas)}" inputmode="numeric" /></label>
+      <label class="ass-campo">% de cada parcela<input type="number" min="0" step="0.001" class="bl-pct" value="${esc(b.pct)}" inputmode="decimal" /></label>
+      <button type="button" class="ass-link bl-tirar" aria-label="Tirar esta linha">Tirar</button></div>`;
+  }
+  function ligarBlocos(){
+    document.querySelectorAll('.bl-tirar').forEach((b) => b.onclick = () => { if(document.querySelectorAll('.dono-bloco').length > 1) b.closest('.dono-bloco').remove(); });
+  }
+  function editarRegra(r){
+    regraEditando = r || null;
+    $('regra-form-titulo').textContent = r ? `Editar "${r.nome}"` : 'Nova regra';
+    $('regra-nome').value = r ? r.nome : '';
+    const blocos = r ? r.blocos.map((b) => ({ parcelas: b.parcelas, pct: Math.round(b.percentual * 100 * 10000) / 10000 })) : [{ parcelas: 1, pct: 0 }];
+    $('regra-blocos').innerHTML = blocos.map(linhaBloco).join('');
+    ligarBlocos();
+    $('regra-base').value = r && r.base === 'negociado' ? 'negociado' : 'final';
+    $('regra-mes').checked = !!(r && r.mesIndependente);
+    $('regra-erro').hidden = true;
+    $('regra-form').hidden = false;
+    $('regra-nome').focus();
+  }
+  $('regra-add-bloco').addEventListener('click', () => { $('regra-blocos').insertAdjacentHTML('beforeend', linhaBloco({ parcelas: 1, pct: 0 })); ligarBlocos(); });
+  $('regra-nova').addEventListener('click', () => editarRegra(null));
+  $('regra-cancelar').addEventListener('click', () => { $('regra-form').hidden = true; });
+  $('regras-fechar').addEventListener('click', () => { $('regras-modal').hidden = true; });
+  $('regra-form').addEventListener('submit', async (ev) => {
+    ev.preventDefault();
+    const corpo = {
+      nome: $('regra-nome').value,
+      blocos: [...document.querySelectorAll('.dono-bloco')].map((d) => ({ parcelas: d.querySelector('.bl-parcelas').value, percentual: d.querySelector('.bl-pct').value })),
+      base: $('regra-base').value,
+      mesIndependente: $('regra-mes').checked,
+    };
+    const ok = await confirmar({ titulo: 'Salvar a regra do cliente?', texto: `Isso muda as comissões calculadas a partir de agora na conta de ${clienteDasRegras.email} e fica registrado no histórico dele. Você já combinou com o cliente?`, sim: 'Sim, salvar' });
+    if(!ok) return;
+    $('regra-salvar').disabled = true;
+    try{
+      if(regraEditando) await api('PUT', `/clientes/${clienteDasRegras.id}/regras/${regraEditando.id}`, corpo);
+      else await api('POST', `/clientes/${clienteDasRegras.id}/regras`, corpo);
+      regras = (await api('GET', `/clientes/${clienteDasRegras.id}/regras`)).regras;
+      desenharRegras();
+      $('regra-form').hidden = true;
+    }catch(err){ $('regra-erro').textContent = err.message; $('regra-erro').hidden = false; }
+    finally{ $('regra-salvar').disabled = false; }
+  });
+
   /* ---------- carregar ---------- */
   async function carregar(){
     const botao = $('dono-atualizar');
     botao.disabled = true; botao.textContent = 'Atualizando…';
     try{
-      const [r, s, d] = await Promise.all([api('GET', '/resumo'), api('GET', '/saude'), api('GET', '/donos')]);
-      resumo = r; desenharResumo(); desenharSaude(s); desenharDonos(d); desenharPromocao(r.promocao);
+      const [r, s, d, eq] = await Promise.all([api('GET', '/resumo'), api('GET', '/saude'), api('GET', '/donos'), api('GET', '/equipes')]);
+      resumo = r; desenharResumo(); desenharSaude(s); desenharDonos(d); desenharPromocao(r.promocao); desenharEquipes(eq);
     }catch(err){
       if(err.status === 403){ document.querySelector('main').innerHTML = `<a class="ass-voltar" href="inicio.html">← Voltar</a><h1 class="ass-titulo">Painel do dono</h1><p class="ass-sub">${esc(err.message)}</p>`; return; }
       $('dono-sub').textContent = err.message;

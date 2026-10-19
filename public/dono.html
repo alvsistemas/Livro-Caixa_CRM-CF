@@ -8,9 +8,9 @@
 <meta name="theme-color" content="#141414" />
 <link rel="icon" href="icons/icon-192.png" />
 <script>try{document.documentElement.setAttribute('data-theme',localStorage.getItem('darkMode')==='1'?'dark':'light');}catch(e){}</script>
-<link rel="stylesheet" href="css/style.css?v=20261119" />
-<link rel="stylesheet" href="css/assinatura.css?v=20261119" />
-<link rel="stylesheet" href="css/dono.css?v=20261119" />
+<link rel="stylesheet" href="css/style.css?v=20261122" />
+<link rel="stylesheet" href="css/assinatura.css?v=20261122" />
+<link rel="stylesheet" href="css/dono.css?v=20261122" />
 </head>
 <body class="ass-body">
   <main class="ass-wrap dono-wrap">
@@ -56,6 +56,14 @@
       </div>
     </section>
 
+    <section aria-labelledby="t-equipes">
+      <h2 class="ass-h2" id="t-equipes">Equipes</h2>
+      <div class="ass-cartao">
+        <p class="ass-texto" style="margin-top:0">O gestor de cada equipe escolhe o que os membros podem usar (aba Equipe → Permissões). Aqui você também pode ajustar, para ajudar. Cada mudança fica no histórico da conta do gestor.</p>
+        <ul class="dono-lista-equipes" id="dono-equipes"><li class="ass-miudo">Carregando…</li></ul>
+      </div>
+    </section>
+
     <section aria-labelledby="t-saude">
       <h2 class="ass-h2" id="t-saude">Saúde do sistema</h2>
       <div class="dono-saude" id="dono-saude"><p class="ass-carregando">Conferindo…</p></div>
@@ -93,6 +101,46 @@
     </form>
   </div>
 
+  <div class="ass-modal-fundo" id="perm-modal" hidden>
+    <form class="ass-modal dono-modal-largo" role="dialog" aria-modal="true" aria-labelledby="perm-titulo" id="perm-form">
+      <h2 class="ass-h2" id="perm-titulo" style="margin-top:0">Permissões da equipe</h2>
+      <p class="ass-texto" id="perm-quem"></p>
+      <div class="dono-perm-colunas" id="perm-campos"></div>
+      <p class="ass-erro" id="perm-erro" role="alert" hidden></p>
+      <div class="ass-acoes">
+        <button type="submit" class="ass-btn ass-btn-forte" id="perm-salvar">Salvar permissões</button>
+        <button type="button" class="ass-btn" id="perm-fechar">Voltar</button>
+      </div>
+    </form>
+  </div>
+
+  <div class="ass-modal-fundo" id="regras-modal" hidden>
+    <div class="ass-modal dono-modal-largo" role="dialog" aria-modal="true" aria-labelledby="regras-titulo">
+      <h2 class="ass-h2" id="regras-titulo" style="margin-top:0">Regras de comissão</h2>
+      <p class="ass-texto" id="regras-quem"></p>
+      <p class="dono-aviso-consent">Altere só depois de combinar com o cliente. Cada mudança fica registrada no histórico (auditoria) da conta dele, com o seu e-mail.</p>
+      <ul class="dono-regras" id="regras-lista"></ul>
+      <form id="regra-form" class="dono-regra-form" hidden>
+        <h3 class="dono-h3" id="regra-form-titulo">Editar regra</h3>
+        <label class="ass-campo">Nome<input id="regra-nome" maxlength="80" required /></label>
+        <div class="dono-blocos" id="regra-blocos"></div>
+        <button type="button" class="ass-link" id="regra-add-bloco">+ Adicionar linha de parcelas</button>
+        <label class="ass-campo">Calcular sobre
+          <select id="regra-base"><option value="final">Valor final da venda (com desconto)</option><option value="negociado">Valor do card (antes do desconto)</option></select></label>
+        <label class="dono-check"><input type="checkbox" id="regra-mes" /> Mês da comissão independente do mês do lead</label>
+        <p class="ass-erro" id="regra-erro" role="alert" hidden></p>
+        <div class="ass-acoes">
+          <button type="submit" class="ass-btn ass-btn-forte" id="regra-salvar">Salvar regra</button>
+          <button type="button" class="ass-btn" id="regra-cancelar">Cancelar</button>
+        </div>
+      </form>
+      <div class="ass-acoes">
+        <button type="button" class="ass-btn" id="regra-nova">+ Nova regra</button>
+        <button type="button" class="ass-btn" id="regras-fechar">Fechar</button>
+      </div>
+    </div>
+  </div>
+
   <div class="ass-modal-fundo" id="ass-modal" hidden>
     <div class="ass-modal" role="dialog" aria-modal="true" aria-labelledby="ass-modal-titulo">
       <h2 class="ass-h2" id="ass-modal-titulo" style="margin-top:0"></h2>
@@ -103,6 +151,6 @@
       </div>
     </div>
   </div>
-  <script src="js/dono.js?v=20261119"></script>
+  <script src="js/dono.js?v=20261122"></script>
 </body>
 </html>

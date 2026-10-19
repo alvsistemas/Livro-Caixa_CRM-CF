@@ -1,5 +1,6 @@
 const express = require('express');
 const { isValidId } = require('../db/ids');
+const { marcarClienteExcluido } = require('../utils/fechamento');
 const { comoSistema, comoUsuario } = require('../db/contexto');
 const auth = require('../middleware/auth');
 const Card = require('../models/Card');
@@ -328,6 +329,8 @@ router.delete('/:id', async (req, res) => {
     const card = await Card.findOneAndDelete({ _id: req.params.id, userId: req.userId });
     if (!card) return res.status(404).json({ error: 'Cliente não encontrado.' });
     registrarAuditoria(req.userId, 'card_excluido', `Cliente "${card.cliente}" excluído`);
+    // lançamentos do fechamento da venda ficam no financeiro, marcados "cliente excluído"
+    if (card.fechamento) await marcarClienteExcluido(req.userId, card._id, card.cliente).catch((e) => console.error('Erro ao marcar lançamentos do cliente excluído:', e.message));
     res.status(204).end();
   } catch (err) {
     res.status(500).json({ error: 'Erro ao excluir cliente.' });

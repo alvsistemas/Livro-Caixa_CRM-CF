@@ -63,7 +63,7 @@ const TIPS = {
 // Cores como variáveis do CSS: assim valem no modo claro e no escuro (ver styles.css)
 const COLORS = { pessoal: "var(--pessoal)", empresa: "var(--empresa)", gold: "var(--gold)", red: "var(--red)", ink: "var(--ink)" };
 
-const CATEGORIAS_DESPESA = ["Moradia","Alimentação","Transporte","Saúde","Educação","Lazer","Assinaturas","Impostos","Cartão de Crédito","Dívidas","Marketing","Fornecedores","Salários","Comissões","Ferramentas/Software","Aluguel Comercial","Outros"];
+const CATEGORIAS_DESPESA = ["Moradia","Alimentação","Transporte","Saúde","Educação","Lazer","Assinaturas","Impostos","Cartão de Crédito","Dívidas","Marketing","Fornecedores","Custo de mercadoria","Frete","Taxas de pagamento","Devoluções","Salários","Comissões","Ferramentas/Software","Aluguel Comercial","Outros"];
 const CATEGORIAS_RECEITA = ["Salário","Freelance","Vendas","Serviços Prestados","Comissão","Dividendos","Rendimentos","Reembolso","Outros"];
 // Categorias dedutíveis no Imposto de Renda (resumo anual) — as personalizadas podem ser marcadas também
 const CATEGORIAS_DEDUTIVEIS = ["Saúde", "Educação"];
@@ -289,7 +289,7 @@ function crmRowsForMonth(month) {
     const ganho = new Set(state.crm.columns.filter((c) => c.tipo === "ganho").map((c) => c.id));
     state.crm.cards.forEach((c) => {
       if (!ganho.has(c.columnId)) return;
-      if (c.fechamento) return; // fechamento feito: as parcelas já são lançamentos de verdade
+      if (c.fechamento && !c.fechamento.cancelado) return; // fechamento feito: as parcelas já são lançamentos de verdade
       const data = dataVendaDoCard(c);
       if (monthKey(data) !== month) return;
       const value = Number(c.valor) || 0;
@@ -488,7 +488,11 @@ function accountSelectInline(tx) {
 }
 // "Nubank" / "Conta Itaú" embaixo da forma de pagamento
 function origemDoLancamento(tx) {
-  if (tx.crmFechamento) return `<a href="../index.html" class="origem-crm" title="Criado pelo fechamento da venda no CRM">CRM · venda</a>`;
+  if (tx.crmFechamento) {
+    const m = tx.crmFechamento;
+    if (m.clienteExcluido) return `<span class="origem-crm" title="O cliente${m.clienteNome ? ` ${escapeHtml(m.clienteNome)}` : ""} foi excluído no CRM; o lançamento fica no histórico">CRM · cliente excluído</span>`;
+    return `<a href="../index.html" class="origem-crm" title="Criado pelo fechamento da venda no CRM">CRM · ${m.tipo === "devolucao" ? "devolução" : "venda"}</a>`;
+  }
   if (tx.account === Calculos.CARTAO) { const c = Calculos.cartaoDoLancamento(tx, state.cards); return c ? `💳 ${escapeHtml(c.name)}` : (state.cards.length > 1 ? `<span class="aviso-mini">escolha o cartão</span>` : ""); }
   const conta = tx.contaId && state.contas.find((k) => k.id === tx.contaId);
   return conta ? `🏦 ${escapeHtml(conta.name)}` : "";
@@ -869,11 +873,78 @@ function renderLucro() {
       <p class="stat-sub" style="margin-top:8px"><span class="legenda" style="background:${COLORS.pessoal}"></span> Receitas &nbsp; <span class="legenda" style="background:${COLORS.red}"></span> Despesas</p>
     </div>
 
+    ${modoIntegracao() === "vendas" && state.scopeFilter !== "Pessoal" ? lucroPorVendaHtml(state.month) : ""}
+
     <div class="card">
       <h2 class="section-title" style="border-color:var(--char)">Como o CRM entra no seu financeiro</h2>
       ${opcoesIntegracaoHtml()}
+      ${modoIntegracao() === "vendas" ? taxasVendaHtml() : ""}
     </div>
   `;
+}
+
+/* Lucro por venda: cada venda fechada no CRM com o que entrou, o que custou e o que sobrou.
+   Lê os lançamentos ligados ao cliente (extras.crmFechamento), então vale o que está aqui no
+   financeiro (se a pessoa editou um valor, o lucro acompanha). */
+function totalDoContratoCrm(ct) {
+  const n = Number(ct.parcelas) || 1;
+  const inicio = String(ct.date || "").slice(0, 7);
+  let t = 0;
+  for (let i = 0; i < n; i++) {
+    if (ct.canceladoNoMes && /^\d{4}-\d{2}$/.test(inicio) && addMonths(inicio, i) >= ct.canceladoNoMes) break; // cortada (cliente foi para Perdido)
+    t += parcelaDoContrato(ct, i);
+  }
+  return Math.round(t * 100) / 100;
+}
+function vendasDoMes(month) {
+  if (!state.crm.carregado) return [];
+  return state.crm.cards.filter((c) => c.fechamento && monthKey(c.fechamento.dataVenda || String(c.fechamento.criadoEm || "").slice(0, 10)) === month).map((c) => {
+    const ligados = state.txs.filter((t) => t.crmFechamento && t.crmFechamento.clienteId === c.id);
+    const receita = ligados.filter((t) => t.type === "Receita").reduce((a, t) => a + (Number(t.value) || 0), 0);
+    const recebido = ligados.filter((t) => t.type === "Receita" && t.status === "Pago").reduce((a, t) => a + (Number(t.value) || 0), 0);
+    const ehDevolucao = (t) => t.crmFechamento.tipo === "devolucao";
+    const custos = ligados.filter((t) => t.type === "Despesa" && !ehDevolucao(t)).reduce((a, t) => a + (Number(t.value) || 0), 0);
+    const devolvido = ligados.filter((t) => t.type === "Despesa" && ehDevolucao(t)).reduce((a, t) => a + (Number(t.value) || 0), 0);
+    const ct = state.config.descontarComissoes && state.crm.contratos.find((k) => k.cardId === c.id);
+    const comissao = ct ? totalDoContratoCrm(ct) : 0;
+    const lucro = receita - custos - devolvido - comissao;
+    return { card: c, desfeita: !!c.fechamento.cancelado, receita, recebido, custos: custos + devolvido, devolvido, comissao, lucro, margem: receita > 0 ? lucro / receita : 0 };
+  }).sort((a, b) => b.lucro - a.lucro);
+}
+function lucroPorVendaHtml(month) {
+  const vendas = vendasDoMes(month);
+  const semFechamento = state.crm.carregado ? state.crm.cards.filter((c) => (!c.fechamento || c.fechamento.cancelado) && c.fechamentoPendente).length : 0;
+  const tot = vendas.reduce((a, v) => ({ receita: a.receita + v.receita, custos: a.custos + v.custos + v.comissao, lucro: a.lucro + v.lucro }), { receita: 0, custos: 0, lucro: 0 });
+  const corLucro = (v) => (v < 0 ? COLORS.red : COLORS.pessoal);
+  return `<div class="card" style="margin-bottom:20px">
+    <h2 class="section-title" style="border-color:${COLORS.empresa}">Lucro por venda</h2>
+    ${vendas.length === 0
+      ? `<p class="stat-sub">Nenhuma venda com fechamento em ${monthLabel(month)}. Quando você fecha uma venda no CRM e informa os custos, ela aparece aqui com o que sobrou.</p>`
+      : `<div class="table-wrap" style="border:none;box-shadow:none"><table class="tabela-lucro">
+        <thead><tr><th>Venda</th><th>Valor final</th><th>Custos${state.config.descontarComissoes ? " + comissão" : ""}</th><th>Sobrou</th><th>Margem</th></tr></thead>
+        <tbody>${vendas.map((v) => `<tr>
+          <td><span style="font-weight:600">${escapeHtml(v.card.cliente || "Cliente")}</span>${v.desfeita ? ` <span class="tag ajuste" title="O cliente saiu de Ganho no CRM; ficou só o que já tinha sido recebido">desfeita</span>` : ""}${v.recebido < v.receita - 0.004 ? `<div class="stat-sub">recebido ${fmtBRL(v.recebido)}</div>` : ""}${v.devolvido ? `<div class="stat-sub">devolvido ${fmtBRL(v.devolvido)}</div>` : ""}</td>
+          <td class="mono">${fmtBRL(v.receita)}</td>
+          <td class="mono">${fmtBRL(v.custos + v.comissao)}${v.custos + v.comissao === 0 ? ` <span class="stat-sub" title="Informe os custos no fechamento da venda, no CRM">· sem custos</span>` : ""}</td>
+          <td class="mono" style="font-weight:700;color:${corLucro(v.lucro)}">${fmtBRL(v.lucro)}</td>
+          <td class="mono" style="color:var(--ink-muted)">${v.receita > 0 ? fmtPct(v.margem) : "—"}</td>
+        </tr>`).join("")}
+        ${vendas.length > 1 ? `<tr class="mes-atual"><td style="font-weight:700">Total</td><td class="mono">${fmtBRL(tot.receita)}</td><td class="mono">${fmtBRL(tot.custos)}</td><td class="mono" style="font-weight:700;color:${corLucro(tot.lucro)}">${fmtBRL(tot.lucro)}</td><td class="mono" style="color:var(--ink-muted)">${tot.receita > 0 ? fmtPct(tot.lucro / tot.receita) : "—"}</td></tr>` : ""}
+        </tbody></table></div>
+        <p class="stat-sub" style="margin-top:8px">Venda conta no mês em que foi fechada, mesmo que as parcelas entrem depois.</p>`}
+    ${semFechamento ? `<p class="integ-aviso">${semFechamento === 1 ? "1 venda está" : `${semFechamento} vendas estão`} sem fechamento no CRM (selo "Falta o fechamento"): ${semFechamento === 1 ? "ela entra" : "elas entram"} pelo valor cheio do card e sem custos. <a href="../index.html">Abrir o CRM</a></p>` : ""}
+  </div>`;
+}
+
+const TAXAS_VENDA = [["credito", "Cartão de crédito à vista"], ["creditoParcelado", "Cartão de crédito parcelado"], ["debito", "Cartão de débito"], ["pix", "Pix"], ["boleto", "Boleto"], ["imposto", "Imposto sobre a venda"]];
+function taxasVendaHtml() {
+  const t = state.config.taxasVenda || {};
+  return `<div class="taxas-venda">
+    <h3 class="taxas-titulo">Taxas usadas no fechamento da venda</h3>
+    <p class="stat-sub">Em % do valor final. O CRM calcula sozinho a cada venda; deixe em branco o que você não paga. MEI paga o DAS fixo por mês: não precisa de imposto aqui.</p>
+    <div class="taxas-grade">${TAXAS_VENDA.map(([k, nome]) => `<label class="taxa-campo"><span>${nome}</span>
+      <span class="taxa-input"><input type="text" inputmode="decimal" data-taxa="${k}" value="${t[k] != null ? String(t[k]).replace(".", ",") : ""}" placeholder="—" aria-label="${nome} em %" /><span>%</span></span></label>`).join("")}</div>
+  </div>`;
 }
 
 /* ----------------------------------------------------------------------- */
@@ -1032,6 +1103,17 @@ function attachMainEvents() {
   document.querySelectorAll("[data-integracao]").forEach((btn) => btn.addEventListener("click", () => {
     state.config = { ...state.config, integracaoCrm: btn.dataset.integracao, integracaoCrmPerguntado: true };
     saveConfig(); render();
+  }));
+  document.querySelectorAll("[data-taxa]").forEach((inp) => inp.addEventListener("change", async () => {
+    let txt = inp.value.trim().replace("%", "");
+    if (txt.includes(",")) txt = txt.replace(/\./g, "").replace(",", ".");
+    const valor = txt === "" ? null : Number(txt);
+    if (valor !== null && !Number.isFinite(valor)) { toast("Use só números, como 3,5.", "erro"); return; }
+    try {
+      const r = await api("PUT", "/financeiro/fechamento/taxas", { [inp.dataset.taxa]: valor });
+      state.config = { ...state.config, taxasVenda: r.taxas };
+      toast("Taxa guardada.", "ok");
+    } catch (e) { toast(e.message || "Não foi possível guardar a taxa.", "erro"); }
   }));
   const descontar = document.getElementById("descontar-comissoes");
   if (descontar) descontar.addEventListener("change", (e) => { state.config = { ...state.config, descontarComissoes: e.target.checked }; saveConfig(); render(); });
@@ -1694,8 +1776,10 @@ function ligarAssistenteIA() {
   }).catch(() => { /* sem resposta: mantém como está */ });
 }
 function telaDeErro(msg) {
-  document.getElementById("onboarding-root").innerHTML = `<div class="carregando"><p>${escapeHtml(msg)}</p><button class="btn char" id="tentar-de-novo">Tentar de novo</button><p><a href="../inicio.html">Voltar</a></p></div>`;
-  document.getElementById("tentar-de-novo").addEventListener("click", iniciar);
+  const semPermissao = /^O gestor da sua equipe/.test(msg || ""); // tentar de novo não adianta: só o gestor libera
+  document.getElementById("onboarding-root").innerHTML = `<div class="carregando"><p>${escapeHtml(msg)}</p>${semPermissao ? `<p>Se precisar, peça para o gestor liberar em Equipe → Permissões, no CRM.</p>` : `<button class="btn char" id="tentar-de-novo">Tentar de novo</button>`}<p><a href="../inicio.html">Voltar</a></p></div>`;
+  const b = document.getElementById("tentar-de-novo");
+  if (b) b.addEventListener("click", iniciar);
 }
 async function iniciar() {
   document.getElementById("onboarding-root").innerHTML = `<div class="carregando"><p>Carregando seu financeiro…</p></div>`;

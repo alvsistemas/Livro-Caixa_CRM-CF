@@ -4,6 +4,7 @@ const { validarSecao, carregarFinanceiro, salvarSecaoFinanceiro } = require('../
 const { query } = require('../db/pool');
 const Card = require('../models/Card');
 const Column = require('../models/Column');
+const Contrato = require('../models/Contrato');
 const { isValidId } = require('../db/ids');
 const fechamento = require('../utils/fechamento');
 
@@ -41,6 +42,15 @@ router.put('/fechamento/modo', async (req, res) => {
   }
 });
 
+// PUT /api/financeiro/fechamento/taxas { credito: 3.5, imposto: 6, pix: null, ... } -> % guardados
+router.put('/fechamento/taxas', async (req, res) => {
+  try { res.json({ taxas: await fechamento.salvarTaxas(req.userId, req.body || {}) }); } catch (err) {
+    if (err instanceof fechamento.ErroFechamento) return res.status(400).json({ error: err.message });
+    console.error('Erro ao salvar as taxas:', err.message);
+    res.status(500).json({ error: 'Erro ao salvar as taxas.' });
+  }
+});
+
 async function cardDoUsuario(req, res) {
   const id = req.params.cardId;
   if (!isValidId(id)) { res.status(400).json({ error: 'Cliente inválido.' }); return null; }
@@ -54,7 +64,16 @@ router.get('/fechamento/:cardId', async (req, res) => {
   try {
     const card = await cardDoUsuario(req, res);
     if (!card) return;
-    res.json({ fechamento: card.fechamento || null, pendente: !!card.fechamentoPendente, lancamentos: await fechamento.lancamentosDoCard(req.userId, card._id) });
+    const [lancamentos, regra, contrato] = await Promise.all([
+      fechamento.lancamentosDoCard(req.userId, card._id),
+      fechamento.regraDoCard(req.userId, card),
+      Contrato.findOne({ cardId: card._id, userId: req.userId }),
+    ]);
+    res.json({
+      fechamento: card.fechamento || null, pendente: !!card.fechamentoPendente, lancamentos, regra,
+      // comissão feita à mão (não pelo Pipeline) não é recalculada: a janela mostra o valor dela
+      comissaoManual: contrato && !contrato.geradoAutomaticamente ? fechamento.totalDaComissao(contrato) : null,
+    });
   } catch (err) {
     console.error('Erro ao ler o fechamento:', err.message);
     res.status(500).json({ error: 'Erro ao carregar o fechamento.' });
@@ -75,6 +94,37 @@ router.post('/fechamento/:cardId', async (req, res) => {
     if (err instanceof fechamento.ErroFechamento) return res.status(400).json({ error: err.message });
     console.error('Erro ao salvar o fechamento:', err.message);
     res.status(500).json({ error: 'Erro ao salvar o fechamento. Tente de novo.' });
+  }
+});
+
+// POST /api/financeiro/fechamento/:cardId/cancelar { devolucao?: { valor, data, motivo } }
+// A venda foi desfeita (o card saiu de Ganho): apaga o que não foi recebido
+router.post('/fechamento/:cardId/cancelar', async (req, res) => {
+  try {
+    const card = await cardDoUsuario(req, res);
+    if (!card) return;
+    const coluna = await Column.findOne({ _id: card.columnId, userId: req.userId });
+    if (coluna && coluna.tipo === 'ganho') return res.status(400).json({ error: 'O cliente ainda está numa coluna de ganho. Para corrigir valores, refaça o fechamento.' });
+    const r = await fechamento.cancelarVenda(req.userId, card, req.body || {});
+    const atualizado = await Card.findOne({ _id: card._id, userId: req.userId });
+    res.json({ card: atualizado.toJSON(), ...r });
+  } catch (err) {
+    if (err instanceof fechamento.ErroFechamento) return res.status(400).json({ error: err.message });
+    console.error('Erro ao desfazer a venda:', err.message);
+    res.status(500).json({ error: 'Erro ao desfazer a venda. Tente de novo.' });
+  }
+});
+
+// POST /api/financeiro/fechamento/:cardId/devolucao { valor, data, motivo }
+router.post('/fechamento/:cardId/devolucao', async (req, res) => {
+  try {
+    const card = await cardDoUsuario(req, res);
+    if (!card) return;
+    res.status(201).json(await fechamento.registrarDevolucao(req.userId, card, req.body || {}));
+  } catch (err) {
+    if (err instanceof fechamento.ErroFechamento) return res.status(400).json({ error: err.message });
+    console.error('Erro ao registrar a devolução:', err.message);
+    res.status(500).json({ error: 'Erro ao registrar a devolução. Tente de novo.' });
   }
 });
 

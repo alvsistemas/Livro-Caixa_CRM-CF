@@ -11,6 +11,7 @@ const Equipe = definirModelo('Equipe', {
     nome: { type: 'string', required: true, trim: true },
     donoId: { type: 'id', ref: 'User', required: true },
     codigoConvite: { type: 'string', default: gerarCodigo },
+    permissoes: { type: 'json', default: () => ({}) }, // abas e funções dos membros (utils/permissoes.js)
   },
   transformJSON: jsonPadrao((ret) => { ret.donoId = String(ret.donoId); }),
 });

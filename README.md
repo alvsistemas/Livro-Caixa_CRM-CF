@@ -452,6 +452,14 @@ falha de segurança conhecida) — trata .csv e .xlsx da mesma forma no navegado
 
 ## Equipes (Chat Interno e Supervisão)
 
+**Permissões:** o gestor escolhe, em Equipe → Permissões, quais abas (Dashboard,
+Leads, Automações, Comissões, Relatórios, Fluxos, Importar/Exportar, Agenda,
+Controle financeiro) e funções (excluir clientes, exportar dados, editar funis e
+colunas, editar regras de comissão, fechamento da venda, ver custos e margem) os
+membros usam. O padrão é tudo liberado; gestores sempre têm tudo. Quem garante é o
+servidor (`server/utils/permissoes.js` + `middleware/auth.js`); o site só esconde.
+O dono do sistema também ajusta pelo Painel do dono → Equipes.
+
 Diferente de tudo mais no projeto, isso não é uma funcionalidade "por
 usuário" — é uma camada nova, sem mexer em nenhum dado que já existia:
 
@@ -484,6 +492,22 @@ botão pra refazer. Os totais de ganho do CRM passam a usar o valor final.
   Crédito" é o cartão da própria pessoa, para despesas).
 - Uma tela do financeiro aberta antes do fechamento não apaga as receitas novas
   ao salvar (o servidor compara com a hora em que a tela carregou).
+- **Custos da venda (opcional):** custo do produto e frete viram despesas pagas no
+  dia da venda; a taxa do meio de pagamento e o imposto são % sobre o valor final,
+  guardados uma vez ("mudar taxa?" na janela, ou na aba Lucro) e lançados na data
+  da 1ª parcela. A comissão do Pipeline é recalculada pelo valor final — cada regra
+  de comissão pode trocar para "valor do card" em "Calcular sobre".
+- A aba **Lucro** mostra o **lucro por venda** do mês (valor final, custos +
+  comissão, quanto sobrou e a margem).
+- **Venda desfeita:** tirar de Ganho um cliente com fechamento pergunta se a venda
+  foi desfeita; "Cancelar o que falta receber" apaga as parcelas e custos ainda não
+  pagos (o recebido fica) e pode registrar a devolução ao cliente.
+- **Devolução parcial:** botão "↩ Devolução" na ficha do cliente; vira uma despesa
+  "Devoluções" ligada à venda.
+- **Valor mudou:** se o valor do card mudar depois do fechamento, o card e a ficha
+  avisam ("refazer o fechamento?"); os lançamentos não mudam sozinhos.
+- **Cliente excluído:** os lançamentos ficam no financeiro, com a etiqueta
+  "CRM · cliente excluído".
 
 ## Comissão automática ao fechar venda
 
