@@ -2,7 +2,7 @@
    Livro-Caixa — front-end
    Estrutura com barra lateral (Dashboard / Pipeline / Leads / Tarefas),
    inspirada no CRM Foco, mantendo tudo que já existia (MongoDB via
-   API REST, modo noturno, cor de destaque, WhatsApp, arraste de cards).
+   API REST, modo noturno, cor de destaque, botão do WhatsApp, arraste de cards).
 ================================================================ */
 
 const API_BASE = '/api';
@@ -71,15 +71,12 @@ const ICON_SETTINGS = `<svg width="17" height="17" viewBox="0 0 24 24" fill="non
 const ICON_SPARKLE = `<svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2l1.6 5.4L19 9l-5.4 1.6L12 16l-1.6-5.4L5 9l5.4-1.6L12 2Z"/><path d="M19 14l.8 2.2L22 17l-2.2.8L19 20l-.8-2.2L16 17l2.2-.8L19 14Z"/><path d="M5 14l.8 2.2L8 17l-2.2.8L5 20l-.8-2.2L2 17l2.2-.8L5 14Z"/></svg>`;
 const ICON_BELL = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>`;
 const ICON_BUSCA = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>`;
-const ICON_CONVERSAS = `<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>`;
-const ICON_DISPAROS = `<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>`;
 const ICON_RELATORIOS = `<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>`;
 const ICON_SUPORTE = `<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>`;
 const ICON_CHAT_INTERNO = `<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>`;
 const ICON_SUPERVISAO = `<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8Z"/><circle cx="12" cy="12" r="3"/></svg>`;
 const ICON_AUTOMACOES = `<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>`;
 const ICON_FLUXOS = `<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="5" cy="6" r="2"/><circle cx="5" cy="18" r="2"/><circle cx="19" cy="12" r="2"/><path d="M5 8v8"/><path d="M7 6h6a4 4 0 0 1 4 4"/><path d="M7 18h6a4 4 0 0 0 4-4"/></svg>`;
-const ICON_AGENDAMENTOS = `<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><path d="M12 14v3l2 1"/></svg>`;
 const ICON_IMPORT_EXPORT = `<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 17l-4-4 4-4"/><path d="M4 13h11a4 4 0 0 0 4-4V7"/><path d="M16 7l4 4-4 4"/><path d="M20 11H9a4 4 0 0 0-4 4v2"/></svg>`;
 const ICON_LOGOUT = `<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>`;
 const ICON_EDIT = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4Z"/></svg>`;
@@ -212,43 +209,10 @@ let calendarSyncing = false;
 // padrão (tudo true) até a checagem real chegar, pra nunca esconder nada à toa por causa
 // de uma resposta lenta. Ver server/routes/config.js.
 let assinaturaInfo = null; // situação da assinatura (GET /api/assinatura)
-let integracoesConfig = { googleAgenda:true, assistenteIA:true, whatsappWebhook:true, instagramWebhook:true, telegramAlerta:true, emailRecuperacao:false, push:false };
+let integracoesConfig = { googleAgenda:true, assistenteIA:true, telegramAlerta:true, emailRecuperacao:false, push:false };
 let icsStatus = null; // { ativo, url } — link de agenda (.ics), alternativa ao Google Agenda
 let icsCarregando = false;
 let icsGerando = false;
-let whatsappConnected = false;
-let whatsappSalvando = false;
-let whatsappConfigMsg = null;
-let whatsappProvedor = 'meta'; // provedor ativo do usuário (vem do servidor)
-let whatsappProvedorEscolhido = 'meta'; // escolha no formulário de conexão
-let whatsappYcloudWebhookPath = null;
-let whatsappYcloudSecretOk = false;
-let whatsappTwilioWebhookPath = null;
-let agenteIaAtivo = false;
-let iaProativaAtiva = false;
-let agendamentos = [];
-let agendamentosContagem = { pendente:0, enviada:0, cancelada:0, falhou:0 };
-let agendamentosLoaded = false;
-let agendamentoModalForm = null;
-let agendamentoSalvando = false;
-let agendamentoMsg = null;
-let menuTriagem = { ativo:false, mensagemInicial:'', opcoes:[] };
-let menuTriagemCarregado = false;
-let menuTriagemSalvando = false;
-let menuTriagemMsg = null;
-let instagramConnected = false;
-let instagramSalvando = false;
-let instagramConfigMsg = null;
-let conversas = [];
-let conversasLoaded = false;
-let conversaSelecionadaCardId = null;
-let conversaMensagens = [];
-let conversaMensagensLoaded = false;
-let conversaTexto = '';
-let conversaEnviando = false;
-let conversaBusca = '';
-let conversasOverlay = null; // null | 'automacoes' | 'disparos' | 'agendamentos'
-let conversaPollingTimer = null;
 let notifOpen = false;
 let buscaGlobalAberta = false;
 let buscaGlobalTexto = '';
@@ -272,7 +236,6 @@ const ROTULOS_EVENTOS_WEBHOOK = {
   'lead.criado': 'Novo lead criado',
   'lead.movido': 'Lead mudou de coluna',
   'lead.ganho': 'Lead marcado como ganho',
-  'mensagem.recebida': 'Mensagem recebida no WhatsApp',
   'tarefa.criada': 'Nova tarefa criada',
 };
 let anexosDoCard = [];
@@ -319,24 +282,6 @@ let auditoriaExpandida = false;
 let configCategoriaAtiva = 'perfil';
 let monitoramentoLoaded = false;
 let monitoramentoErros = [];
-let disparoFiltroColuna = '';
-let disparoFiltroTemp = '';
-let disparoSelecionados = new Set();
-let disparoTexto = '';
-let disparoEnviando = false;
-let disparoResultado = null;
-let disparoUsarTemplate = false;
-let disparoTemplateNome = '';
-let disparoTemplateIdioma = 'pt_BR';
-let disparoTemplateVariaveis = '';
-let disparoTemplatesDisponiveis = [];
-let templatesList = [];
-let templatesCarregados = false;
-let templatesSincronizando = false;
-let templatesMsg = null;
-let templateModalForm = null;
-let templateSalvando = false;
-let templateMsg = null;
 let funis = [];
 let funisLoaded = false;
 let funilAtualId = null;
@@ -1209,7 +1154,6 @@ async function loadIntegracoesConfig(){
     // recurso fora do plano some da tela (o servidor também recusa, por segurança)
     if(r.ia === false) integracoesConfig.assistenteIA = false;
     if(r.googleAgenda === false) integracoesConfig.planoSemGoogleAgenda = true;
-    if(r.whatsapp === false) integracoesConfig.planoSemWhatsapp = true;
   }catch(e){
     // se não conseguir checar, mantém tudo visível (otimista) — melhor mostrar um botão
     // que às vezes falha do que esconder uma integração que na verdade está configurada
@@ -1256,233 +1200,14 @@ function revogarLinkIcs(){
   });
 }
 
-/* ---------- WhatsApp Business API ---------- */
-async function loadWhatsappStatus(){
-  try{
-    const data = await apiRequest('GET', '/whatsapp/status');
-    whatsappConnected = !!data.connected;
-    agenteIaAtivo = !!data.agenteIaAtivo;
-    iaProativaAtiva = !!data.iaProativaAtiva;
-    whatsappProvedor = (data.provedor === 'ycloud' || data.provedor === 'twilio') ? data.provedor : 'meta';
-    whatsappYcloudWebhookPath = data.ycloudWebhookPath || null;
-    whatsappYcloudSecretOk = !!data.ycloudSecretConfigurado;
-    whatsappTwilioWebhookPath = data.twilioWebhookPath || null;
-  }catch(e){
-    whatsappConnected = false;
-  }
-  renderApp();
-}
-async function definirIaProativa(ativo){
-  try{
-    await apiRequest('POST', '/whatsapp/ia-proativa', { ativo });
-    iaProativaAtiva = ativo;
-  }catch(e){
-    errorMsg = e.message || 'Não foi possível atualizar a IA proativa.';
-  }
-  renderApp();
-}
 
-/* ---------- Menu de triagem (fluxo de primeiro contato) ---------- */
-async function loadMenuTriagem(){
-  try{
-    const data = await apiRequest('GET', '/whatsapp/menu-triagem');
-    menuTriagem = data.menuTriagem || { ativo:false, mensagemInicial:'', opcoes:[] };
-  }catch(e){
-    menuTriagem = { ativo:false, mensagemInicial:'', opcoes:[] };
-  }
-  menuTriagemCarregado = true;
-  renderApp();
-}
-async function salvarMenuTriagem(){
-  if(menuTriagem.ativo){
-    if(!menuTriagem.mensagemInicial.trim() || !menuTriagem.opcoes.length){
-      menuTriagemMsg = { tipo:'erro', texto:'Escreva a mensagem inicial e adicione ao menos uma opção antes de ativar.' };
-      renderApp();
-      return;
-    }
-  }
-  menuTriagemSalvando = true;
-  menuTriagemMsg = null;
-  renderApp();
-  try{
-    const data = await apiRequest('PUT', '/whatsapp/menu-triagem', menuTriagem);
-    menuTriagem = data.menuTriagem;
-    menuTriagemMsg = { tipo:'ok', texto:'Menu salvo.' };
-  }catch(e){
-    menuTriagemMsg = { tipo:'erro', texto: e.message || 'Não foi possível salvar o menu.' };
-  }
-  menuTriagemSalvando = false;
-  renderApp();
-}
-async function definirAgenteIa(ativo){
-  try{
-    await apiRequest('POST', '/whatsapp/agente-ia', { ativo });
-    agenteIaAtivo = ativo;
-  }catch(e){
-    errorMsg = e.message || 'Não foi possível atualizar o agente de IA.';
-  }
-  renderApp();
-}
-async function salvarWhatsappConfig(){
-  const val = (id)=>{ const el = document.getElementById(id); return el ? el.value.trim() : ''; };
-  let payload;
-  if(whatsappProvedorEscolhido === 'twilio'){
-    payload = { provedor:'twilio', numero: val('wa-tw-numero'), accountSid: val('wa-tw-sid'), authToken: val('wa-tw-token') };
-    if(!payload.numero || !payload.accountSid || !payload.authToken){
-      whatsappConfigMsg = { tipo:'erro', texto:'Preencha o número do WhatsApp, o Account SID e o Auth Token da Twilio.' };
-      renderApp();
-      return;
-    }
-  } else if(whatsappProvedorEscolhido === 'ycloud'){
-    payload = { provedor:'ycloud', numero: val('wa-yc-numero'), apiKey: val('wa-yc-apikey'), webhookSecret: val('wa-yc-secret') };
-    if(!payload.numero || !payload.apiKey){
-      whatsappConfigMsg = { tipo:'erro', texto:'Preencha o número do WhatsApp e a API Key da YCloud.' };
-      renderApp();
-      return;
-    }
-  } else {
-    payload = { phoneNumberId: val('wa-phone-id'), accessToken: val('wa-token'), wabaId: val('wa-waba-id') };
-    if(!payload.phoneNumberId || !payload.accessToken){
-      whatsappConfigMsg = { tipo:'erro', texto:'Preencha o Phone Number ID e o Access Token.' };
-      renderApp();
-      return;
-    }
-  }
-  whatsappSalvando = true;
-  whatsappConfigMsg = null;
-  renderApp();
-  try{
-    const resp = await apiRequest('POST', '/whatsapp/configurar', payload);
-    whatsappConnected = true;
-    whatsappProvedor = whatsappProvedorEscolhido;
-    whatsappYcloudWebhookPath = (resp && resp.ycloudWebhookPath) || null;
-    whatsappYcloudSecretOk = !!(resp && resp.ycloudSecretConfigurado);
-    whatsappTwilioWebhookPath = (resp && resp.twilioWebhookPath) || null;
-    whatsappConfigMsg = { tipo:'ok', texto:'Conectado com sucesso.' };
-  }catch(e){
-    whatsappConfigMsg = { tipo:'erro', texto: e.message || 'Não foi possível salvar a configuração.' };
-  }
-  whatsappSalvando = false;
-  renderApp();
-}
-function fecharYcloudSecretModal(){ document.getElementById('modal-root').innerHTML=''; }
-function abrirYcloudSecretModal(){
-  const root = document.getElementById('modal-root');
-  root.innerHTML = `
-    <div class="overlay" id="yc-secret-overlay">
-      <div class="modal">
-        <div class="modal-head">
-          <h3>Secret do webhook (YCloud)</h3>
-          <button id="yc-secret-close">✕</button>
-        </div>
-        <div class="modal-body">
-          <p class="settings-page-note" style="margin:0">O secret é uma senha que a YCloud gera quando você cria o endpoint de webhook. Com ela o CRM confere se cada aviso (mensagem recebida, entregue, lida) veio mesmo da YCloud e não de outra pessoa. Sem o secret, o CRM recusa os avisos e as mensagens não aparecem.</p>
-          <ol class="settings-page-note" style="margin:0;padding-left:18px">
-            <li>Na YCloud, crie o endpoint com o endereço do webhook mostrado aqui no CRM.</li>
-            <li>Copie o secret que ela mostrar (começa com <b>whsec_</b>).</li>
-            <li>Cole abaixo e salve.</li>
-          </ol>
-          <div class="field"><label>Secret (whsec_…)</label><input type="password" id="yc-secret-input" autocomplete="off" placeholder="${whatsappYcloudSecretOk ? 'Já existe um salvo — cole aqui só para trocar' : 'whsec_…'}" /></div>
-          <p class="settings-page-msg erro" id="yc-secret-erro" style="display:none"></p>
-        </div>
-        <div class="modal-foot">
-          <span></span>
-          <div class="modal-foot-actions">
-            <button class="btn-outline" id="yc-secret-cancel">Cancelar</button>
-            <button class="btn-save" id="yc-secret-salvar">Salvar secret</button>
-          </div>
-        </div>
-      </div>
-    </div>
-  `;
-  const erro = (t)=>{ const el = document.getElementById('yc-secret-erro'); el.textContent = t; el.style.display = 'block'; };
-  document.getElementById('yc-secret-close').addEventListener('click', fecharYcloudSecretModal);
-  document.getElementById('yc-secret-cancel').addEventListener('click', fecharYcloudSecretModal);
-  document.getElementById('yc-secret-overlay').addEventListener('click', (e)=>{ if(e.target.id==='yc-secret-overlay') fecharYcloudSecretModal(); });
-  document.getElementById('yc-secret-input').focus();
-  document.getElementById('yc-secret-salvar').addEventListener('click', async ()=>{
-    const valor = document.getElementById('yc-secret-input').value.trim();
-    if(!valor){ erro('Cole o secret (whsec_…) mostrado pela YCloud.'); return; }
-    try{
-      await apiRequest('POST', '/whatsapp/ycloud-secret', { webhookSecret: valor });
-      whatsappYcloudSecretOk = true;
-      fecharYcloudSecretModal();
-      renderApp();
-    }catch(e){
-      erro((e && e.message) || 'Não foi possível salvar o secret.');
-    }
-  });
-}
-async function desconectarWhatsapp(){
-  try{
-    await apiRequest('POST', '/whatsapp/desconectar');
-    whatsappConnected = false;
-    whatsappProvedor = 'meta';
-    whatsappYcloudWebhookPath = null;
-    whatsappYcloudSecretOk = false;
-    whatsappTwilioWebhookPath = null;
-  }catch(e){
-    errorMsg = 'Não foi possível desconectar o WhatsApp Business.';
-  }
-  renderApp();
-}
 
-/* ---------- Instagram (captação de leads) ---------- */
-async function loadInstagramStatus(){
-  try{
-    const data = await apiRequest('GET', '/instagram/status');
-    instagramConnected = !!data.connected;
-  }catch(e){
-    instagramConnected = false;
-  }
-  renderApp();
-}
-async function salvarInstagramConfig(){
-  const pageIdEl = document.getElementById('ig-page-id');
-  const tokenEl = document.getElementById('ig-page-token');
-  const igBusinessIdEl = document.getElementById('ig-business-id');
-  const pageId = pageIdEl ? pageIdEl.value.trim() : '';
-  const pageAccessToken = tokenEl ? tokenEl.value.trim() : '';
-  const igBusinessId = igBusinessIdEl ? igBusinessIdEl.value.trim() : '';
-  if(!pageId || !pageAccessToken){
-    instagramConfigMsg = { tipo:'erro', texto:'Preencha o Page ID e o Access Token da página.' };
-    renderApp();
-    return;
-  }
-  instagramSalvando = true;
-  instagramConfigMsg = null;
-  renderApp();
-  try{
-    await apiRequest('POST', '/instagram/configurar', { pageId, pageAccessToken, igBusinessId });
-    instagramConnected = true;
-    instagramConfigMsg = { tipo:'ok', texto:'Conectado com sucesso.' };
-  }catch(e){
-    instagramConfigMsg = { tipo:'erro', texto: e.message || 'Não foi possível salvar a configuração.' };
-  }
-  instagramSalvando = false;
-  renderApp();
-}
-async function desconectarInstagram(){
-  try{
-    await apiRequest('POST', '/instagram/desconectar');
-    instagramConnected = false;
-  }catch(e){
-    errorMsg = 'Não foi possível desconectar o Instagram.';
-  }
-  renderApp();
-}
 
 async function abrirHistoricoCard(){
   const box = document.getElementById('f-historico');
   if(!box || !modalForm || modalForm.__isNew) return;
   box.style.display = 'block';
   box.innerHTML = '<p class="settings-page-note">Carregando histórico…</p>';
-
-  let mensagens = [];
-  try{
-    const data = await apiRequest('GET', `/whatsapp/conversas/${modalForm.id}`);
-    mensagens = data.mensagens || [];
-  }catch(e){ /* sem WhatsApp conectado ou sem conversa — segue sem elas */ }
 
   const tarefasDoLead = tasks.filter(t=>t.leadId===modalForm.id);
 
@@ -1492,9 +1217,6 @@ async function abrirHistoricoCard(){
   }
   tarefasDoLead.forEach(t=>{
     eventos.push({ texto:`Tarefa criada: ${t.titulo}${t.concluida?' (concluída)':''}`, data: t.createdAt || t.vencimento, icone:'✓' });
-  });
-  mensagens.forEach(m=>{
-    eventos.push({ texto:`${m.direction==='out'?'Você':'Cliente'}: ${(m.texto||'').slice(0,80)}`, data: m.timestamp, icone:'💬' });
   });
   eventos.sort((a,b)=> new Date(b.data) - new Date(a.data));
 
@@ -1598,78 +1320,6 @@ function gerarPropostaPdf(){
   closePropostaModal();
 }
 
-async function abrirConversaWhatsapp(){
-  const box = document.getElementById('f-wa-conversa');
-  if(!box || !modalForm || modalForm.__isNew) return;
-  box.style.display = 'block';
-  box.innerHTML = '<p class="settings-page-note">Carregando conversa…</p>';
-  try{
-    const data = await apiRequest('GET', `/whatsapp/conversas/${modalForm.id}`);
-    renderConversaWhatsapp(data.mensagens || []);
-  }catch(e){
-    box.innerHTML = `<p class="settings-page-msg erro">${esc(e.message || 'Não foi possível carregar a conversa.')}</p>`;
-  }
-}
-function statusMensagemIcone(status){
-  if(status === 'read') return `<span class="wa-status wa-status-read" title="Lida">✓✓</span>`;
-  if(status === 'delivered') return `<span class="wa-status" title="Entregue">✓✓</span>`;
-  if(status === 'failed') return `<span class="wa-status wa-status-failed" title="Falhou">⚠</span>`;
-  if(status === 'sent') return `<span class="wa-status" title="Enviada">✓</span>`;
-  return '';
-}
-// Monta o conteúdo de uma mensagem — texto normal, ou a mídia (foto/áudio/documento/vídeo)
-// quando ela tiver um anexo vinculado. Reaproveitado nas duas telas de chat do app.
-function renderConteudoMensagem(m){
-  const iconeCanal = m.canal==='instagram' ? '📷 ' : '';
-  if(!m.anexo) return `<p>${iconeCanal}${esc(m.texto)}</p>`;
-  const a = m.anexo;
-  if(m.midiaTipo==='image'){
-    return `<img src="${a.dadosBase64}" alt="${esc(a.nomeArquivo)}" class="wa-msg-imagem" />`;
-  }
-  if(m.midiaTipo==='audio'){
-    return `<audio controls src="${a.dadosBase64}" class="wa-msg-audio"></audio>`;
-  }
-  return `<a href="${a.dadosBase64}" download="${esc(a.nomeArquivo)}" class="wa-msg-arquivo">${m.midiaTipo==='video'?'🎥':'📄'} ${esc(a.nomeArquivo)}</a>`;
-}
-function renderConversaWhatsapp(mensagens){
-  const box = document.getElementById('f-wa-conversa');
-  if(!box) return;
-  box.innerHTML = `
-    <div class="wa-conversa-lista">
-      ${mensagens.length ? mensagens.map(m=>`
-        <div class="wa-msg wa-msg-${m.direction}">
-          ${renderConteudoMensagem(m)}
-          <span>${new Date(m.timestamp).toLocaleString('pt-BR')} ${m.direction==='out' ? statusMensagemIcone(m.status) : ''}</span>
-        </div>
-      `).join('') : '<p class="settings-page-note">Nenhuma mensagem ainda.</p>'}
-    </div>
-    <div class="wa-conversa-input-row">
-      <input type="text" id="wa-nova-msg" placeholder="Digite uma mensagem..." />
-      <button type="button" class="btn-primary" id="wa-enviar-btn">Enviar</button>
-    </div>
-  `;
-  const lista = box.querySelector('.wa-conversa-lista');
-  if(lista) lista.scrollTop = lista.scrollHeight;
-  const input = document.getElementById('wa-nova-msg');
-  const enviarBtn = document.getElementById('wa-enviar-btn');
-  const enviar = async ()=>{
-    const texto = input.value.trim();
-    if(!texto || !modalForm) return;
-    enviarBtn.disabled = true;
-    try{
-      await apiRequest('POST', '/whatsapp/enviar', { cardId: modalForm.id, texto });
-      input.value = '';
-      await abrirConversaWhatsapp();
-    }catch(e){
-      errorMsg = e.message || 'Não foi possível enviar a mensagem.';
-      renderApp();
-    }
-    if(enviarBtn) enviarBtn.disabled = false;
-  };
-  enviarBtn.addEventListener('click', enviar);
-  input.addEventListener('keydown', (e)=>{ if(e.key==='Enter') enviar(); });
-}
-
 function formatDateHora(iso){
   if(!iso) return '';
   const d = new Date(iso);
@@ -1683,83 +1333,6 @@ function formatHora(iso){
   return d.toLocaleTimeString('pt-BR', { hour:'2-digit', minute:'2-digit' });
 }
 
-async function loadConversas(){
-  try{
-    const data = await apiRequest('GET', '/whatsapp/conversas');
-    conversas = data.conversas || [];
-  }catch(e){
-    conversas = [];
-  }
-  conversasLoaded = true;
-  renderApp();
-}
-async function selecionarConversa(cardId){
-  if(conversaSelecionadaCardId === cardId) return;
-  conversaSelecionadaCardId = cardId;
-  conversaMensagensLoaded = false;
-  conversaMensagens = [];
-  renderApp();
-  await carregarMensagensConversa(cardId, true);
-  iniciarPollingConversa();
-}
-async function carregarMensagensConversa(cardId, primeiraVez){
-  try{
-    const data = await apiRequest('GET', `/whatsapp/conversas/${cardId}`);
-    if(conversaSelecionadaCardId === cardId) conversaMensagens = data.mensagens || [];
-  }catch(e){
-    if(primeiraVez) conversaMensagens = [];
-  }
-  conversaMensagensLoaded = true;
-  renderApp();
-}
-function iniciarPollingConversa(){
-  pararPollingConversa();
-  conversaPollingTimer = setInterval(()=>{
-    if(conversaSelecionadaCardId && currentPage==='conversas') carregarMensagensConversa(conversaSelecionadaCardId, false);
-  }, 6000);
-}
-function pararPollingConversa(){
-  if(conversaPollingTimer){ clearInterval(conversaPollingTimer); conversaPollingTimer = null; }
-}
-async function enviarMensagemConversa(){
-  if(!conversaTexto.trim() || !conversaSelecionadaCardId) return;
-  conversaEnviando = true;
-  renderApp();
-  try{
-    await apiRequest('POST', '/whatsapp/enviar', { cardId: conversaSelecionadaCardId, texto: conversaTexto });
-    conversaTexto = '';
-    await carregarMensagensConversa(conversaSelecionadaCardId, false);
-    loadConversas(); // atualiza a prévia na lista da esquerda, sem travar a tela esperando
-  }catch(e){
-    errorMsg = e.message || 'Não foi possível enviar a mensagem.';
-  }
-  conversaEnviando = false;
-  renderApp();
-}
-async function salvarCampoClienteConversa(campo, valor){
-  const card = board.cards.find(c=>c.id===conversaSelecionadaCardId);
-  if(!card) return;
-  const anterior = card[campo];
-  card[campo] = valor; // otimista
-  try{
-    await apiRequest('PUT', `/cards/${conversaSelecionadaCardId}`, { [campo]: valor });
-    if(campo==='cliente' || campo==='telefone') loadConversas(); // atualiza nome/telefone na lista da esquerda também
-  }catch(e){
-    card[campo] = anterior;
-    errorMsg = 'Não foi possível salvar a alteração.';
-    renderApp();
-  }
-}
-async function executarAutomacaoManual(automacaoId){
-  if(!conversaSelecionadaCardId) return;
-  try{
-    await apiRequest('POST', `/automacoes/${automacaoId}/executar-manual`, { cardId: conversaSelecionadaCardId });
-    await loadTasks();
-  }catch(e){
-    errorMsg = e.message || 'Não foi possível executar a automação.';
-  }
-  renderApp();
-}
 
 /* ---------- Equipe (Chat Interno + Supervisão) ---------- */
 async function loadEquipe(){
@@ -2153,128 +1726,6 @@ function renderCompletarLeadModal(){
   document.getElementById('cl-lead-salvar').addEventListener('click', salvarCompletarLead);
 }
 
-/* ---------- Agendamentos ---------- */
-async function loadAgendamentos(){
-  try{
-    const data = await apiRequest('GET', '/agendamentos');
-    agendamentos = data.mensagens || [];
-    agendamentosContagem = data.contagem || { pendente:0, enviada:0, cancelada:0, falhou:0 };
-  }catch(e){
-    agendamentos = [];
-  }
-  agendamentosLoaded = true;
-  renderApp();
-}
-function agendamentoStatusLabel(status){
-  if(status==='enviada') return '✓ Enviada';
-  if(status==='cancelada') return 'Cancelada';
-  if(status==='falhou') return '⚠ Falhou';
-  return '⏳ A enviar';
-}
-function openNewAgendamento(){
-  agendamentoModalForm = { cardId:'', texto:'', data:'', hora:'' };
-  agendamentoMsg = null;
-  renderAgendamentoModal();
-}
-function closeAgendamentoModal(){ agendamentoModalForm = null; document.getElementById('modal-root').innerHTML=''; }
-async function salvarAgendamento(){
-  const f = agendamentoModalForm;
-  if(!f.cardId || !f.texto.trim() || !f.data || !f.hora){
-    agendamentoMsg = { tipo:'erro', texto:'Preencha o cliente, a data, a hora e a mensagem.' };
-    renderAgendamentoModal();
-    return;
-  }
-  const agendadoPara = new Date(`${f.data}T${f.hora}:00`);
-  agendamentoSalvando = true;
-  agendamentoMsg = null;
-  renderAgendamentoModal();
-  try{
-    await apiRequest('POST', '/agendamentos', { cardId: f.cardId, texto: f.texto, agendadoPara: agendadoPara.toISOString() });
-    closeAgendamentoModal();
-    await loadAgendamentos();
-  }catch(e){
-    agendamentoMsg = { tipo:'erro', texto: e.message || 'Não foi possível agendar a mensagem.' };
-    agendamentoSalvando = false;
-    renderAgendamentoModal();
-  }
-}
-async function cancelarAgendamento(id){
-  try{
-    await apiRequest('POST', `/agendamentos/${id}/cancelar`);
-    await loadAgendamentos();
-  }catch(e){
-    errorMsg = 'Não foi possível cancelar o agendamento.';
-    renderApp();
-  }
-}
-async function excluirAgendamento(id){
-  const idx = agendamentos.findIndex(a=>a.id===id);
-  if(idx===-1) return;
-  const [removido] = agendamentos.splice(idx,1);
-  renderApp();
-  try{
-    await apiRequest('DELETE', `/agendamentos/${id}`);
-    await loadAgendamentos(); // recarrega pra atualizar a contagem por status também
-  }catch(e){
-    if(e && /não encontrado/i.test(e.message || '')){
-      // já tinha sido excluído (ex.: dois cliques seguidos ou outra aba): some da lista e pronto
-      await loadAgendamentos();
-      return;
-    }
-    agendamentos.splice(idx,0,removido);
-    errorMsg = 'Não foi possível excluir o agendamento' + (e && e.message ? ` (${e.message})` : '.');
-    renderApp();
-  }
-}
-function renderAgendamentoModal(){
-  const root = document.getElementById('modal-root');
-  if(!agendamentoModalForm){ root.innerHTML=''; return; }
-  const f = agendamentoModalForm;
-  const candidatos = board.cards.filter(c=>c.telefone);
-  root.innerHTML = `
-    <div class="overlay" id="ag-modal-overlay">
-      <div class="modal">
-        <div class="modal-head">
-          <h3>Nova mensagem agendada</h3>
-          <button id="ag-modal-close">✕</button>
-        </div>
-        <div class="modal-body">
-          <div class="field">
-            <label>Cliente</label>
-            <select id="ag-cliente">
-              <option value="">Selecione</option>
-              ${candidatos.map(c=>`<option value="${c.id}" ${f.cardId===c.id?'selected':''}>${esc(c.cliente)}</option>`).join('')}
-            </select>
-          </div>
-          <div class="field-row">
-            <div class="field"><label>Data</label><input type="date" id="ag-data" value="${f.data}" /></div>
-            <div class="field"><label>Hora</label><input type="time" id="ag-hora" value="${f.hora}" /></div>
-          </div>
-          <div class="field">
-            <label>Mensagem</label>
-            <textarea id="ag-texto" rows="4" placeholder="Texto que será enviado pelo WhatsApp...">${esc(f.texto)}</textarea>
-          </div>
-          ${agendamentoMsg ? `<p class="settings-page-msg ${agendamentoMsg.tipo}">${esc(agendamentoMsg.texto)}</p>` : ''}
-        </div>
-        <div class="modal-foot">
-          <span></span>
-          <div class="modal-foot-actions">
-            <button class="btn-outline" id="ag-cancel">Cancelar</button>
-            <button class="btn-save" id="ag-salvar" ${agendamentoSalvando?'disabled':''}>${agendamentoSalvando?'Agendando…':'Agendar'}</button>
-          </div>
-        </div>
-      </div>
-    </div>
-  `;
-  document.getElementById('ag-modal-close').addEventListener('click', closeAgendamentoModal);
-  document.getElementById('ag-cancel').addEventListener('click', closeAgendamentoModal);
-  document.getElementById('ag-modal-overlay').addEventListener('click', (e)=>{ if(e.target.id==='ag-modal-overlay') closeAgendamentoModal(); });
-  document.getElementById('ag-cliente').addEventListener('change', (e)=> agendamentoModalForm.cardId = e.target.value);
-  document.getElementById('ag-data').addEventListener('input', (e)=> agendamentoModalForm.data = e.target.value);
-  document.getElementById('ag-hora').addEventListener('input', (e)=> agendamentoModalForm.hora = e.target.value);
-  document.getElementById('ag-texto').addEventListener('input', (e)=> agendamentoModalForm.texto = e.target.value);
-  document.getElementById('ag-salvar').addEventListener('click', salvarAgendamento);
-}
 
 async function criarEquipe(){
   const nome = equipeNomeNovo.trim();
@@ -2398,7 +1849,7 @@ async function enviarMensagemIndividual(){
 }
 
 // Notificações são calculadas na hora, a partir do que já está carregado
-// (tarefas, leads e conversas) — não existe uma tabela própria pra isso.
+// (tarefas e leads) — não existe uma tabela própria pra isso.
 function computarNotificacoes(){
   const notifs = [];
   const fimHoje = new Date(); fimHoje.setHours(23,59,59,999);
@@ -2413,84 +1864,10 @@ function computarNotificacoes(){
       notifs.push({ texto:`Novo lead: ${c.cliente}`, timestamp:c.createdAt, cardId:c.id });
     }
   });
-  const doisDias = new Date(Date.now() - 48*60*60*1000);
-  conversas.forEach(cv=>{
-    if(cv.direcaoUltima==='in' && cv.ultimaMensagemEm && new Date(cv.ultimaMensagemEm) >= doisDias){
-      notifs.push({ texto:`${cv.card.cliente}: ${(cv.ultimaMensagem||'').slice(0,60)}`, timestamp:cv.ultimaMensagemEm, cardId:cv.card.id });
-    }
-  });
   return notifs.sort((a,b)=> new Date(b.timestamp) - new Date(a.timestamp));
 }
 
-/* ---------- Disparos (mensagem em massa) ---------- */
-async function enviarDisparo(){
-  if(disparoSelecionados.size===0) return;
-  if(disparoUsarTemplate){
-    if(!disparoTemplateNome.trim()) return;
-  } else if(!disparoTexto.trim()){
-    return;
-  }
-  disparoEnviando = true;
-  disparoResultado = null;
-  renderApp();
-  try{
-    const corpo = { cardIds: Array.from(disparoSelecionados) };
-    if(disparoUsarTemplate){
-      corpo.usarTemplate = true;
-      corpo.templateName = disparoTemplateNome.trim();
-      corpo.idioma = disparoTemplateIdioma.trim() || 'pt_BR';
-      corpo.variaveis = disparoTemplateVariaveis.trim() ? disparoTemplateVariaveis.split(',').map(v=>v.trim()) : [];
-    } else {
-      corpo.texto = disparoTexto;
-    }
-    const data = await apiRequest('POST', '/whatsapp/disparo', corpo);
-    disparoResultado = data;
-  }catch(e){
-    errorMsg = e.message || 'Não foi possível enviar os disparos.';
-  }
-  disparoEnviando = false;
-  renderApp();
-}
-async function carregarTemplatesDisponiveis(){
-  try{
-    const data = await apiRequest('GET', '/whatsapp/templates');
-    disparoTemplatesDisponiveis = (data.templates || []).filter(t=>t.status==='APPROVED');
-  }catch(e){
-    errorMsg = e.message || 'Não foi possível carregar os modelos.';
-  }
-  renderApp();
-}
 
-/* ---------- Templates (página) ---------- */
-function renderMenuTriagemOpcao(op, idx){
-  return `
-    <div class="mt-opcao-card">
-      <div class="field-row">
-        <div class="field mt-opcao-numero-field">
-          <label>Número</label>
-          <input type="text" class="mt-opcao-numero" data-idx="${idx}" value="${esc(op.numero)}" maxlength="3" />
-        </div>
-        <div class="field" style="flex:1;">
-          <label>Coluna de destino</label>
-          <select class="mt-opcao-coluna" data-idx="${idx}">
-            ${board.columns.map(c=>`<option value="${c.id}" ${op.colunaDestinoId===c.id?'selected':''}>${esc(c.nome)}</option>`).join('')}
-          </select>
-        </div>
-        <button type="button" class="icon-btn mt-opcao-remover" data-idx="${idx}" title="Remover opção">${ICON_TRASH}</button>
-      </div>
-      <div class="field">
-        <label>Mensagem de confirmação (opcional)</label>
-        <input type="text" class="mt-opcao-confirmacao" data-idx="${idx}" value="${esc(op.respostaConfirmacao||'')}" placeholder="Ex: Perfeito! Já te chamo por aqui." />
-      </div>
-    </div>
-  `;
-}
-function statusTemplateLabel(status){
-  if(status==='APPROVED') return '✓ Aprovado';
-  if(status==='PENDING') return '⏳ Em análise';
-  if(status==='REJECTED') return '✕ Rejeitado';
-  return status || '—';
-}
 
 /* ---------- Campos personalizados ---------- */
 async function toggleAgendamentoPublicoAtivo(){
@@ -2830,112 +2207,6 @@ async function handleAnexoFileSelected(file){
   if(listaAtualizada){ listaAtualizada.innerHTML = renderAnexosListaHtml(); ligarBindingsAnexos(); }
 }
 
-async function loadTemplates(){
-  try{
-    const data = await apiRequest('GET', '/whatsapp/templates');
-    templatesList = data.templates || [];
-  }catch(e){
-    templatesList = [];
-  }
-  templatesCarregados = true;
-  renderApp();
-}
-async function sincronizarTemplates(){
-  templatesSincronizando = true;
-  templatesMsg = null;
-  renderApp();
-  try{
-    const data = await apiRequest('GET', '/whatsapp/templates');
-    templatesList = data.templates || [];
-    templatesMsg = { tipo:'ok', texto:'Lista atualizada.' };
-  }catch(e){
-    templatesMsg = { tipo:'erro', texto: e.message || 'Não foi possível sincronizar.' };
-  }
-  templatesSincronizando = false;
-  renderApp();
-}
-function openNewTemplateModal(){
-  templateModalForm = { nome:'', categoria:'MARKETING', idioma:'pt_BR', texto:'' };
-  templateMsg = null;
-  renderTemplateModal();
-}
-function closeTemplateModal(){ templateModalForm = null; document.getElementById('modal-root').innerHTML=''; }
-async function enviarNovoTemplate(){
-  const f = templateModalForm;
-  if(!f.nome.trim() || !f.texto.trim()){
-    templateMsg = { tipo:'erro', texto:'Preencha o nome e o texto da mensagem.' };
-    renderTemplateModal();
-    return;
-  }
-  templateSalvando = true;
-  templateMsg = null;
-  renderTemplateModal();
-  try{
-    await apiRequest('POST', '/whatsapp/templates', {
-      nome: f.nome, categoria: f.categoria, idioma: f.idioma || 'pt_BR', texto: f.texto,
-    });
-    closeTemplateModal();
-    await loadTemplates();
-  }catch(e){
-    templateMsg = { tipo:'erro', texto: e.message || 'Não foi possível enviar o template.' };
-    templateSalvando = false;
-    renderTemplateModal();
-  }
-}
-function renderTemplateModal(){
-  const root = document.getElementById('modal-root');
-  if(!templateModalForm){ root.innerHTML=''; return; }
-  const f = templateModalForm;
-  root.innerHTML = `
-    <div class="overlay" id="tpl-modal-overlay">
-      <div class="modal">
-        <div class="modal-head">
-          <h3>Novo template</h3>
-          <button id="tpl-modal-close">✕</button>
-        </div>
-        <div class="modal-body">
-          <div class="field">
-            <label>Nome (só letras minúsculas e "_", sem espaço)</label>
-            <input type="text" id="tpl-nome" value="${esc(f.nome)}" placeholder="Ex: boas_vindas" />
-          </div>
-          <div class="field">
-            <label>Categoria</label>
-            <select id="tpl-categoria">
-              <option value="MARKETING" ${f.categoria==='MARKETING'?'selected':''}>Marketing</option>
-              <option value="UTILITY" ${f.categoria==='UTILITY'?'selected':''}>Utilidade</option>
-              <option value="AUTHENTICATION" ${f.categoria==='AUTHENTICATION'?'selected':''}>Autenticação</option>
-            </select>
-          </div>
-          <div class="field">
-            <label>Idioma</label>
-            <input type="text" id="tpl-idioma" value="${esc(f.idioma)}" placeholder="pt_BR" />
-          </div>
-          <div class="field">
-            <label>Texto da mensagem</label>
-            <textarea id="tpl-texto" rows="4" placeholder="Use {{1}}, {{2}} pra variáveis. Ex: Olá {{1}}, sua proposta está pronta!">${esc(f.texto)}</textarea>
-          </div>
-          <p class="settings-page-note">Depois de enviado, a Meta pode levar de minutos a alguns dias pra aprovar. Use "Sincronizar" na lista pra ver o status atualizado.</p>
-          ${templateMsg ? `<p class="settings-page-msg ${templateMsg.tipo}">${esc(templateMsg.texto)}</p>` : ''}
-        </div>
-        <div class="modal-foot">
-          <span></span>
-          <div class="modal-foot-actions">
-            <button class="btn-outline" id="tpl-cancel">Cancelar</button>
-            <button class="btn-save" id="tpl-enviar" ${templateSalvando?'disabled':''}>${templateSalvando?'Enviando…':'Enviar pra aprovação'}</button>
-          </div>
-        </div>
-      </div>
-    </div>
-  `;
-  document.getElementById('tpl-modal-close').addEventListener('click', closeTemplateModal);
-  document.getElementById('tpl-cancel').addEventListener('click', closeTemplateModal);
-  document.getElementById('tpl-modal-overlay').addEventListener('click', (e)=>{ if(e.target.id==='tpl-modal-overlay') closeTemplateModal(); });
-  document.getElementById('tpl-nome').addEventListener('input', (e)=> templateModalForm.nome = e.target.value);
-  document.getElementById('tpl-categoria').addEventListener('change', (e)=> templateModalForm.categoria = e.target.value);
-  document.getElementById('tpl-idioma').addEventListener('input', (e)=> templateModalForm.idioma = e.target.value);
-  document.getElementById('tpl-texto').addEventListener('input', (e)=> templateModalForm.texto = e.target.value);
-  document.getElementById('tpl-enviar').addEventListener('click', enviarNovoTemplate);
-}
 
 /* ---------- Relatórios ---------- */
 function relatoriosDadosMensais(mesesAtras, cardsBase){
@@ -3697,7 +2968,6 @@ function goToPage(page){
     metaVendasValorBackupGestor = null;
     visualizandoDashboardDe = null;
   }
-  if(currentPage === 'conversas') pararPollingConversa();
   currentPage = page;
   dateMenuOpen = false;
   openMenuColId = null;
@@ -3715,8 +2985,6 @@ function goToPage(page){
   taskModalForm = null;
   propostaModalForm = null;
   completarLeadModalForm = null;
-  agendamentoModalForm = null;
-  templateModalForm = null;
   eventoGoogleModalForm = null;
   contratoModalForm = null;
   regrasModalAberto = false;
@@ -4759,16 +4027,15 @@ function renderApp(){
   if(!loaded){ app.innerHTML = '<div class="loading">Carregando painel…</div>'; return; }
 
   let pageHtml = '';
+  // páginas que saíram com a integração do WhatsApp/Instagram: volta pro Dashboard
+  if(['conversas', 'disparos', 'agendamentos'].includes(currentPage)) currentPage = 'dashboard';
   if(currentPage === 'dashboard') pageHtml = renderDashboardPage();
   else if(currentPage === 'pipeline') pageHtml = renderPipelinePage();
   else if(currentPage === 'leads') pageHtml = renderLeadsPage();
-  else if(currentPage === 'conversas') pageHtml = renderConversasPage();
   else if(currentPage === 'comissoes') pageHtml = renderComissoesPage();
   else if(currentPage === 'relatorios') pageHtml = renderRelatoriosPage();
-  else if(currentPage === 'disparos') pageHtml = renderDisparosPage();
   else if(currentPage === 'automacoes') pageHtml = renderAutomacoesPage();
   else if(currentPage === 'fluxos') pageHtml = renderFluxosPage();
-  else if(currentPage === 'agendamentos') pageHtml = renderAgendamentosPage();
   else if(currentPage === 'import-export') pageHtml = renderImportExportPage();
   else if(currentPage === 'configuracoes') pageHtml = renderConfiguracoesPage();
   else if(currentPage === 'suporte') pageHtml = renderSuportePage();
@@ -4824,7 +4091,7 @@ const NAV_PADRAO = [
   ['dashboard', 'Dashboard', ICON_DASHBOARD],
   ['pipeline', 'Pipeline', ICON_PIPELINE],
   ['leads', 'Leads', ICON_LEADS],
-  ['conversas', 'Conversas', ICON_CONVERSAS],
+  ['automacoes', 'Automações', ICON_AUTOMACOES],
   ['comissoes', 'Comissões', ICON_COMISSOES],
   ['relatorios', 'Relatórios', ICON_RELATORIOS],
   ['fluxos', 'Fluxos', ICON_FLUXOS],
@@ -6058,9 +5325,7 @@ const CONFIG_CATEGORIAS = [
     ['notificacoes', 'Notificações'],
   ]},
   { grupo: 'Integrações', itens: [
-    ['whatsapp', 'WhatsApp Business'],
     ['google-agenda', 'Google Agenda'],
-    ['instagram', 'Instagram'],
     ['webhooks', 'Webhooks'],
     ['agendamento', 'Link de agendamento'],
   ]},
@@ -6193,165 +5458,6 @@ function renderConfigAparencia(){
   `;
 }
 
-function renderConfigWhatsapp(){
-  if(integracoesConfig.planoSemWhatsapp){
-    return `
-    <div class="settings-page-section">
-      <h3>WhatsApp Business API</h3>
-      <p class="settings-page-note">A integração com a API do WhatsApp (conversas dentro do CRM, agente com IA e disparos) faz parte do plano Completo. <a href="assinatura.html?de=crm">Ver planos</a>.</p>
-      <p class="settings-page-note">O botão de abrir conversa no WhatsApp continua funcionando em todos os clientes com telefone cadastrado.</p>
-    </div>`;
-  }
-  return `
-    <div class="settings-page-section">
-      <h3>WhatsApp Business API</h3>
-      <div class="settings-page-row">
-        <span>Status</span>
-        <span>${whatsappConnected ? '✓ Conectado' : 'Não conectado'}</span>
-      </div>
-      ${whatsappConnected ? `
-        <p class="settings-page-note">Conversas ficam registradas dentro do card de cada cliente. Pra reconfigurar, desconecte e conecte de novo com os dados atualizados.</p>
-        ${whatsappProvedor==='twilio' ? `
-        <div class="settings-page-row"><span>Provedor</span><span>Twilio</span></div>
-        ${whatsappTwilioWebhookPath ? `
-        <div class="field">
-          <label>Endereço do webhook (cole na Twilio)</label>
-          <input type="text" readonly value="${esc((location.origin) + whatsappTwilioWebhookPath)}" onclick="this.select()" />
-        </div>
-        <p class="settings-page-note">Na Twilio, no número/remetente de WhatsApp: em <b>“When a message comes in”</b> cole esse endereço, com o método <b>HTTP POST</b>. Os status de entrega chegam pelo mesmo endereço.</p>` : ''}` : ''}
-        ${whatsappProvedor==='ycloud' ? `
-        <div class="settings-page-row"><span>Provedor</span><span>YCloud</span></div>
-        ${whatsappYcloudWebhookPath ? `
-        <div class="field">
-          <label>Endereço do webhook (cole na YCloud)</label>
-          <input type="text" readonly value="${esc(location.origin + whatsappYcloudWebhookPath)}" onclick="this.select()" />
-        </div>
-        <p class="settings-page-note">Na YCloud: Developers → Webhooks → criar endpoint com esse endereço, marcando os eventos <b>whatsapp.inbound_message.received</b>, <b>whatsapp.message.updated</b> e <b>whatsapp.smb.message.echoes</b> (o que você digita no celular). Para histórico e alertas, marque também <b>whatsapp.smb.history</b>, <b>whatsapp.template.reviewed</b>, <b>whatsapp.phone_number.quality_updated</b>, <b>whatsapp.business_account.updated</b> e <b>whatsapp.business_account.reviewed</b>. Depois de criar, a YCloud mostra o secret (whsec_…): clique em “Adicionar secret” abaixo.</p>` : ''}
-        <div class="settings-page-row">
-          <span>Secret do webhook</span>
-          <span style="display:flex;align-items:center;gap:10px;">
-            <span class="${whatsappYcloudSecretOk?'':'wa-secret-pendente'}" style="font-size:12px;">${whatsappYcloudSecretOk ? '✓ Secret adicionado' : '⚠️ Secret ainda não adicionado'}</span>
-            <button class="btn-outline" data-action="abrir-ycloud-secret">${whatsappYcloudSecretOk ? 'Trocar secret' : 'Adicionar secret'}</button>
-          </span>
-        </div>
-        ` : ''}
-        ${integracoesConfig.assistenteIA ? `
-        <div class="settings-page-row">
-          <span>Agente IA (responde clientes sozinho)</span>
-          <span class="switch ${agenteIaAtivo?'on':''}" data-action="toggle-agente-ia" title="${agenteIaAtivo?'Ativado':'Desativado'}"><span class="switch-knob"></span></span>
-        </div>
-        ${agenteIaAtivo ? `<p class="settings-page-msg erro">⚠️ O agente está respondendo mensagens automaticamente, sem revisão sua. Ele fica em silêncio por 30 min sempre que você responder um cliente manualmente. Desative quando quiser assumir de vez.</p>` : `<p class="settings-page-note">Quando ativado, a IA responde sozinha as mensagens novas do WhatsApp — sem você revisar antes de enviar.</p>`}
-
-        <div class="settings-sep-line"></div>
-
-        <div class="settings-page-row">
-          <span>IA proativa (sugestões automáticas)</span>
-          <span class="switch ${iaProativaAtiva?'on':''}" data-action="toggle-ia-proativa" title="${iaProativaAtiva?'Ativada':'Desativada'}"><span class="switch-knob"></span></span>
-        </div>
-        <p class="settings-page-note">Analisa a conversa quando o cliente responde e deixa uma sugestão de mensagem e tarefa prontas no card — nunca envia nada sozinha, é sempre você quem decide usar.</p>
-        ` : ''}
-
-        <button class="btn-outline" data-action="desconectar-whatsapp">Desconectar</button>
-      ` : `
-        <div class="field">
-          <label>Provedor</label>
-          <select id="wa-provedor">
-            <option value="meta" ${whatsappProvedorEscolhido==='meta'?'selected':''}>Meta (API oficial direta)</option>
-            <option value="ycloud" ${whatsappProvedorEscolhido==='ycloud'?'selected':''}>YCloud</option>
-            <option value="twilio" ${whatsappProvedorEscolhido==='twilio'?'selected':''}>Twilio</option>
-          </select>
-        </div>
-        ${whatsappProvedorEscolhido==='twilio' ? `
-        <div class="field">
-          <label>Número do WhatsApp na Twilio</label>
-          <input type="text" id="wa-tw-numero" placeholder="Ex: 5515988053447 (com DDI e DDD). No sandbox: 14155238886" />
-        </div>
-        <div class="field">
-          <label>Account SID</label>
-          <input type="text" id="wa-tw-sid" placeholder="Começa com AC… (painel principal da Twilio)" />
-        </div>
-        <div class="field">
-          <label>Auth Token</label>
-          <input type="password" id="wa-tw-token" placeholder="Painel principal da Twilio → Auth Token" />
-        </div>
-        <p class="settings-page-note">Depois de conectar, o painel mostra o endereço do webhook pra você colar na Twilio. O mesmo Auth Token é usado pra conferir a assinatura dos webhooks.</p>
-        ` : whatsappProvedorEscolhido==='ycloud' ? `
-        <div class="field">
-          <label>Número do WhatsApp conectado na YCloud</label>
-          <input type="text" id="wa-yc-numero" placeholder="Ex: 5515988053447 (com DDI e DDD)" />
-        </div>
-        <div class="field">
-          <label>API Key da YCloud</label>
-          <input type="password" id="wa-yc-apikey" placeholder="Developers → API Keys" />
-        </div>
-        <div class="field">
-          <label>Secret do webhook (whsec_…)</label>
-          <input type="password" id="wa-yc-secret" placeholder="Mostrado pela YCloud ao criar o webhook" />
-        </div>
-        <p class="settings-page-note">Depois de conectar, o painel mostra o endereço do webhook pra você colar na YCloud. Pode deixar o secret em branco agora: a YCloud só mostra o secret depois de criar o endpoint, e você cola ele aqui depois de conectar.</p>
-        ` : `
-        <div class="field">
-          <label>Phone Number ID</label>
-          <input type="text" id="wa-phone-id" placeholder="Ex: 109xxxxxxxxxxxx" />
-        </div>
-        <div class="field">
-          <label>Access Token</label>
-          <input type="password" id="wa-token" placeholder="Token permanente gerado no Meta" />
-        </div>
-        <div class="field">
-          <label>WABA ID (opcional)</label>
-          <input type="text" id="wa-waba-id" placeholder="ID da conta comercial do WhatsApp" />
-        </div>`}
-        ${whatsappConfigMsg ? `<p class="settings-page-msg ${whatsappConfigMsg.tipo}">${esc(whatsappConfigMsg.texto)}</p>` : ''}
-        <button class="btn-primary" data-action="salvar-whatsapp-config" ${whatsappSalvando?'disabled':''}>${whatsappSalvando?'Salvando…':'Conectar'}</button>
-      `}
-      <p class="settings-page-note">${whatsappProvedorEscolhido==='twilio' ? 'Requer conta na Twilio com um remetente de WhatsApp. Passo a passo no README.' : whatsappProvedorEscolhido==='ycloud' ? 'Requer conta na YCloud com um número de WhatsApp conectado. Passo a passo no README.' : 'Requer conta comercial no Meta com o produto WhatsApp ativado. Passo a passo completo no README.'}</p>
-    </div>
-
-    <div class="settings-page-section">
-      <h3>Menu de triagem (primeiro contato)</h3>
-      <p class="settings-page-note">Quando alguém escreve pela primeira vez, manda esse menu automaticamente e move o lead pra coluna certa conforme a resposta (digitando o número da opção).</p>
-      <div class="field">
-        <label>Mensagem inicial</label>
-        <textarea id="mt-mensagem" rows="3" placeholder="Ex: Oi! Sobre o que você quer falar?&#10;1 - Orçamento&#10;2 - Já sou cliente&#10;3 - Outro assunto">${esc(menuTriagem.mensagemInicial)}</textarea>
-      </div>
-      <div class="mt-opcoes-lista">
-        ${menuTriagem.opcoes.map((op, idx)=>renderMenuTriagemOpcao(op, idx)).join('')}
-      </div>
-      <button type="button" class="btn-outline" id="mt-add-opcao">+ Adicionar opção</button>
-
-      <div class="settings-sep-line"></div>
-
-      <div class="settings-page-row">
-        <span>Ativar menu de triagem</span>
-        <span class="switch ${menuTriagem.ativo?'on':''}" data-action="toggle-menu-triagem"><span class="switch-knob"></span></span>
-      </div>
-      ${menuTriagem.ativo ? `<p class="settings-page-msg erro">⚠️ O menu é enviado automaticamente pra qualquer contato novo, sem revisão sua.</p>` : ''}
-      ${menuTriagemMsg ? `<p class="settings-page-msg ${menuTriagemMsg.tipo}">${esc(menuTriagemMsg.texto)}</p>` : ''}
-      <button class="btn-primary" id="mt-salvar" ${menuTriagemSalvando?'disabled':''}>${menuTriagemSalvando?'Salvando…':'Salvar menu'}</button>
-    </div>
-
-    <div class="settings-page-section">
-      <h3>Templates de mensagem</h3>
-      <p class="settings-page-note">Crie modelos e envie pra aprovação da Meta. "Sincronizar" atualiza o status de cada um (aprovado, em análise ou rejeitado).</p>
-      <div class="settings-btn-row">
-        <button class="btn-outline" data-action="sincronizar-templates" ${templatesSincronizando?'disabled':''}>${templatesSincronizando?'Sincronizando…':'Sincronizar da Meta'}</button>
-        <button class="btn-primary" data-action="open-new-template">+ Novo template</button>
-      </div>
-      ${templatesMsg ? `<p class="settings-page-msg ${templatesMsg.tipo}">${esc(templatesMsg.texto)}</p>` : ''}
-      ${!templatesCarregados ? `<p class="settings-page-note">Carregando…</p>` : (templatesList.length ? `
-        <div class="templates-list">
-          ${templatesList.map(t=>`
-            <div class="template-item">
-              <span class="template-item-nome">${esc(t.nome)}</span>
-              <span class="template-item-status template-status-${(t.status||'').toLowerCase()}">${statusTemplateLabel(t.status)}</span>
-            </div>
-          `).join('')}
-        </div>
-      ` : `<p class="dash-empty">Nenhum template ainda. Crie o primeiro pra começar.</p>`)}
-    </div>
-  `;
-}
 
 function renderConfigGoogleAgenda(){
   return `
@@ -6374,7 +5480,6 @@ function renderConfigGoogleAgenda(){
           ? `<button class="btn-primary" data-action="connect-calendar">Conectar Google Agenda</button>`
           : `<p class="settings-page-note">Essa integração não está configurada neste servidor — use o link de agenda abaixo como alternativa (funciona com Google, Apple, Outlook e outros).</p>`)
       }
-      <p class="settings-page-note">O botão do WhatsApp de abrir conversa já funciona em todos os clientes com telefone cadastrado, sem precisar conectar nada.</p>
     </div>
     <div class="settings-page-section">
       <h3>Agenda por link (.ics)</h3>
@@ -6394,37 +5499,6 @@ function renderConfigGoogleAgenda(){
   `;
 }
 
-function renderConfigInstagram(){
-  return `
-    <div class="settings-page-section">
-      <h3>Instagram (captação de leads)</h3>
-      <div class="settings-page-row">
-        <span>Status</span>
-        <span>${instagramConnected ? '✓ Conectado' : 'Não conectado'}</span>
-      </div>
-      ${instagramConnected ? `
-        <p class="settings-page-note">Formulário de anúncio preenchido = lead novo automático. Mensagens diretas (DM) também chegam direto na aba Conversas, junto com as do WhatsApp.</p>
-        <button class="btn-outline" data-action="desconectar-instagram">Desconectar</button>
-      ` : `
-        <div class="field">
-          <label>Page ID</label>
-          <input type="text" id="ig-page-id" placeholder="ID da sua Página do Facebook" />
-        </div>
-        <div class="field">
-          <label>Access Token da página</label>
-          <input type="password" id="ig-page-token" placeholder="Token com permissão leads_retrieval e instagram_manage_messages" />
-        </div>
-        <div class="field">
-          <label>ID da conta comercial do Instagram (opcional, pra receber DMs)</label>
-          <input type="text" id="ig-business-id" placeholder="ID da conta profissional do Instagram vinculada" />
-        </div>
-        ${instagramConfigMsg ? `<p class="settings-page-msg ${instagramConfigMsg.tipo}">${esc(instagramConfigMsg.texto)}</p>` : ''}
-        <button class="btn-primary" data-action="salvar-instagram-config" ${instagramSalvando?'disabled':''}>${instagramSalvando?'Salvando…':'Conectar'}</button>
-      `}
-      <p class="settings-page-note">Requer o produto Marketing API no mesmo App do Meta usado no WhatsApp, com sua Página (e Instagram profissional vinculado) conectados. Passo a passo completo no README.</p>
-    </div>
-  `;
-}
 
 function renderConfigWebhooks(){
   return `
@@ -6661,7 +5735,7 @@ function renderConfigNotificacoes(){
     corpo = `<p class="settings-page-note">As notificações estão bloqueadas para este site. Libere nas configurações do navegador (cadeado ao lado do endereço) e volte aqui.</p>`;
   } else {
     corpo = `
-      <p class="settings-page-note">Avisa no celular ou computador quando chegar mensagem de cliente (WhatsApp/Instagram) e na hora das suas tarefas, mesmo com o app fechado. A ativação vale só para este aparelho.</p>
+      <p class="settings-page-note">Avisa no celular ou computador na hora das suas tarefas, mesmo com o app fechado. A ativação vale só para este aparelho.</p>
       <p class="settings-page-note"><strong>Situação:</strong> ${pushEstado.inscrito ? 'ativadas neste aparelho ✅' : 'desativadas neste aparelho'}</p>
       ${pushEstado.msg ? `<p class="settings-page-msg ${pushEstado.msg.tipo}">${esc(pushEstado.msg.texto)}</p>` : ''}
       ${pushEstado.inscrito
@@ -6757,9 +5831,7 @@ function renderConfiguracoesPage(){
     'seguranca': renderConfigSeguranca,
     'aparencia': renderConfigAparencia,
     'notificacoes': renderConfigNotificacoes,
-    'whatsapp': renderConfigWhatsapp,
     'google-agenda': renderConfigGoogleAgenda,
-    'instagram': renderConfigInstagram,
     'webhooks': renderConfigWebhooks,
     'agendamento': renderConfigAgendamento,
     'campos': renderConfigCampos,
@@ -6841,63 +5913,6 @@ function bindAppEvents(){
   if(sairDashboardBtn) sairDashboardBtn.addEventListener('click', sairDashboardDeMembro);
   const abrirBackupModalBtn = app.querySelector('[data-action="abrir-backup-modal"]');
   if(abrirBackupModalBtn) abrirBackupModalBtn.addEventListener('click', abrirBackupModal);
-
-  /* -- Conversas (3 colunas) -- */
-  const conversasBuscaInput = document.getElementById('conversas-busca-input');
-  if(conversasBuscaInput) conversasBuscaInput.addEventListener('input', (e)=>{ conversaBusca = e.target.value; renderApp(); });
-  app.querySelectorAll('[data-action="abrir-overlay-conversas"]').forEach(btn=>{
-    btn.addEventListener('click', ()=>{
-      conversasOverlay = btn.dataset.overlay;
-      if(conversasOverlay==='automacoes' && !automacoesLoaded) loadAutomacoes();
-      if(conversasOverlay==='agendamentos' && !agendamentosLoaded) loadAgendamentos();
-      renderApp();
-    });
-  });
-  app.querySelectorAll('[data-action="fechar-overlay-conversas"]').forEach(el=>{
-    el.addEventListener('click', ()=>{ conversasOverlay = null; renderApp(); });
-  });
-  app.querySelectorAll('[data-action="selecionar-conversa"]').forEach(el=>{
-    el.addEventListener('click', ()=> selecionarConversa(el.dataset.cardId));
-  });
-  const conversasNovaMsgInput = document.getElementById('conversas-nova-msg');
-  if(conversasNovaMsgInput){
-    conversasNovaMsgInput.addEventListener('input', (e)=> conversaTexto = e.target.value);
-    conversasNovaMsgInput.addEventListener('keydown', (e)=>{ if(e.key==='Enter') enviarMensagemConversa(); });
-  }
-  const conversasEnviarBtn = document.getElementById('conversas-enviar-btn');
-  if(conversasEnviarBtn) conversasEnviarBtn.addEventListener('click', enviarMensagemConversa);
-  const conversasChatLista = document.getElementById('conversas-chat-lista');
-  if(conversasChatLista) conversasChatLista.scrollTop = conversasChatLista.scrollHeight;
-
-  const cvDetNome = document.getElementById('cv-det-nome');
-  if(cvDetNome) cvDetNome.addEventListener('blur', (e)=> salvarCampoClienteConversa('cliente', e.target.value));
-  const cvDetTelefone = document.getElementById('cv-det-telefone');
-  if(cvDetTelefone) cvDetTelefone.addEventListener('blur', (e)=> salvarCampoClienteConversa('telefone', e.target.value));
-  const cvDetValor = document.getElementById('cv-det-valor');
-  if(cvDetValor){
-    cvDetValor.addEventListener('input', (e)=>{
-      const { texto } = maskInteiro(e.target.value);
-      e.target.value = texto;
-    });
-    cvDetValor.addEventListener('blur', (e)=>{
-      const { numero } = maskInteiro(e.target.value);
-      salvarCampoClienteConversa('valor', numero);
-    });
-  }
-  const cvDetTemp = document.getElementById('cv-det-temp');
-  if(cvDetTemp) cvDetTemp.addEventListener('change', (e)=> salvarCampoClienteConversa('temperatura', e.target.value));
-
-  app.querySelectorAll('[data-action="executar-automacao-manual"]').forEach(btn=>{
-    btn.addEventListener('click', ()=> executarAutomacaoManual(btn.dataset.automacaoId));
-  });
-  app.querySelectorAll('[data-action="editar-automacao-conversa"]').forEach(btn=>{
-    btn.addEventListener('click', ()=> openEditAutomacao(btn.dataset.automacaoId));
-  });
-  const novaAutomacaoConversaBtn = app.querySelector('[data-action="open-new-automacao-conversa"]');
-  if(novaAutomacaoConversaBtn) novaAutomacaoConversaBtn.addEventListener('click', ()=>{
-    const card = board.cards.find(c=>c.id===conversaSelecionadaCardId);
-    openNewAutomacao(card ? card.columnId : null);
-  });
 
   app.querySelectorAll('[data-action="set-accent"]').forEach(btn=>{
     btn.addEventListener('click', ()=>{
@@ -7068,44 +6083,6 @@ function bindAppEvents(){
     cel.addEventListener('touchcancel', ()=>{ clearTimeout(longPressTimer); cel.classList.remove('agenda-cell-pressionando'); });
   });
 
-  /* -- Disparos -- */
-  const disparoColunaSelect = document.getElementById('disparo-coluna');
-  if(disparoColunaSelect) disparoColunaSelect.addEventListener('change', (e)=>{ disparoFiltroColuna = e.target.value; renderApp(); });
-  const disparoTempSelect = document.getElementById('disparo-temp');
-  if(disparoTempSelect) disparoTempSelect.addEventListener('change', (e)=>{ disparoFiltroTemp = e.target.value; renderApp(); });
-  app.querySelectorAll('.disparo-lead-checkbox').forEach(cb=>{
-    cb.addEventListener('change', ()=>{
-      if(cb.checked) disparoSelecionados.add(cb.dataset.cardId);
-      else disparoSelecionados.delete(cb.dataset.cardId);
-      renderApp();
-    });
-  });
-  const disparoTextoEl = document.getElementById('disparo-texto');
-  if(disparoTextoEl) disparoTextoEl.addEventListener('input', (e)=> disparoTexto = e.target.value);
-  const toggleDisparoTemplateEl = app.querySelector('[data-action="toggle-disparo-template"]');
-  if(toggleDisparoTemplateEl) toggleDisparoTemplateEl.addEventListener('click', ()=>{ disparoUsarTemplate = !disparoUsarTemplate; renderApp(); });
-  const disparoTemplateNomeEl = document.getElementById('disparo-template-nome');
-  if(disparoTemplateNomeEl) disparoTemplateNomeEl.addEventListener('input', (e)=> disparoTemplateNome = e.target.value);
-  const disparoTemplateIdiomaEl = document.getElementById('disparo-template-idioma');
-  if(disparoTemplateIdiomaEl) disparoTemplateIdiomaEl.addEventListener('input', (e)=> disparoTemplateIdioma = e.target.value);
-  const disparoTemplateVariaveisEl = document.getElementById('disparo-template-variaveis');
-  if(disparoTemplateVariaveisEl) disparoTemplateVariaveisEl.addEventListener('input', (e)=> disparoTemplateVariaveis = e.target.value);
-  const carregarTemplatesBtn = app.querySelector('[data-action="carregar-templates"]');
-  if(carregarTemplatesBtn) carregarTemplatesBtn.addEventListener('click', carregarTemplatesDisponiveis);
-  const disparoSelTodosBtn = app.querySelector('[data-action="disparo-selecionar-todos"]');
-  if(disparoSelTodosBtn) disparoSelTodosBtn.addEventListener('click', ()=>{
-    board.cards.forEach(c=>{
-      const bateColuna = !disparoFiltroColuna || c.columnId===disparoFiltroColuna;
-      const bateTemp = !disparoFiltroTemp || c.temperatura===disparoFiltroTemp;
-      if(bateColuna && bateTemp && c.telefone) disparoSelecionados.add(c.id);
-    });
-    renderApp();
-  });
-  const disparoLimparBtn = app.querySelector('[data-action="disparo-limpar-selecao"]');
-  if(disparoLimparBtn) disparoLimparBtn.addEventListener('click', ()=>{ disparoSelecionados.clear(); renderApp(); });
-  const enviarDisparoBtn = app.querySelector('[data-action="enviar-disparo"]');
-  if(enviarDisparoBtn) enviarDisparoBtn.addEventListener('click', enviarDisparo);
-
   /* -- Automações -- */
   const openNewAutomacaoBtn = app.querySelector('[data-action="open-new-automacao"]');
   if(openNewAutomacaoBtn) openNewAutomacaoBtn.addEventListener('click', ()=> openNewAutomacao());
@@ -7135,16 +6112,7 @@ function bindAppEvents(){
     el.addEventListener('click', ()=>{
       const id = el.dataset.fluxoId;
       const f = fluxos.find(x=>x.id===id);
-      const temMensagem = f && (f.etapas||[]).some(e=>e.tipo==='mensagem');
-      if(f && !f.ativo && temMensagem){
-        showConfirm({
-          message: `Ativar o fluxo "${f.nome}"? Ele tem etapa(s) de envio de WhatsApp automático, sem revisão sua antes de mandar.`,
-          confirmLabel: 'Ativar mesmo assim',
-          onConfirm: ()=>{ toggleFluxoAtivo(id); closeConfirm(); },
-        });
-      } else {
-        toggleFluxoAtivo(id);
-      }
+      if(f) toggleFluxoAtivo(id);
     });
   });
   app.querySelectorAll('[data-action="delete-fluxo"]').forEach(btn=>{
@@ -7181,29 +6149,6 @@ function bindAppEvents(){
         message: 'Descartar esse possível lead? Ele não vira cliente.',
         confirmLabel: 'Descartar',
         onConfirm: ()=>{ descartarPossivelLead(id); closeConfirm(); },
-      });
-    });
-  });
-
-  /* -- Agendamentos -- */
-  const openNewAgendamentoBtn = app.querySelector('[data-action="open-new-agendamento"]');
-  if(openNewAgendamentoBtn) openNewAgendamentoBtn.addEventListener('click', openNewAgendamento);
-  app.querySelectorAll('[data-action="cancelar-agendamento"]').forEach(btn=>{
-    btn.addEventListener('click', ()=>{
-      const id = btn.dataset.agendamentoId;
-      showConfirm({
-        message: 'Cancelar essa mensagem agendada?',
-        confirmLabel: 'Cancelar mensagem',
-        onConfirm: ()=>{ cancelarAgendamento(id); closeConfirm(); },
-      });
-    });
-  });
-  app.querySelectorAll('[data-action="excluir-agendamento"]').forEach(btn=>{
-    btn.addEventListener('click', ()=>{
-      const id = btn.dataset.agendamentoId;
-      showConfirm({
-        message: 'Excluir esse agendamento permanentemente? Não dá pra desfazer.',
-        onConfirm: ()=>{ excluirAgendamento(id); closeConfirm(); },
       });
     });
   });
@@ -7413,67 +6358,6 @@ function bindAppEvents(){
     });
   });
 
-  const salvarWaBtn = app.querySelector('[data-action="salvar-whatsapp-config"]');
-  if(salvarWaBtn) salvarWaBtn.addEventListener('click', salvarWhatsappConfig);
-  const waProvEl = document.getElementById('wa-provedor');
-  if(waProvEl) waProvEl.addEventListener('change', ()=>{ whatsappProvedorEscolhido = (waProvEl.value==='ycloud' || waProvEl.value==='twilio') ? waProvEl.value : 'meta'; whatsappConfigMsg = null; renderApp(); });
-  const abrirYcSecretBtn = app.querySelector('[data-action="abrir-ycloud-secret"]');
-  if(abrirYcSecretBtn) abrirYcSecretBtn.addEventListener('click', abrirYcloudSecretModal);
-  const desconectarWaBtn = app.querySelector('[data-action="desconectar-whatsapp"]');
-  if(desconectarWaBtn) desconectarWaBtn.addEventListener('click', desconectarWhatsapp);
-
-  const toggleAgenteIaEl = app.querySelector('[data-action="toggle-agente-ia"]');
-  if(toggleAgenteIaEl) toggleAgenteIaEl.addEventListener('click', ()=>{
-    if(!agenteIaAtivo){
-      showConfirm({
-        message: 'Ativar o agente de IA? Ele vai responder mensagens de WhatsApp automaticamente, sem você revisar antes de enviar. Sempre que você responder um cliente manualmente, o agente fica em silêncio por 30 minutos naquela conversa. Pode desativar a qualquer momento.',
-        confirmLabel: 'Ativar mesmo assim',
-        onConfirm: ()=>{ definirAgenteIa(true); closeConfirm(); },
-      });
-    } else {
-      definirAgenteIa(false);
-    }
-  });
-  const toggleIaProativaEl = app.querySelector('[data-action="toggle-ia-proativa"]');
-  if(toggleIaProativaEl) toggleIaProativaEl.addEventListener('click', ()=> definirIaProativa(!iaProativaAtiva));
-
-  const mtMensagemEl = document.getElementById('mt-mensagem');
-  if(mtMensagemEl) mtMensagemEl.addEventListener('input', (e)=> menuTriagem.mensagemInicial = e.target.value);
-  const mtAddOpcaoBtn = document.getElementById('mt-add-opcao');
-  if(mtAddOpcaoBtn) mtAddOpcaoBtn.addEventListener('click', ()=>{
-    menuTriagem.opcoes.push({ numero: String(menuTriagem.opcoes.length+1), colunaDestinoId: (board.columns[0]||{}).id || '', respostaConfirmacao:'' });
-    renderApp();
-  });
-  document.querySelectorAll('.mt-opcao-remover').forEach(btn=>{
-    btn.addEventListener('click', ()=>{
-      menuTriagem.opcoes.splice(parseInt(btn.dataset.idx,10),1);
-      renderApp();
-    });
-  });
-  document.querySelectorAll('.mt-opcao-numero').forEach(el=>{
-    el.addEventListener('input', (e)=>{ menuTriagem.opcoes[parseInt(el.dataset.idx,10)].numero = e.target.value; });
-  });
-  document.querySelectorAll('.mt-opcao-coluna').forEach(el=>{
-    el.addEventListener('change', (e)=>{ menuTriagem.opcoes[parseInt(el.dataset.idx,10)].colunaDestinoId = e.target.value; });
-  });
-  document.querySelectorAll('.mt-opcao-confirmacao').forEach(el=>{
-    el.addEventListener('input', (e)=>{ menuTriagem.opcoes[parseInt(el.dataset.idx,10)].respostaConfirmacao = e.target.value; });
-  });
-  const toggleMenuTriagemEl = app.querySelector('[data-action="toggle-menu-triagem"]');
-  if(toggleMenuTriagemEl) toggleMenuTriagemEl.addEventListener('click', ()=>{ menuTriagem.ativo = !menuTriagem.ativo; renderApp(); });
-  const salvarMenuTriagemBtn = document.getElementById('mt-salvar');
-  if(salvarMenuTriagemBtn) salvarMenuTriagemBtn.addEventListener('click', ()=>{
-    if(menuTriagem.ativo){
-      showConfirm({
-        message: 'Salvar e manter o menu de triagem ativo? Ele vai responder automaticamente qualquer contato novo no WhatsApp, sem revisão sua.',
-        confirmLabel: 'Manter ativo',
-        onConfirm: ()=>{ salvarMenuTriagem(); closeConfirm(); },
-      });
-    } else {
-      salvarMenuTriagem();
-    }
-  });
-
   const twofaIniciarBtn = document.getElementById('twofa-iniciar');
   if(twofaIniciarBtn) twofaIniciarBtn.addEventListener('click', iniciar2FA);
   const twofaCancelarSetupBtn = document.getElementById('twofa-cancelar-setup');
@@ -7487,15 +6371,6 @@ function bindAppEvents(){
   const twofaConfirmarDesativarBtn = document.getElementById('twofa-confirmar-desativar');
   if(twofaConfirmarDesativarBtn) twofaConfirmarDesativarBtn.addEventListener('click', desativar2FA);
   if(twoFactorSetup) renderizarQrCode2FA();
-
-  const salvarIgBtn = app.querySelector('[data-action="salvar-instagram-config"]');
-  if(salvarIgBtn) salvarIgBtn.addEventListener('click', salvarInstagramConfig);
-  const desconectarIgBtn = app.querySelector('[data-action="desconectar-instagram"]');
-  if(desconectarIgBtn) desconectarIgBtn.addEventListener('click', desconectarInstagram);
-  const sincronizarTemplatesBtn = app.querySelector('[data-action="sincronizar-templates"]');
-  if(sincronizarTemplatesBtn) sincronizarTemplatesBtn.addEventListener('click', sincronizarTemplates);
-  const openNewTemplateBtn = app.querySelector('[data-action="open-new-template"]');
-  if(openNewTemplateBtn) openNewTemplateBtn.addEventListener('click', openNewTemplateModal);
 
   /* -- Leads -- */
   const openNewLeadBtn = app.querySelector('[data-action="open-new-lead"]');
@@ -8555,13 +7430,11 @@ function renderModal(){
                 ${WA_ICON} Abrir WhatsApp
               </button>
               ${!f.__isNew && integracoesConfig.assistenteIA ? `<button type="button" class="ai-btn" id="f-ai-mensagem">${ICON_SPARKLE} Sugerir mensagem</button>` : ''}
-              ${!f.__isNew && whatsappConnected ? `<button type="button" class="ai-btn" id="f-ver-conversa">${WA_ICON} Ver conversa</button>` : ''}
               ${!f.__isNew ? `<button type="button" class="ai-btn" id="f-ver-historico">🕘 Ver histórico</button>` : ''}
               ${!f.__isNew ? `<button type="button" class="ai-btn" id="f-gerar-proposta">📄 Gerar proposta</button>` : ''}
               ${!f.__isNew ? `<button type="button" class="ai-btn" id="f-toggle-arquivar">${f.arquivado?'📦 Desarquivar':'📦 Arquivar'}</button>` : ''}
             </div>
             <div class="ai-result" id="f-ai-mensagem-result" style="display:none;"></div>
-            <div class="wa-conversa" id="f-wa-conversa" style="display:none;"></div>
             <div class="wa-conversa" id="f-historico" style="display:none;"></div>
           </div>
           <div class="field">
@@ -8579,20 +7452,6 @@ function renderModal(){
           ${!f.__isNew ? `
             <div class="field">
               <button type="button" class="btn-outline" id="f-abrir-extras" style="width:100%;">⋯ Extras (etiquetas, anexos, tarefas, histórico)</button>
-            </div>
-          ` : ''}
-          ${!f.__isNew && f.sugestaoIA && f.sugestaoIA.texto ? `
-            <div class="field">
-              <div class="ai-result" style="display:block;">
-                <p class="settings-page-subtitle">✨ Sugestão da IA proativa</p>
-                <p>${esc(f.sugestaoIA.texto)}</p>
-                ${f.sugestaoIA.tarefaTitulo ? `<p class="settings-page-note">Tarefa sugerida: <b>${esc(f.sugestaoIA.tarefaTitulo)}</b> (${f.sugestaoIA.tarefaDias||3} dia(s))</p>` : ''}
-                <div class="ai-result-actions">
-                  <button type="button" class="btn-outline" id="f-sugestao-copiar">Copiar mensagem</button>
-                  ${f.sugestaoIA.tarefaTitulo ? `<button type="button" class="btn-outline" id="f-sugestao-criar-tarefa">Criar tarefa sugerida</button>` : ''}
-                  <button type="button" class="btn-outline" id="f-sugestao-descartar">Descartar</button>
-                </div>
-              </div>
             </div>
           ` : ''}
         </div>
@@ -8636,42 +7495,6 @@ function renderModal(){
   if(aiMensagemBtn) aiMensagemBtn.addEventListener('click', sugerirMensagemIA);
   const aiTarefaBtn = document.getElementById('f-ai-tarefa');
   if(aiTarefaBtn) aiTarefaBtn.addEventListener('click', sugerirTarefaIA);
-  const sugestaoCopiarBtn = document.getElementById('f-sugestao-copiar');
-  if(sugestaoCopiarBtn) sugestaoCopiarBtn.addEventListener('click', ()=>{
-    navigator.clipboard.writeText(modalForm.sugestaoIA.texto).catch(()=>{});
-  });
-  const sugestaoCriarTarefaBtn = document.getElementById('f-sugestao-criar-tarefa');
-  if(sugestaoCriarTarefaBtn) sugestaoCriarTarefaBtn.addEventListener('click', async ()=>{
-    sugestaoCriarTarefaBtn.disabled = true;
-    try{
-      const venc = new Date();
-      venc.setDate(venc.getDate() + (modalForm.sugestaoIA.tarefaDias||3));
-      const nova = await apiRequest('POST', '/tasks', {
-        titulo: modalForm.sugestaoIA.tarefaTitulo, vencimento: venc.toISOString().slice(0,10),
-        prioridade:'media', leadId: modalForm.id, descricao:'',
-      });
-      tasks.push(nova);
-      sugestaoCriarTarefaBtn.textContent = '✓ Tarefa criada';
-    }catch(e){
-      errorMsg = 'Não foi possível criar a tarefa.';
-      renderApp();
-    }
-  });
-  const sugestaoDescartarBtn = document.getElementById('f-sugestao-descartar');
-  if(sugestaoDescartarBtn) sugestaoDescartarBtn.addEventListener('click', async ()=>{
-    try{
-      const atualizado = await apiRequest('DELETE', `/cards/${modalForm.id}/sugestao-ia`);
-      const idx = board.cards.findIndex(c=>c.id===modalForm.id);
-      if(idx>-1) board.cards[idx] = atualizado;
-      modalForm.sugestaoIA = atualizado.sugestaoIA;
-      renderModal();
-    }catch(e){
-      errorMsg = 'Não foi possível descartar a sugestão.';
-      renderApp();
-    }
-  });
-  const verConversaBtn = document.getElementById('f-ver-conversa');
-  if(verConversaBtn) verConversaBtn.addEventListener('click', abrirConversaWhatsapp);
   const verHistoricoBtn = document.getElementById('f-ver-historico');
   if(verHistoricoBtn) verHistoricoBtn.addEventListener('click', abrirHistoricoCard);
   const gerarPropostaBtn = document.getElementById('f-gerar-proposta');
@@ -9190,224 +8013,7 @@ function renderTaskModal(){
   }
 }
 
-/* ---------- página: Conversas ---------- */
-function renderConversasPage(){
-  if(!conversasLoaded){
-    return `<div class="page-head"><div><h1>Conversas</h1><p>Carregando…</p></div></div>`;
-  }
-  if(!whatsappConnected){
-    return `
-      <div class="page-head"><div><h1>Conversas</h1><p>Nenhuma conversa ainda</p></div></div>
-      <div class="tasks-empty">Conecte o WhatsApp Business em Configurações → Integrações para ver as conversas aqui.</div>
-    `;
-  }
-  const busca = conversaBusca.trim().toLowerCase();
-  const listaFiltrada = busca ? conversas.filter(cv=> (cv.card.cliente||'').toLowerCase().includes(busca) || (cv.card.telefone||'').includes(busca)) : conversas;
-  const card = conversaSelecionadaCardId ? board.cards.find(c=>c.id===conversaSelecionadaCardId) : null;
-  const automacoesRelevantes = card ? automacoes.filter(a=>a.colunaGatilhoId===card.columnId && a.ativa!==false) : [];
 
-  return `
-    <div class="page-head">
-      <div>
-        <h1>Conversas</h1>
-        <p>${conversas.length} conversa${conversas.length===1?'':'s'} no WhatsApp</p>
-      </div>
-      <div class="page-head-actions">
-        <button class="btn-outline" data-action="abrir-overlay-conversas" data-overlay="automacoes">⚡ Automações</button>
-        <button class="btn-outline" data-action="abrir-overlay-conversas" data-overlay="disparos">📣 Disparos</button>
-        <button class="btn-outline" data-action="abrir-overlay-conversas" data-overlay="agendamentos">🕐 Agendar Mensagem</button>
-      </div>
-    </div>
-    <div class="conversas-3col">
-      <div class="conversas-col-lista">
-        <input type="text" class="conversas-busca" id="conversas-busca-input" placeholder="Buscar por nome ou telefone…" value="${esc(conversaBusca)}" />
-        <div class="conversas-lista-scroll">
-          ${listaFiltrada.length ? listaFiltrada.map(cv=>`
-            <div class="conversa-item ${conversaSelecionadaCardId===cv.card.id?'conversa-item-ativa':''}" data-action="selecionar-conversa" data-card-id="${cv.card.id}">
-              <div class="conversa-item-main">
-                <span class="conversa-item-nome">${cv.canal==='instagram'?'📷':'💬'} ${esc(cv.card.cliente) || 'Sem nome'}</span>
-                <span class="conversa-item-preview">${cv.direcaoUltima==='out' ? 'Você: ' : ''}${esc((cv.ultimaMensagem||'').slice(0,60))}</span>
-              </div>
-              <span class="conversa-item-hora">${formatDateHora(cv.ultimaMensagemEm)}</span>
-            </div>
-          `).join('') : `<p class="dash-empty" style="padding:16px;">Nenhuma conversa encontrada.</p>`}
-        </div>
-      </div>
-
-      <div class="conversas-col-chat">
-        ${!card ? `
-          <div class="conversas-vazio">Escolha uma conversa à esquerda pra começar.</div>
-        ` : `
-          <div class="conversas-chat-head">
-            <span class="conversa-item-nome">${esc(card.cliente)||'Sem nome'}</span>
-            <span class="settings-page-note">${esc(card.telefone||'')}</span>
-          </div>
-          ${!conversaMensagensLoaded ? `<p class="settings-page-note" style="padding:16px;">Carregando conversa…</p>` : `
-            <div class="wa-conversa-lista conversas-chat-lista" id="conversas-chat-lista">
-              ${conversaMensagens.length ? conversaMensagens.map(m=>`
-                <div class="wa-msg wa-msg-${m.direction}">
-                  ${renderConteudoMensagem(m)}
-                  <span>${new Date(m.timestamp).toLocaleString('pt-BR')} ${m.direction==='out' ? statusMensagemIcone(m.status) : ''}</span>
-                </div>
-              `).join('') : '<p class="settings-page-note">Nenhuma mensagem ainda.</p>'}
-            </div>
-          `}
-          <div class="wa-conversa-input-row">
-            <input type="text" id="conversas-nova-msg" placeholder="Digite uma mensagem..." value="${esc(conversaTexto)}" />
-            <button type="button" class="btn-primary" id="conversas-enviar-btn" ${conversaEnviando?'disabled':''}>Enviar</button>
-          </div>
-        `}
-      </div>
-
-      <div class="conversas-col-detalhes">
-        ${!card ? `<div class="conversas-vazio">—</div>` : `
-          <div class="settings-page-subtitle">Detalhes do cliente</div>
-          <div class="field">
-            <label>Nome</label>
-            <input type="text" id="cv-det-nome" value="${esc(card.cliente)}" />
-          </div>
-          <div class="field">
-            <label>Telefone</label>
-            <input type="text" id="cv-det-telefone" value="${esc(card.telefone||'')}" />
-          </div>
-          <div class="field">
-            <label>Valor</label>
-            <div class="money-wrap">
-              <span>R$</span>
-              <input type="text" inputmode="numeric" id="cv-det-valor" value="${card.valor ? Number(card.valor).toLocaleString('pt-BR') : ''}" />
-            </div>
-          </div>
-          <div class="field">
-            <label>Qualificação</label>
-            <select id="cv-det-temp">
-              <option value="quente" ${card.temperatura==='quente'?'selected':''}>🔥 Quente</option>
-              <option value="morno" ${card.temperatura==='morno'?'selected':''}>☀️ Morno</option>
-              <option value="frio" ${card.temperatura==='frio'?'selected':''}>❄️ Frio</option>
-            </select>
-          </div>
-          <button class="btn-outline" data-action="open-edit-card" data-card-id="${card.id}" style="width:100%; margin-top:4px;">Ver ficha completa</button>
-
-          <div class="settings-sep-line"></div>
-          <div class="settings-page-subtitle">Automações dessa etapa</div>
-          ${automacoesRelevantes.length ? automacoesRelevantes.map(a=>`
-            <div class="conversas-automacao-item">
-              <span>${esc(a.nome)}</span>
-              <div class="settings-btn-row">
-                <button class="btn-outline" data-action="executar-automacao-manual" data-automacao-id="${a.id}" title="Executar agora nesse cliente">▶</button>
-                <button class="icon-btn" data-action="editar-automacao-conversa" data-automacao-id="${a.id}" title="Editar">${ICON_EDIT}</button>
-              </div>
-            </div>
-          `).join('') : `<p class="settings-page-note">Nenhuma automação configurada pra coluna atual desse cliente.</p>`}
-          <button class="btn-outline" data-action="open-new-automacao-conversa" style="width:100%; margin-top:8px;">+ Nova automação</button>
-        `}
-      </div>
-    </div>
-    ${conversasOverlay ? `
-      <div class="conversas-overlay-backdrop" data-action="fechar-overlay-conversas">
-        <div class="conversas-overlay-painel" onclick="event.stopPropagation()">
-          <button class="icon-btn conversas-overlay-fechar" data-action="fechar-overlay-conversas" title="Fechar">✕</button>
-          ${conversasOverlay==='automacoes' ? renderAutomacoesPage() : ''}
-          ${conversasOverlay==='disparos' ? renderDisparosPage() : ''}
-          ${conversasOverlay==='agendamentos' ? renderAgendamentosPage() : ''}
-        </div>
-      </div>
-    ` : ''}
-  `;
-}
-
-/* ---------- página: Disparos ---------- */
-function renderDisparosPage(){
-  const filtrados = board.cards.filter(c=>{
-    if(disparoFiltroColuna && c.columnId !== disparoFiltroColuna) return false;
-    if(disparoFiltroTemp && c.temperatura !== disparoFiltroTemp) return false;
-    return !!c.telefone;
-  });
-  return `
-    <div class="page-head">
-      <div>
-        <h1>Disparos</h1>
-        <p>Envie a mesma mensagem para vários leads de uma vez</p>
-      </div>
-    </div>
-    ${!whatsappConnected ? `<div class="tasks-empty">Conecte o WhatsApp Business em Configurações → Integrações para usar os disparos.</div>` : `
-      <div class="settings-page-section" style="margin-bottom:20px;">
-        <h3>Filtrar leads</h3>
-        <div class="field-row">
-          <div class="field">
-            <label>Coluna</label>
-            <select id="disparo-coluna">
-              <option value="">Todas</option>
-              ${board.columns.map(c=>`<option value="${c.id}" ${disparoFiltroColuna===c.id?'selected':''}>${esc(c.nome)}</option>`).join('')}
-            </select>
-          </div>
-          <div class="field">
-            <label>Qualificação</label>
-            <select id="disparo-temp">
-              <option value="">Todas</option>
-              <option value="quente" ${disparoFiltroTemp==='quente'?'selected':''}>Quente</option>
-              <option value="morno" ${disparoFiltroTemp==='morno'?'selected':''}>Morno</option>
-              <option value="frio" ${disparoFiltroTemp==='frio'?'selected':''}>Frio</option>
-            </select>
-          </div>
-        </div>
-        <p class="settings-page-note">${filtrados.length} lead(s) com telefone encontrados. Marque quem vai receber:</p>
-        <div class="disparo-lista-leads">
-          ${filtrados.length ? filtrados.map(c=>`
-            <label class="disparo-lead-item">
-              <input type="checkbox" class="disparo-lead-checkbox" data-card-id="${c.id}" ${disparoSelecionados.has(c.id)?'checked':''} />
-              <span>${esc(c.cliente)} <span class="settings-page-note">${esc(c.telefone)}</span></span>
-            </label>
-          `).join('') : '<p class="dash-empty">Nenhum lead encontrado com esse filtro.</p>'}
-        </div>
-        <div class="settings-btn-row" style="margin-top:10px;">
-          <button class="btn-outline" data-action="disparo-selecionar-todos">Selecionar todos</button>
-          <button class="btn-outline" data-action="disparo-limpar-selecao">Limpar seleção</button>
-        </div>
-      </div>
-
-      <div class="settings-page-section">
-        <h3>Mensagem</h3>
-        <label class="settings-toggle-row">
-          <span>Usar modelo de mensagem (alcança leads frios)</span>
-          <span class="switch ${disparoUsarTemplate?'on':''}" data-action="toggle-disparo-template">
-            <span class="switch-knob"></span>
-          </span>
-        </label>
-        ${disparoUsarTemplate ? `
-          <div class="field-row">
-            <div class="field">
-              <label>Nome do modelo</label>
-              <input type="text" id="disparo-template-nome" value="${esc(disparoTemplateNome)}" placeholder="ex: boas_vindas" />
-            </div>
-            <div class="field">
-              <label>Idioma</label>
-              <input type="text" id="disparo-template-idioma" value="${esc(disparoTemplateIdioma)}" placeholder="pt_BR" />
-            </div>
-          </div>
-          <div class="field">
-            <label>Variáveis do modelo (opcional, separadas por vírgula, na ordem certa)</label>
-            <input type="text" id="disparo-template-variaveis" value="${esc(disparoTemplateVariaveis)}" placeholder="Ex: João, 15/08" />
-          </div>
-          <button class="btn-outline" data-action="carregar-templates">Carregar modelos aprovados</button>
-          ${disparoTemplatesDisponiveis.length ? `<p class="settings-page-note">Modelos encontrados: ${disparoTemplatesDisponiveis.map(t=>esc(t.nome)).join(', ')}</p>` : ''}
-        ` : `
-          <div class="field">
-            <textarea id="disparo-texto" rows="4" placeholder="Escreva a mensagem que será enviada...">${esc(disparoTexto)}</textarea>
-          </div>
-        `}
-        <p class="settings-page-note">⚠️ Texto livre só chega pra quem te escreveu nas últimas 24h — regra da própria Meta. Modelo de mensagem funciona pra qualquer lead, inclusive frio, mas precisa estar aprovado no Meta Business Manager antes.</p>
-        ${disparoResultado ? `<p class="settings-page-msg ${disparoResultado.falha ? 'erro' : 'ok'}">${disparoResultado.sucesso} enviada(s)${disparoResultado.falha ? `, ${disparoResultado.falha} falharam` : ''}.</p>` : ''}
-        ${disparoResultado && disparoResultado.detalhesFalha && disparoResultado.detalhesFalha.length ? `
-          <div class="settings-page-section" style="margin-top:0;">
-            <div class="settings-page-subtitle">Detalhes das falhas</div>
-            ${disparoResultado.detalhesFalha.map(d=>`<p class="settings-page-note">• ${esc(d.cliente||'')}: ${esc(d.erro||'')}</p>`).join('')}
-          </div>
-        ` : ''}
-        <button class="btn-primary" data-action="enviar-disparo" ${disparoEnviando?'disabled':''}>${disparoEnviando ? 'Enviando…' : `Enviar para ${disparoSelecionados.size} lead(s)`}</button>
-      </div>
-    `}
-  `;
-}
 
 /* ---------- página: Relatórios ---------- */
 function cardsParaRelatorio(){
@@ -9775,7 +8381,6 @@ function renderFluxosPage(){
       <div class="automacoes-list">
         ${fluxos.map(f=>{
           const coluna = board.columns.find(c=>c.id===f.colunaGatilhoId);
-          const temMensagem = (f.etapas||[]).some(e=>e.tipo==='mensagem');
           return `
             <div class="automacao-card ${f.ativo?'':'automacao-inativa'}">
               <div class="contrato-card-head">
@@ -9785,7 +8390,6 @@ function renderFluxosPage(){
                     Começa quando entra em <b>${esc(coluna?coluna.nome:'coluna removida')}</b> ·
                     ${(f.etapas||[]).length} etapa${(f.etapas||[]).length===1?'':'s'} ·
                     ${f.emAndamento||0} cliente${(f.emAndamento||0)===1?'':'s'} em andamento
-                    ${temMensagem ? ' · <span style="color:var(--danger)">envia WhatsApp</span>' : ''}
                   </p>
                 </div>
                 <div class="contrato-card-actions">
@@ -9802,48 +8406,6 @@ function renderFluxosPage(){
   `;
 }
 
-/* ---------- página: Agendamentos ---------- */
-function renderAgendamentosPage(){
-  if(!agendamentosLoaded){
-    return `<div class="page-head"><div><h1>Agendar Mensagem</h1><p>Carregando…</p></div></div>`;
-  }
-  return `
-    <div class="page-head">
-      <div>
-        <h1>Agendar Mensagem</h1>
-        <p>Tudo que está programado pra enviar, o que já saiu, e o que foi cancelado ou falhou</p>
-      </div>
-      <button class="btn-primary" data-action="open-new-agendamento">+ Nova mensagem</button>
-    </div>
-    <div class="metric-grid">
-      <div class="metric-card"><div class="metric-card-top"><span>A enviar</span></div><div class="metric-value">${agendamentosContagem.pendente||0}</div></div>
-      <div class="metric-card"><div class="metric-card-top"><span>Enviadas</span></div><div class="metric-value">${agendamentosContagem.enviada||0}</div></div>
-      <div class="metric-card"><div class="metric-card-top"><span>Canceladas</span></div><div class="metric-value">${agendamentosContagem.cancelada||0}</div></div>
-      <div class="metric-card"><div class="metric-card-top"><span>Falhas</span></div><div class="metric-value">${agendamentosContagem.falhou||0}</div></div>
-    </div>
-    ${agendamentos.length ? `
-      <div class="leads-table-wrap">
-        <table class="leads-table">
-          <thead><tr><th>Cliente</th><th>Mensagem</th><th>Data/hora</th><th>Status</th><th>Ações</th></tr></thead>
-          <tbody>
-            ${agendamentos.map(a=>`
-              <tr>
-                <td>${esc(a.clienteNome)}</td>
-                <td>${esc((a.texto||'').slice(0,60))}${(a.texto||'').length>60?'…':''}</td>
-                <td>${formatDateHora(a.agendadoPara)}</td>
-                <td>${agendamentoStatusLabel(a.status)}${a.status==='falhou' && a.erro ? ` <span class="settings-page-note">(${esc(a.erro)})</span>` : ''}</td>
-                <td>
-                  ${a.status==='pendente' ? `<button class="icon-btn" data-action="cancelar-agendamento" data-agendamento-id="${a.id}" title="Cancelar">✕</button>` : ''}
-                  <button class="icon-btn" data-action="excluir-agendamento" data-agendamento-id="${a.id}" title="Excluir permanentemente">${ICON_TRASH}</button>
-                </td>
-              </tr>
-            `).join('')}
-          </tbody>
-        </table>
-      </div>
-    ` : `<div class="tasks-empty">Nenhuma mensagem agendada ainda.</div>`}
-  `;
-}
 
 /* ---------- página: Importar/Exportar ---------- */
 function renderImportExportPage(){
@@ -9933,8 +8495,6 @@ function renderSuportePage(){
     <div class="settings-page-grid">
       <div class="settings-page-section">
         <h3>Perguntas frequentes</h3>
-        <p class="settings-page-note"><b>Como conecto o WhatsApp Business?</b><br/>Configurações → Integrações → WhatsApp Business API, seguindo o passo a passo do README do projeto.</p>
-        <p class="settings-page-note"><b>Por que uma mensagem de Disparo não chegou?</b><br/>A API do WhatsApp só permite texto livre pra quem te escreveu nas últimas 24h.</p>
         <p class="settings-page-note"><b>Como mudo a cor do painel?</b><br/>Configurações → Aparência.</p>
         <p class="settings-page-note"><b>Como conecto a Google Agenda?</b><br/>Configurações → Integrações → Google Agenda.</p>
       </div>
@@ -10490,7 +9050,7 @@ function openNewFluxo(){
   fluxoModalForm = {
     __isNew:true, id:null, nome:'',
     colunaGatilhoId: (board.columns[0]||{}).id || '',
-    etapas: [{ diasAposInicio:0, tipo:'mensagem', params:{ texto:'' } }],
+    etapas: [{ diasAposInicio:0, tipo:'tarefa', params:{ titulo:'', diasParaVencimento:1 } }],
   };
   renderFluxoModal();
 }
@@ -10647,7 +9207,7 @@ function renderColunaLeadsPickerModal(){
 
 function renderFluxoEtapaParams(etapa, idx){
   if(etapa.tipo === 'mensagem'){
-    return `<div class="field"><label>Mensagem</label><textarea class="fx-etapa-texto" data-idx="${idx}" rows="2" placeholder="Texto que será enviado pelo WhatsApp...">${esc((etapa.params&&etapa.params.texto)||'')}</textarea></div>`;
+    return `<p class="settings-page-note">Etapa de envio de WhatsApp: não está mais disponível e é pulada. Troque o tipo ou remova a etapa.</p>`;
   }
   if(etapa.tipo === 'tarefa'){
     return `
@@ -10678,7 +9238,7 @@ function renderFluxoEtapa(etapa, idx){
         <div class="field" style="flex:1;">
           <label>O que fazer</label>
           <select class="fx-etapa-tipo" data-idx="${idx}">
-            <option value="mensagem" ${etapa.tipo==='mensagem'?'selected':''}>Enviar mensagem de WhatsApp</option>
+            ${etapa.tipo==='mensagem' ? `<option value="mensagem" selected disabled>Enviar WhatsApp (indisponível)</option>` : ''}
             <option value="tarefa" ${etapa.tipo==='tarefa'?'selected':''}>Criar tarefa</option>
             <option value="mover_coluna" ${etapa.tipo==='mover_coluna'?'selected':''}>Mover pra outra coluna</option>
           </select>
@@ -10699,7 +9259,7 @@ function bindFluxoModalEvents(){
   document.getElementById('fx-coluna-gatilho').addEventListener('change', (e)=> fluxoModalForm.colunaGatilhoId = e.target.value);
 
   document.getElementById('fx-add-etapa').addEventListener('click', ()=>{
-    fluxoModalForm.etapas.push({ diasAposInicio:1, tipo:'mensagem', params:{ texto:'' } });
+    fluxoModalForm.etapas.push({ diasAposInicio:1, tipo:'tarefa', params:{ titulo:'', diasParaVencimento:1 } });
     renderFluxoModal();
   });
   document.querySelectorAll('.fx-etapa-remover').forEach(btn=>{
@@ -10745,16 +9305,7 @@ function bindFluxoModalEvents(){
   });
 
   document.getElementById('fx-save').addEventListener('click', ()=>{
-    const temMensagem = fluxoModalForm.etapas.some(e=>e.tipo==='mensagem');
-    if(fluxoModalForm.__isNew && temMensagem){
-      showConfirm({
-        message: 'Este fluxo já nasce ativo e tem etapa(s) de envio de WhatsApp automático, sem revisão sua antes de mandar. Quer criar mesmo assim?',
-        confirmLabel: 'Criar mesmo assim',
-        onConfirm: ()=>{ salvarFluxo(); closeConfirm(); },
-      });
-    } else {
-      salvarFluxo();
-    }
+    salvarFluxo();
   });
   if(!fluxoModalForm.__isNew){
     document.getElementById('fx-delete').addEventListener('click', ()=>{
@@ -10789,7 +9340,6 @@ function renderFluxoModal(){
               ${board.columns.map(c=>`<option value="${c.id}" ${f.colunaGatilhoId===c.id?'selected':''}>${esc(c.nome)}</option>`).join('')}
             </select>
           </div>
-          <p class="settings-page-msg erro">⚠️ Etapas de "Enviar mensagem" mandam pelo WhatsApp automaticamente, sem você revisar antes. Se você responder o cliente manualmente, o fluxo fica em silêncio por 30 min naquela conversa.</p>
           <div class="fluxo-etapas-lista">
             ${f.etapas.map((etapa, idx)=>renderFluxoEtapa(etapa, idx)).join('')}
           </div>
@@ -10861,17 +9411,11 @@ if(getToken()){
   loadContratos();
   loadRegrasComissao();
   loadIntegracoesConfig();
-  loadWhatsappStatus();
-  loadInstagramStatus();
-  loadTemplates();
-  loadAgendamentos();
-  loadMenuTriagem();
   loadCamposPersonalizados();
   loadPossiveisLeads();
   loadMetaVendas();
   loadMetaVendasEquipe();
   if(!agendaLoaded) loadAgendaMes(agendaMesAtual); // carrega em segundo plano — o Dashboard também usa eventos do Google em "Tarefas abertas"
-  loadConversas();
   loadEquipe();
   loadAutomacoes();
   loadFluxos();

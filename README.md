@@ -308,23 +308,16 @@ O painel agora tem uma barra lateral com 5 páginas (tudo dentro do mesmo
   produto, serviço ou linha de venda
 - **Tarefas** — lista de tarefas com prioridade, vencimento e lead
   relacionado
-- **Conversas** — todas as conversas do WhatsApp Business, ordenadas
-  pela mensagem mais recente; clicar numa abre o card do cliente
 - **Relatórios** — novos leads por mês (últimos 6 meses), leads por
   qualificação, totais de ganho/perdido, e exportação em CSV. Tem um
   seletor para ver "Todos os funis" ou um específico
-- **Disparos** — envia a mesma mensagem de WhatsApp para vários leads
-  de uma vez, com filtro por coluna e qualificação. Também aceita
-  **modelos de mensagem aprovados** (necessário pra alcançar leads
-  frios, fora da janela de 24h de texto livre)
 - **Automações** — cria regras com dois gatilhos possíveis: "quando o
   cliente entra numa coluna" (na hora) ou "quando fica X dias parado
   numa coluna" (checado a cada hora pelo servidor). A ação pode ser
   criar uma tarefa ou mover pra outra coluna
 - **Fluxos** — uma versão mais forte das automações: em vez de uma
   ação só, uma **sequência de etapas no tempo**, cada uma "X dias
-  depois do início" (enviar mensagem de WhatsApp, criar tarefa, ou
-  mover de coluna). Começa quando o cliente entra na coluna
+  depois do início" (criar tarefa ou mover de coluna). Começa quando o cliente entra na coluna
   escolhida, e o servidor confere a cada hora se já chegou a hora da
   próxima etapa de cada cliente
 - **Chat Interno** — um canal de conversa único por equipe, entre quem
@@ -349,183 +342,19 @@ com tarefas vencendo, leads novos e mensagens recebidas nas últimas
 48h — calculado na hora a partir do que já está carregado, sem
 nenhuma tabela nova no banco.
 
-## WhatsApp pela YCloud (alternativa à Meta direta)
+## WhatsApp e Instagram (retirados por enquanto)
 
-Em vez de criar e manter um app na Meta, você pode usar a **YCloud**
-(provedor oficial, parceiro da Meta). O caminho da Meta continua
-funcionando igual — você escolhe o provedor em Configurações →
-Integrações → WhatsApp Business API → **Provedor**.
+A integração com a API do WhatsApp (Meta, YCloud, Twilio), o Instagram (captação de leads e
+mensagens diretas), a aba Conversas, disparos, templates, menu de triagem, agente/IA proativa,
+mensagens agendadas e a etapa "Enviar mensagem" dos fluxos foram retirados: exigiam configurar a
+empresa de cada cliente na Meta. Ficou só o **botão de WhatsApp** em cada cliente (abre `wa.me`
+no WhatsApp da própria pessoa).
 
-**Na YCloud (ycloud.com):**
-
-1. Crie a conta e conecte o número (Embedded Signup — login com o Meta
-   Business; o número precisa ser dedicado à API)
-2. Developers → **API Keys** → crie uma chave
-3. Guarde o **número** conectado, com DDI e DDD (ex.: `5515988053447`)
-
-**No painel do CRM:**
-
-1. Provedor **YCloud** → informe o número e a API Key → Conectar
-2. O painel mostra o **endereço do webhook** (único por usuário)
-3. Na YCloud: Developers → **Webhooks** → criar endpoint com esse endereço,
-   marcando `whatsapp.inbound_message.received`, `whatsapp.message.updated` e `whatsapp.smb.message.echoes` (o que você digita no celular). Opcionais: `whatsapp.smb.history` (histórico), `whatsapp.template.reviewed`, `whatsapp.phone_number.quality_updated`, `whatsapp.business_account.updated` e `whatsapp.business_account.reviewed` (viram notificações)
-4. Copie o **secret** (`whsec_…`) que a YCloud mostra e informe no painel
-   (desconectando e conectando de novo, ou já na primeira conexão). Sem o
-   secret, todos os webhooks são recusados — é a conferência de assinatura
-   (`YCloud-Signature`)
-
-**Diferenças em relação à Meta direta:**
-
-- Os **modelos de mensagem** (templates) são criados e aprovados no painel
-  da YCloud; no CRM você só envia pelo nome (Disparos → "Usar modelo")
-- Texto livre só dentro da janela de 24h depois que o cliente escreve
-- Não precisa de variáveis novas no Render: chave e secret ficam guardados
-  por usuário no banco (nunca saem do servidor nem entram no backup)
-- Pra voltar à Meta: Desconectar → escolher Provedor "Meta" → conectar
-
-⚠️ Integração escrita pela documentação da YCloud, ainda não testada com
-uma conta real. Teste com uma mensagem sua antes de usar com clientes.
-
-## WhatsApp pela Twilio (outra alternativa à Meta direta)
-
-Mesma ideia da YCloud: você escolhe o provedor em Configurações →
-Integrações → WhatsApp Business API → **Provedor → Twilio**. Meta e YCloud
-continuam funcionando igual.
-
-**Na Twilio (twilio.com/console):**
-
-1. Crie a conta e, em Messaging → Try it out → **Send a WhatsApp message**, use
-   o **sandbox** pra testar (número `14155238886`; cada celular precisa
-   mandar a frase "join …" que a Twilio mostra, uma vez). Em produção, registre
-   um remetente de WhatsApp (Messaging → Senders → WhatsApp senders)
-2. No painel principal, copie o **Account SID** (começa com `AC`) e o
-   **Auth Token**
-
-**No painel do CRM:**
-
-1. Provedor **Twilio** → número (com DDI/DDD), Account SID e Auth Token → Conectar
-2. O painel mostra o **endereço do webhook** (único por usuário). Na Twilio,
-   no sandbox (Sandbox settings) ou no remetente, cole em **"When a message
-   comes in"** com método **POST**. Os status de entrega (enviado/entregue/lido)
-   chegam no mesmo endereço (o painel já manda esse endereço como StatusCallback
-   se a variável `APP_URL` estiver configurada no Render)
-3. Os webhooks são conferidos pela assinatura `X-Twilio-Signature` (usa o
-   Auth Token e a URL exata; por isso `APP_URL` precisa ser o endereço público
-   com https, igual ao que está na Twilio)
-
-**Diferenças em relação à Meta direta:**
-
-- Modelos de mensagem: crie e aprove no **Content Template Builder** da Twilio;
-  no CRM (Disparos → "Usar modelo") informe o **Content SID** (começa com `HX`).
-  As variáveis são enviadas numeradas ({{1}}, {{2}}…)
-- Texto livre só dentro de 24h depois que o cliente escreve
-- O Auth Token fica guardado por usuário no banco (não entra no backup)
-- A Twilio cobra a mensagem dela somada à tarifa da Meta (cobrança em dólar)
-
-⚠️ Integração escrita pela documentação da Twilio, ainda não testada com
-uma conta real. Teste com uma mensagem sua antes de usar com clientes.
-
-## Configurar a API do WhatsApp Business (opcional)
-
-Isso é diferente do botão de WhatsApp que já existia (aquele só abre uma
-conversa externa). Com essa integração, as mensagens passam a ficar
-registradas dentro do CRM — dá pra ver o histórico e responder sem sair
-do painel.
-
-**O que você precisa preparar no Meta:**
-
-1. Crie/acesse uma conta em [business.facebook.com](https://business.facebook.com)
-2. Vá em [developers.facebook.com/apps](https://developers.facebook.com/apps), crie um app do tipo "Empresa" e adicione o produto **WhatsApp**
-3. No painel do produto WhatsApp, você já ganha um número de teste — ou
-   pode adicionar seu próprio número comercial (ele não pode continuar
-   logado no WhatsApp normal do celular ao mesmo tempo)
-4. Copie o **Phone Number ID** (aparece na tela inicial do produto WhatsApp)
-5. Gere um **Access Token permanente**: Configurações da Empresa →
-   Usuários do sistema → crie um usuário do sistema → gere um token com
-   permissão `whatsapp_business_messaging`
-6. (Opcional) copie o **WABA ID** (ID da conta do WhatsApp Business),
-   útil se você quiser gerenciar modelos de mensagem depois
-
-**Configure o webhook (pra receber mensagens):**
-
-1. No painel do produto WhatsApp → Configuração → Webhook
-2. URL de retorno de chamada: `https://seudominio.com.br/api/whatsapp/webhook`
-3. Token de verificação: qualquer texto que você escolher — coloque esse
-   mesmo valor no `.env` como `WHATSAPP_VERIFY_TOKEN` (e no Render também)
-4. Inscreva-se no campo `messages`
-
-**No painel do CRM:**
-
-1. Configurações → Integrações → WhatsApp Business API
-2. Cole o Phone Number ID e o Access Token → Conectar
-
-Depois disso, qualquer mensagem que o cliente mandar pro seu número
-aparece automaticamente como um card novo no Pipeline (se ainda não
-existir um cliente com aquele telefone) e fica registrada na conversa
-dentro do card — acessível pelo botão "Ver conversa" no modal de edição.
-
-⚠️ **Sobre o primeiro contato:** a API só deixa mandar texto livre pra
-quem já te escreveu nas últimas 24h. Pra iniciar uma conversa com
-alguém que nunca falou com você, é preciso usar um "modelo de mensagem"
-aprovado pela Meta — crie e acompanhe o status deles em Configurações
-→ Integrações → **Templates de mensagem** (cria e manda pra aprovação
-da Meta direto pelo painel; "Sincronizar da Meta" atualiza o status de
-cada um: aprovado, em análise ou rejeitado). Pra usar um template já
-aprovado, vá em Disparos e ligue a opção "Usar modelo de mensagem".
-
-⚠️ **Custo:** a Meta cobra por conversa iniciada (varia por categoria e
-país), geralmente com uma cota gratuita mensal. Consulte a página de
-preços da Meta antes de usar em produção.
-
-## Configurar a captação de leads via Instagram/Facebook (opcional)
-
-Usa o mesmo App do Meta que você já criou pro WhatsApp Business — não
-precisa cadastrar outro. Toda vez que alguém preenche um formulário de
-anúncio (mesmo rodando no Instagram, ele é sempre vinculado a uma
-Página do Facebook), um lead novo é criado automaticamente na primeira
-coluna "em aberto". Além disso, **mensagens diretas (DM) do Instagram
-também chegam na aba Conversas**, junto com as do WhatsApp — inbox
-unificado de verdade, e você responde dali mesmo.
-
-**No painel do Meta (mesmo App do WhatsApp):**
-
-1. Adicione o produto **Marketing API** ao App (Adicionar produto)
-2. Configurações da Empresa → Contas → Páginas → conecte sua Página do
-   Facebook (com o Instagram profissional já vinculado a ela) ao App
-3. Configurações da Empresa → Usuários do sistema → gere um **token de
-   acesso de página** com as permissões `leads_retrieval`,
-   `pages_manage_ads`, `pages_show_list`, `instagram_basic` e
-   `instagram_manage_messages` (essas duas últimas são só pras
-   mensagens diretas — se só quiser captar leads de formulário, pode
-   deixar de fora)
-4. No produto Webhooks do App (o mesmo onde você cadastrou o do
-   WhatsApp): URL `https://seudominio.com.br/api/instagram/webhook`,
-   token de verificação = o mesmo valor que você colocar em
-   `INSTAGRAM_VERIFY_TOKEN` no `.env`/Render — inscreva-se no campo
-   `leadgen` (leads de formulário) e também no objeto **Instagram**,
-   campo `messages` (pras mensagens diretas)
-5. Anote o **ID da conta comercial do Instagram** (não é o Page ID) —
-   aparece em Configurações da Empresa → Contas → Contas do Instagram
-
-**No painel do CRM:**
-
-1. Configurações → Integrações → Instagram (captação de leads)
-2. Cole o Page ID, o Access Token da página e (se for usar mensagens
-   diretas) o ID da conta comercial do Instagram → Conectar
-
-⚠️ Os nomes dos campos do formulário variam de anúncio pra anúncio.
-O sistema tenta reconhecer automaticamente nome, telefone e e-mail a
-partir dos nomes mais comuns (`full_name`, `phone_number`, `email`,
-entre outros) — se o seu formulário usar nomes de campo muito
-diferentes disso, talvez alguns dados não sejam capturados
-corretamente na primeira tentativa.
-
-⚠️ O formato exato dos eventos de webhook de mensagens do Instagram
-pode variar um pouco conforme a versão da API — se as mensagens não
-aparecerem na aba Conversas depois de configurado, confira os logs do
-servidor (ou o Monitoramento de erros, se você tiver acesso de
-supervisor de dados) pra ver se o formato recebido bateu com o
-esperado.
+- Os dados antigos continuam no banco (tabelas `mensagens_whatsapp` e `mensagens_agendadas`,
+  campos `whatsapp_*`/`instagram_*` em `usuarios`) e no backup; nada foi apagado.
+- Fluxos antigos com etapa de mensagem: a etapa é pulada e precisa ser trocada para salvar o fluxo.
+- Para trazer de volta, o código está no histórico do Git (antes da versão 20261118).
+- **Automações** (criar tarefa / mover coluna) ganharam item próprio no menu (antes só abriam pela aba Conversas).
 
 ## Funis, equipe, PWA e guia de uso
 
@@ -606,8 +435,8 @@ falha de segurança conhecida) — trata .csv e .xlsx da mesma forma no navegado
 - **Busca global** — atalho **Ctrl+K** (⌘K no Mac) ou o ícone de lupa
   no topo da página, abre uma busca rápida por cliente ou tarefa
 - **Histórico de atividades** — botão "🕘 Ver histórico" no modal do
-  cliente, mostra uma linha do tempo com criação do cliente, tarefas
-  e mensagens do WhatsApp, mais recentes primeiro. É calculado na
+  cliente, mostra uma linha do tempo com criação do cliente e
+  tarefas, mais recentes primeiro. É calculado na
   hora a partir do que já existe — não é uma tabela nova no banco
 - **Etiquetas** — campo livre no modal do cliente (separadas por
   vírgula), aparecem como pílulas no card do Pipeline e no modal
@@ -672,7 +501,7 @@ variáveis de ambiente:
   `anthropic`); sem ele, a prioridade é Gemini, depois Groq, depois Anthropic.
 
 Sem nenhuma das chaves, a IA fica desligada: o assistente flutuante, os
-botões de sugestão, os insights e as opções de IA do WhatsApp somem da tela
+botões de sugestão e os insights somem da tela
 e o resto do painel funciona normalmente. Nos planos gratuitos (Gemini e Groq) há limite
 de uso; ao atingir, a IA responde "limite de uso" e volta sozinha no dia
 seguinte (nada mais do painel é afetado). Todo o código de IA está em
@@ -694,194 +523,6 @@ melhorar os produtos dele (no plano pago, não).
   lista de 2 a 4 alertas curtos sobre o estado atual do funil (não
   gera sozinho, só quando você pede — pra não pesar a tela nem gastar
   chamadas de API à toa)
-- **IA proativa em Negociações** — diferente dos recursos acima (que
-  só geram quando você pede), essa analisa a conversa sozinha toda
-  vez que o cliente responde no WhatsApp e deixa uma sugestão de
-  mensagem de follow-up + tarefa prontas dentro do card — mas nunca
-  envia nada nem cria nada sozinha, sempre espera você confirmar.
-  Liga em Configurações → Integrações → WhatsApp Business API, sem
-  precisar de confirmação especial pra ativar (não tem risco de
-  mandar mensagem indevida, porque não manda nada)
-
-### ⚠️ Agente IA autônomo (opcional, desligado por padrão)
-
-Diferente dos recursos acima (que só sugerem, você decide se envia),
-esse **responde o cliente sozinho, sem revisão humana**. Fica em
-Configurações → Integrações → WhatsApp Business API, só aparece
-depois de conectar o WhatsApp, e pede uma confirmação explícita antes
-de ligar.
-
-Regra de segurança embutida: sempre que você responder um cliente
-manualmente, o agente fica em silêncio por 30 minutos naquela
-conversa — pra nunca responder por cima de um atendimento humano em
-andamento. Pode ser desativado a qualquer momento, e o aviso de que
-está ativo fica visível na tela enquanto ligado.
-
-A etapa "Enviar mensagem" dos **Fluxos** usa a mesma trava de
-segurança (fica 30 min em silêncio se um humano respondeu
-manualmente) — mas é diferente do agente: aqui a mensagem é o texto
-exato que você escreveu, não algo gerado pela IA na hora. Ao criar ou
-ativar um fluxo com essa etapa, o painel avisa antes de confirmar.
-
-## Menu de triagem (fluxo de primeiro contato)
-
-Em Configurações → Integrações → WhatsApp Business API: quando alguém
-manda mensagem pela primeira vez (número que ainda não é lead seu), o
-CRM responde automaticamente com uma mensagem de menu que você
-escreve (ex: "1 - Orçamento, 2 - Já sou cliente..."). Quando a pessoa
-responde com um número que bate com uma das opções configuradas, o
-lead é movido pra coluna escolhida e (se você preencheu) uma mensagem
-de confirmação é enviada. Se a resposta não bater com nenhuma opção,
-o CRM simplesmente segue o fluxo normal (sem travar nada).
-
-⚠️ Como isso manda mensagem automática pra qualquer contato novo, o
-painel pede confirmação antes de salvar com o menu ativado.
-
-Limitação atual: mover o lead pela resposta do menu **não** dispara
-Automações nem Fluxos ligados àquela coluna (só o "arrastar" manual,
-criar direto na coluna, transferir/copiar, ou os processadores de
-Automações/Fluxos disparam isso hoje).
-
-## Mensagens agendadas
-
-Nova aba "Agendamentos" na barra lateral: agende uma mensagem de
-WhatsApp pra um cliente específico, numa data e hora futura. Um
-painel mostra quantas estão a enviar, já enviadas, canceladas ou que
-falharam. O servidor confere a cada **5 minutos** se alguma já passou
-do horário — é um pouco mais frequente que os outros verificadores
-(Automações e Fluxos rodam de hora em hora), justamente pra respeitar
-melhor o horário escolhido.
-
-**Autenticação (públicas):**
-- `POST /api/auth/register` — `{ nome, email, senha }` → cria conta + funil padrão
-- `POST /api/auth/login` — `{ email, senha }` → retorna token
-- `POST /api/auth/google` — `{ credential }` (token do Google) → cria/liga conta e retorna token
-- `GET  /api/auth/me` — dados do usuário logado (exige token)
-- `PUT  /api/auth/nome` — `{ nome }` → muda o nome de exibição da conta
-- `POST /api/auth/logout-all` — invalida todos os tokens de login já emitidos (exige token)
-- `PUT  /api/auth/avatar` — `{ avatarUrl }` → salva a foto de perfil, já em base64 pequeno (exige token)
-- `PUT  /api/auth/password` — `{ senhaAtual, senhaNova }` → troca (ou define) a senha da conta
-
-**Painel (exigem token, sempre isoladas por usuário):**
-- `GET  /api/funis` — lista os funis (cria "Funil Principal" e migra colunas antigas se necessário)
-- `POST /api/funis` — cria funil vazio
-- `PUT  /api/funis/:id` — renomeia funil
-- `DELETE /api/funis/:id` — exclui funil, colunas e cards dele (exige ao menos 1 funil restante)
-- `GET  /api/board` — colunas + cards
-- `POST /api/columns` — cria coluna (dentro de um funil, via `funilId`)
-- `PUT  /api/columns/:id` — renomeia / muda tipo
-- `DELETE /api/columns/:id` — exclui coluna (e os cards dela)
-- `POST /api/cards` — cria cliente
-- `PUT  /api/cards/:id` — edita cliente
-- `PUT  /api/cards/:id/move` — move cliente entre colunas (drag and drop)
-- `DELETE /api/cards/:id` — exclui cliente
-- `GET  /api/cards/:id/anexos` — lista os anexos de um cliente
-- `POST /api/cards/:id/anexos` — `{ nomeArquivo, tipoMime, dadosBase64 }` → sobe um anexo (~3 MB no máximo)
-- `DELETE /api/cards/:id/anexos/:anexoId` — remove um anexo
-
-**Tarefas (exigem token, isoladas por usuário):**
-- `GET  /api/tasks` — lista as tarefas
-- `POST /api/tasks` — cria tarefa
-- `PUT  /api/tasks/:id` — edita tarefa
-- `PUT  /api/tasks/:id/toggle` — marca/desmarca como concluída
-- `DELETE /api/tasks/:id` — exclui tarefa (e o evento correspondente na Agenda)
-- `POST /api/tasks/sync-calendar` — puxa da Google Agenda o que mudou de lá pra cá
-
-**Comissões (exigem token, isoladas por usuário):**
-- `GET  /api/comissoes` — lista os contratos
-- `POST /api/comissoes` — cria contrato (parcelas calculadas automaticamente)
-- `PUT  /api/comissoes/:id` — edita contrato (recalcula se o valor da venda mudar)
-- `DELETE /api/comissoes/:id` — exclui contrato
-
-**Google Agenda (exigem token):**
-- `GET  /api/calendar/status` — diz se o usuário já conectou a Agenda
-- `GET  /api/calendar/connect-url` — devolve a URL de autorização do Google
-- `GET  /api/calendar/callback` — o Google redireciona pra cá após o consentimento (não chame direto)
-- `POST /api/calendar/disconnect` — desconecta (não apaga os eventos já criados)
-
-**IA (exigem token):**
-- `POST /api/ai/mensagem` — `{ cardId }` → sugere mensagem de WhatsApp para o cliente
-- `POST /api/ai/insights` — gera de 2 a 4 alertas curtos sobre o funil atual
-- `POST /api/ai/sugerir-tarefa` — `{ cardId }` → sugere título e prazo de uma tarefa de acompanhamento
-
-**Equipes (exigem token):**
-- `GET  /api/equipe` — dados da equipe do usuário logado (ou `null`)
-- `POST /api/equipe` — `{ nome }` → cria equipe (quem cria vira supervisor)
-- `POST /api/equipe/entrar` — `{ codigo }` → entra numa equipe existente
-- `POST /api/equipe/sair` — sai da equipe atual
-- `POST /api/equipe/regenerar-codigo` — gera novo código de convite (só supervisor)
-- `PUT  /api/equipe/membro/:userId/papel` — `{ papel }` → promove/rebaixa (só supervisor)
-- `DELETE /api/equipe/membro/:userId` — remove um membro (só supervisor)
-- `GET  /api/equipe/chat` — mensagens do chat interno
-- `POST /api/equipe/chat` — `{ texto }` → envia mensagem no chat interno
-- `GET  /api/equipe/supervisao` — resumo de desempenho de cada membro (só supervisor)
-
-**WhatsApp Business:**
-- `GET  /api/whatsapp/webhook` — verificação do webhook (chamada pela Meta, não chame direto)
-- `POST /api/whatsapp/webhook` — recebe mensagens e status (chamada pela Meta, pública)
-- `GET  /api/whatsapp/status` — diz se o usuário já conectou (exige token)
-- `POST /api/whatsapp/configurar` — `{ phoneNumberId, accessToken, wabaId }` (exige token)
-- `POST /api/whatsapp/desconectar` — (exige token)
-- `GET  /api/whatsapp/conversas/:cardId` — histórico de mensagens do cliente (exige token)
-- `POST /api/whatsapp/enviar` — `{ cardId, texto }` → envia mensagem (exige token)
-- `GET  /api/whatsapp/conversas` — lista todas as conversas, ordenadas pela mais recente (exige token)
-- `POST /api/whatsapp/disparo` — `{ cardIds, texto }` ou `{ cardIds, usarTemplate:true, templateName, idioma, variaveis }` → envia (exige token)
-- `GET  /api/whatsapp/templates` — lista os modelos de mensagem com status (aprovado/em análise/rejeitado) (exige token e WABA ID configurado)
-- `POST /api/whatsapp/templates` — `{ nome, categoria, idioma, texto }` → cria um template e manda pra aprovação da Meta (exige token e WABA ID configurado)
-- `POST /api/whatsapp/enviar-template` — `{ cardId, templateName, idioma, variaveis }` → envia um modelo (exige token)
-- `POST /api/whatsapp/agente-ia` — `{ ativo }` → liga/desliga o agente que responde clientes sozinho (exige token)
-- `POST /api/whatsapp/ia-proativa` — `{ ativo }` → liga/desliga a IA que só sugere no card (exige token)
-- `GET  /api/whatsapp/menu-triagem` — configuração atual do menu de primeiro contato (exige token)
-- `PUT  /api/whatsapp/menu-triagem` — `{ ativo, mensagemInicial, opcoes }` → salva o menu de triagem (exige token)
-
-**Automações (exigem token):**
-- `GET  /api/automacoes` — lista as automações do usuário
-- `POST /api/automacoes` — `{ nome, colunaGatilhoId, acaoTipo, acaoParams }` → cria
-- `PUT  /api/automacoes/:id` — edita (nome, ativa/inativa, parâmetros da ação)
-- `DELETE /api/automacoes/:id` — exclui
-
-**Fluxos (exigem token):**
-- `GET  /api/fluxos` — lista os fluxos do usuário, com quantos clientes estão em andamento em cada um
-- `POST /api/fluxos` — `{ nome, colunaGatilhoId, etapas }` → cria
-- `PUT  /api/fluxos/:id` — edita (nome, coluna, etapas, ativo/inativo)
-- `DELETE /api/fluxos/:id` — exclui (e apaga as execuções em andamento)
-
-**Agendamentos (exigem token):**
-- `GET  /api/agendamentos` — lista as mensagens agendadas, com contagem por status
-- `POST /api/agendamentos` — `{ cardId, texto, agendadoPara }` → agenda uma nova mensagem
-- `POST /api/agendamentos/:id/cancelar` — cancela uma pendente
-- `DELETE /api/agendamentos/:id` — remove da lista (qualquer status)
-
-**Campos personalizados (exigem token):**
-- `GET  /api/campos-personalizados` — lista os campos do usuário
-- `POST /api/campos-personalizados` — `{ nome, tipo }` → cria (`tipo`: texto, numero ou data)
-- `DELETE /api/campos-personalizados/:id` — exclui a definição do campo
-
-**Possíveis leads (exigem token):**
-- `GET  /api/possiveis-leads` — lista os pendentes
-- `POST /api/possiveis-leads/importar` — `{ linhas: [{nome,telefone,tipoServico}], origemArquivo }` → importa em lote (a planilha já foi lida no navegador antes)
-- `POST /api/possiveis-leads/:id/promover` — `{ nome, telefone, columnId, valor, temperatura, obs, mes }` → vira um cliente de verdade
-- `DELETE /api/possiveis-leads/:id` — descarta
-
-**Metas de vendas (exigem token):**
-- `GET  /api/metas/:mes` — meta do mês (formato `YYYY-MM`), 0 se ainda não definida
-- `PUT  /api/metas/:mes` — `{ valorMeta }` → define/atualiza
-
-**Auditoria (exige token):**
-- `GET  /api/auditoria` — últimos 100 eventos de segurança da própria conta
-
-**2FA — dentro de `/api/auth` (as duas primeiras são públicas, o resto exige token):**
-- `POST /api/auth/2fa/validar-login` — `{ tempToken, codigo }` → segunda etapa do login, devolve o token de verdade
-- `POST /api/auth/2fa/iniciar` — gera um novo segredo e devolve o QR code (ainda não ativa)
-- `POST /api/auth/2fa/confirmar` — `{ codigo }` → confirma o primeiro código e ativa de vez
-- `POST /api/auth/2fa/desativar` — `{ codigo }` → exige o código atual pra desligar
-
-**Instagram/Facebook Lead Ads:**
-- `GET  /api/instagram/webhook` — verificação do webhook (chamada pela Meta, não chame direto)
-- `POST /api/instagram/webhook` — recebe eventos de novo lead (chamada pela Meta, pública)
-- `GET  /api/instagram/status` — diz se o usuário já conectou (exige token)
-- `POST /api/instagram/configurar` — `{ pageId, pageAccessToken }` (exige token)
-- `POST /api/instagram/desconectar` — (exige token)
 
 ## Assinatura paga (Asaas)
 
@@ -889,7 +530,7 @@ Cobrança mensal por Pix, boleto ou cartão, com teste grátis. Tutorial complet
 funciona, sandbox → produção) no documento "Assinatura com o Asaas".
 
 - **Desligada por padrão:** sem `ASAAS_API_KEY` nada muda (tudo liberado). Variáveis no `server/.env.example`.
-- **Planos:** Essencial (R$ 29,90: CRM + financeiro) e Completo (R$ 39,90: + IA, API do WhatsApp,
+- **Planos:** Essencial (R$ 29,90: CRM + financeiro) e Completo (R$ 39,90: + IA e
   Google Agenda), iguais aos da página de divulgação. Preço muda por variável de ambiente.
 - **Teste grátis:** 7 dias a partir do primeiro acesso depois de ligar a cobrança, com tudo do Completo.
 - **Quem diz o que foi pago é o Asaas:** o webhook (`POST /api/assinatura/webhook`, token no
@@ -902,6 +543,11 @@ funciona, sandbox → produção) no documento "Assinatura com o Asaas".
   sistema grava; `assinatura_eventos`: avisos já processados, pra não repetir).
 - **Arquivos:** `server/utils/asaas.js`, `server/utils/assinatura.js`, `server/routes/assinatura.js`,
   `public/assinatura.html`, `public/js/assinatura.js`, `public/css/assinatura.css`.
+- **Plano anual:** R$ 300 (Essencial) e R$ 400 (Completo), cycle YEARLY no Asaas; acesso de 12 meses por cobrança paga.
+- **Descontos:** pessoal (Painel do dono → Desconto) ou promoção para novos (Painel do dono), por N meses ou para sempre. Campos `desconto_*` em `assinaturas`; promoção em `configuracoes_sistema` (migração `006`). Preço contratado guardado em `valor_contratado`.
+- **Valor mudou → assinatura nova:** a API do Asaas não garante mudar o valor; `recriarAssinatura` cria a nova a partir do próximo vencimento e só então apaga a antiga (desfaz se falhar). Período pago anterior fica em `pago_ate_base`. A sincronização confere se o valor da próxima fatura bate com `valorDevido` (fim de desconto) e corrige sozinha.
+- **E-mails da assinatura** (`server/utils/avisosAssinatura.js`, com Resend configurado): teste acabando/acabou, fatura próxima/vencida, pagamento confirmado; uma vez cada (tabela `assinatura_avisos`), das 9h às 20h. Com eles ligados, `notificationDisabled` desliga os avisos do Asaas (`ASSINATURA_AVISOS=asaas` mantém o Asaas avisando).
+- **Validação de saque (Asaas → Mecanismos de segurança):** `POST /api/assinatura/validar-saque` recusa todo saque pedido pela API (o sistema nunca saca) e alerta nos erros/Telegram. Token em `ASAAS_SAQUE_TOKEN`. A chave é usada 1x por dia (`manterChaveAtiva`) porque o Asaas desativa chaves paradas por 3 meses.
 - **Liberar alguém sem cobrança:** `ASSINATURA_LIBERADOS` (e-mails) ou, no Neon,
   `SELECT set_config('app.bypass', 'on', false); UPDATE assinaturas SET status = 'cortesia' WHERE user_id = (SELECT id FROM usuarios WHERE email = 'pessoa@email.com');` (a primeira parte libera o comando por causa do RLS)
 
@@ -937,8 +583,7 @@ Rotas: `POST /api/auth/esqueci-senha` (`{ email }`) e
 
 ## Notificações push (app fechado)
 
-Avisam no celular/computador quando chega mensagem de cliente (WhatsApp ou
-Instagram) e na hora das tarefas. Gere as chaves uma vez:
+Avisam no celular/computador na hora das tarefas. Gere as chaves uma vez:
 
 ```
 cd server && npx web-push generate-vapid-keys
@@ -965,11 +610,3 @@ chega um aviso para baixar pelo botão Backup. **Os anexos dos clientes ficam
 fora desse arquivo** (use o Backup manual se quiser incluí-los).
 Rotas: `GET/PUT /api/backup/automatico` e `POST /api/backup/automatico/enviar-agora`.
 
-## Segurança dos webhooks da Meta e versão da API
-
-- `META_APP_SECRET` — "Chave secreta do app" da Meta. Quando definida, os
-  webhooks de WhatsApp e Instagram só são aceitos se vierem assinados pela
-  Meta (cabeçalho `X-Hub-Signature-256`). Sem ela, tudo funciona como antes.
-- `META_GRAPH_VERSION` — versão da Graph API (padrão `v22.0`). Fica definida
-  num único lugar (`server/utils/meta.js`); pra subir de versão basta mudar
-  essa variável.

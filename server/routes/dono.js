@@ -4,6 +4,9 @@
    GET    /sou            { dono: true|false } (qualquer pessoa logada; decide se mostra o link)
    GET    /resumo         números dos clientes e assinaturas + lista de clientes
    GET    /saude          servidor, banco, erros, avisos do Asaas, integrações
+   PUT    /clientes/:id/desconto  { percentual, meses|null } desconto pessoal (0 = tirar)
+   GET    /promocao       promoção para novos clientes
+   PUT    /promocao       { ativa, percentual, meses|null, validaAte|null }
    GET    /donos          lista de donos
    POST   /donos          { email } adiciona um dono
    DELETE /donos/:email   remove um dono (os fixos não) */
@@ -48,16 +51,16 @@ const DIA = 86400000;
 // Em que situação cada pessoa está (função pura, testada à parte)
 function situacaoDoCliente(linha, { email, dono, liberadoPorEmail, ligada, agora = new Date() }) {
   if (dono) return { chave: 'dono', rotulo: 'Dono' };
-  if (!ligada) return { chave: 'livre', rotulo: 'Liberado (cobrança desligada)' };
+  if (!ligada) return { chave: 'livre', rotulo: 'Liberado' };
   if (liberadoPorEmail || (linha && linha.status === 'cortesia')) return { chave: 'cortesia', rotulo: 'Cortesia' };
-  if (!linha) return { chave: 'sem_acesso', rotulo: 'Não entrou desde que a cobrança foi ligada' };
+  if (!linha) return { chave: 'sem_acesso', rotulo: 'Ainda não entrou' };
   const s = A.calcularAcesso(linha, { agora, email: '', ligada: true });
-  const pagoAte = linha.pago_ate ? new Date(linha.pago_ate).getTime() : 0;
+  const pagoAte = [linha.pago_ate, linha.pago_ate_base].filter(Boolean).map((d) => new Date(d).getTime()).sort((a, b) => b - a)[0] || 0;
   if (s.liberado) {
     if (pagoAte && pagoAte >= agora.getTime()) {
-      return linha.status === 'cancelada' ? { chave: 'cancelou', rotulo: 'Cancelou (ainda com acesso)' } : { chave: 'pagante', rotulo: 'Pagando' };
+      return linha.status === 'cancelada' ? { chave: 'cancelou', rotulo: 'Cancelou, com acesso' } : { chave: 'pagante', rotulo: 'Pagando' };
     }
-    if (s.emTolerancia) return pagoAte ? { chave: 'atrasado', rotulo: 'Pagamento atrasado (na tolerância)' } : { chave: 'aguardando', rotulo: 'Assinou, falta pagar' };
+    if (s.emTolerancia) return pagoAte ? { chave: 'atrasado', rotulo: 'Atrasado, na tolerância' } : { chave: 'aguardando', rotulo: 'Assinou, falta pagar' };
     if (s.emTeste) return s.temAssinatura ? { chave: 'teste_assinou', rotulo: 'No teste, já assinou' } : { chave: 'teste', rotulo: 'No teste grátis' };
   }
   const motivos = { teste_acabou: 'Teste acabou sem assinar', aguardando_pagamento: 'Assinou e não pagou', pagamento_atrasado: 'Bloqueado por atraso', cancelada: 'Cancelou' };
@@ -68,8 +71,7 @@ router.get('/resumo', async (req, res) => {
   try {
     const agora = new Date();
     const { rows } = await comoSistema(() => query(
-      `SELECT u.id, u.nome, u.email, u.created_at AS cadastro, a.plano, a.status, a.teste_ate, a.pago_ate,
-              a.proximo_vencimento, a.asaas_assinatura_id
+      `SELECT a.*, u.id, u.nome, u.email, u.created_at AS cadastro
          FROM usuarios u LEFT JOIN assinaturas a ON a.user_id = u.id
         ORDER BY u.created_at DESC`
     ));
@@ -80,6 +82,7 @@ router.get('/resumo', async (req, res) => {
     const contagem = {};
     const porPlano = { essencial: 0, completo: 0 };
     let receitaMensal = 0;
+    let anuais = 0;
     let testeAcabou = 0;
     let testeAcabouEPagou = 0;
     const clientes = rows.map((r) => {
@@ -91,18 +94,26 @@ router.get('/resumo', async (req, res) => {
       if (sit.chave === 'pagante' || sit.chave === 'atrasado') {
         const plano = A.PLANOS[r.plano] ? r.plano : 'completo';
         porPlano[plano]++;
-        receitaMensal += A.valorDoPlano(plano);
+        if (r.ciclo === 'anual') anuais++;
+        // receita em "equivalente mensal": o anual entra dividido por 12, já com o desconto
+        const valor = A.valorDevido(r, r.proximo_vencimento instanceof Date ? r.proximo_vencimento.toISOString().slice(0, 10) : r.proximo_vencimento);
+        receitaMensal += r.ciclo === 'anual' ? valor / 12 : valor;
       }
       // conversão: entre quem já terminou o teste (sem contar donos e cortesias), quantos pagaram alguma vez
       if (linha && !dono && sit.chave !== 'cortesia' && new Date(r.teste_ate).getTime() < agora.getTime()) {
         testeAcabou++;
-        if (r.pago_ate) testeAcabouEPagou++;
+        if (r.pago_ate || r.pago_ate_base) testeAcabouEPagou++;
       }
+      const pagoAte = [r.pago_ate, r.pago_ate_base].filter(Boolean).sort((a, b) => new Date(b) - new Date(a))[0] || null;
       return {
-        nome: r.nome || '', email: r.email, cadastro: r.cadastro,
+        id: r.id, nome: r.nome || '', email: r.email, cadastro: r.cadastro,
+        ciclo: linha && r.asaas_assinatura_id ? (r.ciclo || 'mensal') : null,
+        desconto: linha && Number(r.desconto_percentual) > 0
+          ? { percentual: Number(r.desconto_percentual), meses: r.desconto_meses, ate: r.desconto_ate, origem: r.desconto_origem }
+          : null,
         situacao: sit.chave, rotulo: sit.rotulo,
         plano: linha && r.asaas_assinatura_id ? r.plano : null,
-        testeAte: r.teste_ate, pagoAte: r.pago_ate, proximoVencimento: r.proximo_vencimento,
+        testeAte: r.teste_ate, pagoAte, proximoVencimento: r.proximo_vencimento,
       };
     });
     const desde = (dias) => rows.filter((r) => agora - new Date(r.cadastro) <= dias * DIA).length;
@@ -123,12 +134,14 @@ router.get('/resumo', async (req, res) => {
         cortesias: (contagem.cortesia || 0) + (contagem.dono || 0),
         semAcesso: contagem.sem_acesso || 0,
         porPlano,
+        anuais,
         receitaMensal: Math.round(receitaMensal * 100) / 100,
         testeAcabou,
         testeAcabouEPagou,
         conversao: testeAcabou ? Math.round((testeAcabouEPagou / testeAcabou) * 1000) / 10 : null,
       },
       planos: A.listaDePlanos(),
+      promocao: await comoSistema(() => A.lerConfig('promocao_novos')).catch(() => null),
       clientes: clientes.slice(0, 500),
     });
   } catch (err) {
@@ -186,6 +199,36 @@ router.get('/saude', async (req, res) => {
   } catch (err) {
     console.error('Painel do dono (saúde):', err);
     res.status(500).json({ error: 'Não foi possível conferir a saúde do sistema.' });
+  }
+});
+
+/* ---------- descontos ---------- */
+router.put('/clientes/:id/desconto', async (req, res) => {
+  try {
+    if (!/^[0-9a-f-]{36}$/i.test(req.params.id)) return res.status(400).json({ error: 'Cliente inválido.' });
+    const existe = await comoSistema(() => query('SELECT 1 FROM usuarios WHERE id = $1', [req.params.id]));
+    if (!existe.rows.length) return res.status(404).json({ error: 'Cliente não encontrado.' });
+    const { percentual, meses } = req.body || {};
+    await comoSistema(() => A.definirDescontoPessoal(req.params.id, { percentual, meses }));
+    res.json({ ok: true });
+  } catch (err) {
+    if (err && err.status >= 400 && err.status < 500) return res.status(err.status === 404 ? 400 : err.status).json({ error: err.message });
+    console.error('Painel do dono (desconto):', err);
+    res.status(502).json({ error: (err && err.message) || 'Não foi possível aplicar o desconto agora.' });
+  }
+});
+
+router.get('/promocao', async (req, res) => {
+  try { res.json({ promocao: await comoSistema(() => A.lerConfig('promocao_novos')) }); }
+  catch (err) { res.status(500).json({ error: 'Não foi possível ler a promoção.' }); }
+});
+
+router.put('/promocao', async (req, res) => {
+  try { res.json({ promocao: await comoSistema(() => A.definirPromocao(req.body || {})) }); }
+  catch (err) {
+    if (err && err.status >= 400 && err.status < 500) return res.status(err.status).json({ error: err.message });
+    console.error('Painel do dono (promoção):', err);
+    res.status(500).json({ error: 'Não foi possível salvar a promoção.' });
   }
 });
 

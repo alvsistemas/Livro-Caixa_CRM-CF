@@ -9,16 +9,15 @@ const Column = require('../models/Column');
 const router = express.Router();
 router.use(auth); // todas as rotas de fluxo exigem login
 
-const TIPOS_ETAPA = ['mensagem', 'tarefa', 'mover_coluna'];
+// 'mensagem' (envio pelo WhatsApp) saiu junto com a integração; fluxos antigos com ela precisam trocar a etapa
+const TIPOS_ETAPA = ['tarefa', 'mover_coluna'];
 
 function validarEtapas(etapas) {
   if (!Array.isArray(etapas) || !etapas.length) return 'Adicione ao menos uma etapa.';
   for (const etapa of etapas) {
+    if (etapa.tipo === 'mensagem') return 'A etapa de enviar WhatsApp não está mais disponível. Troque o tipo dela ou remova.';
     if (!TIPOS_ETAPA.includes(etapa.tipo)) return 'Tipo de etapa inválido.';
     if (typeof etapa.diasAposInicio !== 'number' || etapa.diasAposInicio < 0) return 'Dias inválidos numa das etapas.';
-    if (etapa.tipo === 'mensagem' && (!etapa.params || !etapa.params.texto || !etapa.params.texto.trim())) {
-      return 'Preencha o texto da mensagem em todas as etapas de mensagem.';
-    }
     if (etapa.tipo === 'mover_coluna' && (!etapa.params || !etapa.params.colunaDestinoId)) {
       return 'Escolha a coluna de destino em todas as etapas de mover coluna.';
     }

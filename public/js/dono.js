@@ -74,7 +74,7 @@
       kpi('Cadastros', t.cadastros, `+${t.cadastros7d} em 7 dias · +${t.cadastros30d} em 30`),
       kpi('No teste grátis', t.emTeste, t.semAcesso ? `${t.semAcesso} ainda não entraram desde que a cobrança foi ligada` : ''),
       kpi('Pagando', t.pagantes, `Essencial ${t.porPlano.essencial} · Completo ${t.porPlano.completo}`),
-      kpi('Receita mensal', brl(t.receitaMensal), 'estimada pelos planos de quem paga'),
+      kpi('Receita mensal', brl(t.receitaMensal), `estimada, já com descontos${t.anuais ? ` · ${t.anuais} ${t.anuais === 1 ? 'anual entra' : 'anuais entram'} como 1/12` : ''}`),
       kpi('Teste → pagante', t.conversao == null ? '—' : `${String(t.conversao).replace('.', ',')}%`, t.testeAcabou ? `${t.testeAcabouEPagou} de ${t.testeAcabou} que terminaram o teste` : 'ninguém terminou o teste ainda'),
       kpi('Precisa de atenção', atencao, `${t.atrasados} ${t.atrasados === 1 ? 'atrasado' : 'atrasados'} · ${t.aguardando} sem pagar a 1ª fatura · ${t.cancelaram} ${t.cancelaram === 1 ? 'cancelou' : 'cancelaram'}`, atencao > 0),
     ].join('');
@@ -101,20 +101,104 @@
       if(c.testeAte) return `teste até ${data(c.testeAte)}`;
       return '—';
     };
-    $('dono-tabela').innerHTML = `<thead><tr><th>Cliente</th><th>Cadastro</th><th>Situação</th><th>Plano</th><th>Período</th><th>Próximo vencimento</th></tr></thead><tbody>${
+    const podeDesconto = (c) => resumo.cobranca && !['dono', 'cortesia', 'livre'].includes(c.situacao);
+    const textoDesc = (d) => d ? `${String(d.percentual).replace('.', ',')}% ${d.ate ? `até ${data(d.ate)}` : d.meses ? `por ${d.meses} ${d.meses === 1 ? 'mês' : 'meses'}` : 'para sempre'}${d.origem === 'promocao' ? ' · promoção' : ''}` : '';
+    $('dono-tabela').innerHTML = `<thead><tr><th>Cliente</th><th>Cadastro</th><th>Situação</th><th>Plano</th><th>Período</th><th>Vencimento</th><th><span class="sr-only">Ações</span></th></tr></thead><tbody>${
       lista.length ? lista.map((c) => `<tr>
         <td><div>${esc(c.nome || '(sem nome)')}</div><div class="email">${esc(c.email)}</div></td>
         <td class="num">${data(c.cadastro)}</td>
         <td><span class="ass-selo ${SELO[c.situacao] || ''}">${esc(c.rotulo)}</span></td>
-        <td>${c.plano ? esc(nomeDoPlano(c.plano)) : '—'}</td>
+        <td>${c.plano ? `${esc(nomeDoPlano(c.plano))}${c.ciclo === 'anual' ? ' anual' : ''}` : '—'}${c.desconto ? `<br><span class="dono-desc">${esc(textoDesc(c.desconto))}</span>` : ''}</td>
         <td class="num">${esc(ate(c))}</td>
         <td class="num">${c.proximoVencimento && c.situacao !== 'cancelou' ? data(c.proximoVencimento) : '—'}</td>
-      </tr>`).join('') : `<tr><td colspan="6" class="dono-vazio">Nenhum cliente neste filtro.</td></tr>`
+        <td class="acao">${podeDesconto(c) ? `<button type="button" class="ass-btn dono-btn-mini" data-desconto="${esc(c.id)}" aria-label="${c.desconto ? 'Mudar o desconto' : 'Dar desconto'} de ${esc(c.nome || c.email)}">Desconto</button>` : ''}</td>
+      </tr>`).join('') : `<tr><td colspan="7" class="dono-vazio">Nenhum cliente neste filtro.</td></tr>`
     }</tbody>`;
+    document.querySelectorAll('[data-desconto]').forEach((b) => b.addEventListener('click', () => abrirDesconto(resumo.clientes.find((c) => c.id === b.dataset.desconto))));
     $('dono-tabela-rodape').textContent = `${lista.length} ${lista.length === 1 ? 'cliente' : 'clientes'}${resumo.clientes.length >= 500 ? ' (mostrando os 500 cadastros mais recentes)' : ''}.`;
   }
 
   $('dono-busca').addEventListener('input', (e) => { busca = e.target.value; if(resumo) desenharTabela(); });
+
+  /* ---------- desconto pessoal ---------- */
+  let clienteDoDesconto = null;
+  function mostrarCampoMeses(sel, campo){ $(campo).hidden = $(sel).value !== 'meses'; }
+  $('desc-duracao').addEventListener('change', () => { mostrarCampoMeses('desc-duracao', 'desc-meses-campo'); explicarDesconto(); });
+  ['desc-pct', 'desc-meses'].forEach((id) => $(id).addEventListener('input', explicarDesconto));
+  function explicarDesconto(){
+    const c = clienteDoDesconto; if(!c) return;
+    const pct = Number($('desc-pct').value) || 0;
+    const plano = c.plano || 'completo';
+    const p = (resumo.planos || []).find((x) => x.id === plano) || resumo.planos[0];
+    const base = c.ciclo === 'anual' ? p.valorAnual : p.valor;
+    const fim = $('desc-duracao').value === 'meses' ? `por ${Number($('desc-meses').value) || '?'} meses e depois volta para ${brl(base)}` : 'para sempre';
+    const assina = c.plano && ['pagante', 'atrasado', 'aguardando', 'teste_assinou'].includes(c.situacao);
+    $('desc-explica').textContent = pct > 0
+      ? `${assina ? `Plano ${p.nome}${c.ciclo === 'anual' ? ' anual' : ''}` : `Exemplo no ${p.nome}`}: ${brl(base)} vira ${brl(Math.max(5, Math.round(Math.round(base * 100) * (100 - pct) / 100) / 100))}${c.ciclo === 'anual' ? '/ano' : '/mês'}, ${fim}. ${assina ? 'Vale a partir da próxima fatura.' : 'Vale a partir da primeira fatura, quando a pessoa assinar.'}`
+      : '';
+  }
+  function abrirDesconto(c){
+    clienteDoDesconto = c;
+    $('desc-quem').textContent = `${c.nome || c.email} · ${c.email}`;
+    $('desc-pct').value = c.desconto ? c.desconto.percentual : '';
+    $('desc-duracao').value = c.desconto && c.desconto.meses ? 'meses' : 'sempre';
+    $('desc-meses').value = c.desconto && c.desconto.meses ? c.desconto.meses : '';
+    mostrarCampoMeses('desc-duracao', 'desc-meses-campo');
+    $('desc-remover').hidden = !c.desconto;
+    $('desc-erro').hidden = true;
+    explicarDesconto();
+    $('desc-modal').hidden = false;
+    $('desc-pct').focus();
+  }
+  $('desc-fechar').addEventListener('click', () => { $('desc-modal').hidden = true; });
+  async function salvarDesconto(corpo, botao){
+    const texto = botao.textContent; botao.disabled = true; botao.textContent = 'Salvando…';
+    try{
+      await api('PUT', `/clientes/${clienteDoDesconto.id}/desconto`, corpo);
+      $('desc-modal').hidden = true;
+      resumo = await api('GET', '/resumo'); desenharResumo();
+    }catch(err){ $('desc-erro').textContent = err.message; $('desc-erro').hidden = false; }
+    finally{ botao.disabled = false; botao.textContent = texto; }
+  }
+  $('desc-form').addEventListener('submit', (e) => {
+    e.preventDefault();
+    const pct = Number($('desc-pct').value);
+    if(!(pct >= 1 && pct <= 99)){ $('desc-erro').textContent = 'Informe um desconto entre 1% e 99%.'; $('desc-erro').hidden = false; return; }
+    const meses = $('desc-duracao').value === 'meses' ? Number($('desc-meses').value) : null;
+    if($('desc-duracao').value === 'meses' && !(meses >= 1)){ $('desc-erro').textContent = 'Informe por quantos meses.'; $('desc-erro').hidden = false; return; }
+    salvarDesconto({ percentual:pct, meses }, $('desc-salvar'));
+  });
+  $('desc-remover').addEventListener('click', () => salvarDesconto({ percentual:0 }, $('desc-remover')));
+
+  /* ---------- promoção para novos ---------- */
+  let promoAtiva = false;
+  function desenharPromocao(p){
+    promoAtiva = !!(p && p.ativa);
+    const sw = $('promo-ativa');
+    sw.classList.toggle('on', promoAtiva); sw.setAttribute('aria-checked', String(promoAtiva));
+    $('promo-pct').value = p && p.percentual ? p.percentual : '';
+    $('promo-duracao').value = p && p.meses ? 'meses' : 'sempre';
+    $('promo-meses').value = p && p.meses ? p.meses : '';
+    $('promo-ate').value = (p && p.validaAte) || '';
+    mostrarCampoMeses('promo-duracao', 'promo-meses-campo');
+    const hoje = new Date().toISOString().slice(0, 10);
+    const vencida = p && p.validaAte && p.validaAte < hoje;
+    $('promo-status').innerHTML = p && p.ativa && !vencida
+      ? `<b>Ligada:</b> quem assinar pela primeira vez ganha ${String(p.percentual).replace('.', ',')}% de desconto ${p.meses ? `nos primeiros ${p.meses} meses` : 'para sempre'}${p.validaAte ? `, até ${data(p.validaAte)}` : ''}.`
+      : vencida ? `A promoção terminou em ${data(p.validaAte)}.` : 'Nenhuma promoção ligada: novos clientes pagam o preço normal.';
+  }
+  $('promo-ativa').addEventListener('click', () => { promoAtiva = !promoAtiva; $('promo-ativa').classList.toggle('on', promoAtiva); $('promo-ativa').setAttribute('aria-checked', String(promoAtiva)); });
+  $('promo-duracao').addEventListener('change', () => mostrarCampoMeses('promo-duracao', 'promo-meses-campo'));
+  $('promo-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const erro = $('promo-erro'); erro.hidden = true;
+    const corpo = { ativa:promoAtiva, percentual:Number($('promo-pct').value) || 0, meses:$('promo-duracao').value === 'meses' ? Number($('promo-meses').value) || '' : null, validaAte:$('promo-ate').value || null };
+    const botao = e.submitter || $('promo-form').querySelector('button[type=submit]');
+    botao.disabled = true;
+    try{ const r = await api('PUT', '/promocao', corpo); desenharPromocao(r.promocao); }
+    catch(err){ erro.textContent = err.message; erro.hidden = false; }
+    finally{ botao.disabled = false; }
+  });
 
   /* ---------- saúde ---------- */
   function linha(rotulo, valor){ return `<div class="dono-linha"><span>${esc(rotulo)}</span><span>${valor}</span></div>`; }
@@ -170,7 +254,7 @@
     botao.disabled = true; botao.textContent = 'Atualizando…';
     try{
       const [r, s, d] = await Promise.all([api('GET', '/resumo'), api('GET', '/saude'), api('GET', '/donos')]);
-      resumo = r; desenharResumo(); desenharSaude(s); desenharDonos(d);
+      resumo = r; desenharResumo(); desenharSaude(s); desenharDonos(d); desenharPromocao(r.promocao);
     }catch(err){
       if(err.status === 403){ document.querySelector('main').innerHTML = `<a class="ass-voltar" href="inicio.html">← Voltar</a><h1 class="ass-titulo">Painel do dono</h1><p class="ass-sub">${esc(err.message)}</p>`; return; }
       $('dono-sub').textContent = err.message;

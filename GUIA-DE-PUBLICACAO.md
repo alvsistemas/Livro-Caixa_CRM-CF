@@ -161,10 +161,6 @@ Enquanto o projeto estiver em modo "Teste", só os usuários de teste conseguem 
 
 Siga o passo a passo no início do arquivo `server/utils/telegramAlerta.js` e crie `TELEGRAM_BOT_TOKEN` e `TELEGRAM_CHAT_ID`.
 
-### 5.6 WhatsApp (YCloud, Twilio ou Meta)
-
-Não tem variável no Render: cada usuário conecta o próprio WhatsApp dentro do CRM, em **Configurações → Integrações**. Como o endereço do site mudou, cadastre na YCloud o **endereço de webhook novo** que o CRM mostra nessa tela.
-
 ### 5.7 Assinatura paga (Asaas)
 Siga o tutorial "Assinatura com o Asaas": primeiro no sandbox (dinheiro de mentira), depois em
 produção. Resumo das variáveis no Render: `ASAAS_API_KEY`, `ASAAS_AMBIENTE`, `ASAAS_WEBHOOK_TOKEN`,

@@ -10,13 +10,12 @@ const LIVRES_SEM_ASSINATURA = ['/api/auth', '/api/assinatura', '/api/backup/expo
 // Recursos que só o plano Completo tem
 function recursoDoCaminho(caminho) {
   if (caminho.startsWith('/api/ai/')) return 'ia';
-  if (caminho.startsWith('/api/whatsapp/') && !/^\/api\/whatsapp\/(status|desconectar)\/?$/.test(caminho)) return 'whatsapp';
   // agenda-mes fica aberta (traz as tarefas do calendário); lá dentro os eventos do Google
   // só entram se o plano tiver a integração
   if (/^\/api\/calendar\/(connect-url|eventos)/.test(caminho)) return 'googleAgenda';
   return null;
 }
-const NOME_DO_RECURSO = { ia: 'O assistente com IA', whatsapp: 'A integração com o WhatsApp', googleAgenda: 'A integração com o Google Agenda' };
+const NOME_DO_RECURSO = { ia: 'O assistente com IA', googleAgenda: 'A integração com o Google Agenda' };
 
 const JWT_SECRET = process.env.JWT_SECRET || 'troque-este-segredo-no-env';
 

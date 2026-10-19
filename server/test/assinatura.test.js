@@ -39,7 +39,7 @@ test('assinou no teste: ganha a tolerância pra pagar a 1ª fatura, depois bloqu
 test('pago: vale o plano escolhido; Essencial não tem IA', () => {
   const s = A.calcularAcesso({ plano: 'essencial', status: 'ativa', teste_ate: em(-30), pago_ate: em(10), asaas_assinatura_id: 'sub_1' }, { agora, ligada: true, tolerancia: 3 });
   assert.equal(s.liberado, true);
-  assert.deepEqual(s.recursos, { ia: false, whatsapp: false, googleAgenda: false });
+  assert.deepEqual(s.recursos, { ia: false, googleAgenda: false });
 });
 
 test('vencido: libera nos dias de tolerância e bloqueia depois', () => {
@@ -142,4 +142,58 @@ test('painel do dono: situação de cada cliente', () => {
   assert.equal(situacaoDoCliente({ status: 'cancelada', teste_ate: em(-60), pago_ate: em(5), asaas_assinatura_id: 's' }, base).chave, 'cancelou');
   assert.equal(situacaoDoCliente({ status: 'teste', teste_ate: em(-1) }, base).chave, 'bloqueado');
   assert.equal(situacaoDoCliente({ status: 'cortesia', teste_ate: em(-1) }, base).chave, 'cortesia');
+});
+
+test('plano anual: preços padrão e acesso de 12 meses por cobrança paga', () => {
+  assert.equal(A.valorDoPlano('essencial', 'anual'), 300);
+  assert.equal(A.valorDoPlano('completo', 'anual'), 400);
+  assert.equal(A.somarMeses('2026-10-25', 12), '2027-10-25');
+  assert.equal(A.somarMeses('2028-02-29', 12), '2029-02-28');
+  const s = A.situacaoPelasCobrancas({ status: 'ACTIVE', cycle: 'YEARLY', nextDueDate: '2027-10-25' }, [{ status: 'RECEIVED', dueDate: '2026-10-25', value: 300 }]);
+  assert.equal(s.pagoAte.toISOString(), new Date('2027-10-25T23:59:59-03:00').toISOString());
+});
+
+test('desconto: vale até a data, por percentual, sobre o preço contratado', () => {
+  const linha = { plano: 'completo', ciclo: 'mensal', valor_contratado: 39.9, desconto_percentual: 25, desconto_ate: '2027-01-10' };
+  assert.equal(A.descontoVale(linha, '2026-12-10'), true);
+  assert.equal(A.descontoVale(linha, '2027-01-10'), false, 'a cobrança que vence na data já é cheia');
+  assert.equal(A.valorDevido(linha, '2026-12-10'), 29.93);
+  assert.equal(A.valorDevido(linha, '2027-02-10'), 39.9);
+  // para sempre
+  assert.equal(A.valorDevido({ ...linha, desconto_ate: null }, '2035-01-01'), 29.93);
+  // preço contratado antigo continua valendo mesmo se a tabela mudar
+  process.env.ASSINATURA_VALOR_COMPLETO = '49.90';
+  try {
+    assert.equal(A.valorDevido({ plano: 'completo', ciclo: 'mensal', valor_contratado: 39.9 }, '2027-01-01'), 39.9);
+    assert.equal(A.valorDevido({ plano: 'essencial', ciclo: 'mensal', valor_contratado: 29.9 }, '2027-01-01', 'completo', 'mensal'), 49.9, 'trocou de plano: preço novo da tabela');
+  } finally { delete process.env.ASSINATURA_VALOR_COMPLETO; }
+  // nunca abaixo do mínimo do Asaas
+  assert.equal(A.valorDevido({ plano: 'essencial', ciclo: 'mensal', desconto_percentual: 90 }, '2027-01-01'), 5);
+});
+
+test('promoção para novos: validade e quem ganha', () => {
+  const agora = new Date('2026-11-10T12:00:00-03:00');
+  assert.equal(A.promocaoValida({ ativa: true, percentual: 20 }, agora), true);
+  assert.equal(A.promocaoValida({ ativa: true, percentual: 20, validaAte: '2026-11-09' }, agora), false);
+  assert.equal(A.promocaoValida({ ativa: false, percentual: 20 }, agora), false);
+  const promo = { ativa: true, percentual: 20 };
+  assert.equal(A.ganhaPromocao({}, promo), true);
+  assert.equal(A.ganhaPromocao({ asaas_assinatura_id: 'sub' }, promo), false, 'já assinou antes');
+  assert.equal(A.ganhaPromocao({ pago_ate_base: '2026-01-01' }, promo), false);
+  assert.equal(A.ganhaPromocao({ desconto_percentual: 10 }, promo), false, 'desconto pessoal tem prioridade');
+});
+
+test('e-mails da assinatura: textos com valor, data e link', () => {
+  const { montarAviso } = require('../utils/avisosAssinatura');
+  const f = montarAviso('fatura_proxima', { nome: 'Ana Paula', plano: 'Completo', valor: 39.9, vencimento: '2026-11-25', link: 'https://asaas/i/1', appUrl: 'https://app' });
+  assert.match(f.assunto, /25\/11\/2026/);
+  assert.match(f.html, /R\$\s?39,90/);
+  assert.match(f.html, /Olá, Ana!/);
+  assert.match(f.html, /https:\/\/asaas\/i\/1/);
+  const t = montarAviso('teste_acabando', { nome: '<b>x</b>', testeAte: '2026-10-25', appUrl: 'https://app' });
+  assert.match(t.html, /https:\/\/app\/assinatura\.html/);
+  assert.doesNotMatch(t.html, /<b>x<\/b>/, 'nome escapado');
+  for (const tipo of ['teste_acabou', 'fatura_vencida', 'pagamento_confirmado']) {
+    assert.ok(montarAviso(tipo, { plano: 'Essencial', valor: 29.9, vencimento: '2026-11-01', pagoAte: '2026-12-01', appUrl: 'https://app' }).assunto);
+  }
 });

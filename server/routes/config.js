@@ -19,8 +19,6 @@ router.get('/integracoes', (req, res) => {
     googleClientId: process.env.GOOGLE_CLIENT_ID || '',
     googleAgenda: !!(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET),
     assistenteIA: iaConfigurada(),
-    whatsappWebhook: !!process.env.WHATSAPP_VERIFY_TOKEN,
-    instagramWebhook: !!process.env.INSTAGRAM_VERIFY_TOKEN,
     telegramAlerta: !!(process.env.TELEGRAM_BOT_TOKEN && process.env.TELEGRAM_CHAT_ID),
     // e-mail (Resend) liga "esqueci minha senha" e o backup automático; push liga as notificações no celular
     emailRecuperacao: emailConfigurado(),

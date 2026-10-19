@@ -8,9 +8,9 @@
 <meta name="theme-color" content="#141414" />
 <link rel="icon" href="icons/icon-192.png" />
 <script>try{document.documentElement.setAttribute('data-theme',localStorage.getItem('darkMode')==='1'?'dark':'light');}catch(e){}</script>
-<link rel="stylesheet" href="css/style.css?v=20261115" />
-<link rel="stylesheet" href="css/assinatura.css?v=20261115" />
-<link rel="stylesheet" href="css/dono.css?v=20261115" />
+<link rel="stylesheet" href="css/style.css?v=20261118" />
+<link rel="stylesheet" href="css/assinatura.css?v=20261118" />
+<link rel="stylesheet" href="css/dono.css?v=20261118" />
 </head>
 <body class="ass-body">
   <main class="ass-wrap dono-wrap">
@@ -35,6 +35,27 @@
       <p class="ass-miudo" id="dono-tabela-rodape"></p>
     </section>
 
+    <section aria-labelledby="t-promo">
+      <h2 class="ass-h2" id="t-promo">Promoção para novos clientes</h2>
+      <div class="ass-cartao">
+        <p class="ass-texto" style="margin-top:0" id="promo-status"></p>
+        <form id="promo-form" class="dono-form-promo">
+          <label class="settings-toggle-row dono-toggle"><span>Promoção ativa</span>
+            <button type="button" class="switch" id="promo-ativa" role="switch" aria-checked="false"><span class="switch-knob"></span></button></label>
+          <div class="dono-campos">
+            <label class="ass-campo">Desconto (%)<input type="number" id="promo-pct" min="1" max="90" step="1" inputmode="numeric" /></label>
+            <label class="ass-campo">Por quanto tempo
+              <select id="promo-duracao"><option value="sempre">Para sempre</option><option value="meses">Por alguns meses</option></select></label>
+            <label class="ass-campo" id="promo-meses-campo">Quantos meses<input type="number" id="promo-meses" min="1" max="60" step="1" inputmode="numeric" /></label>
+            <label class="ass-campo">Vale para quem assinar até (opcional)<input type="date" id="promo-ate" /></label>
+          </div>
+          <p class="ass-miudo">Vale para quem assina pela primeira vez. Quem já ganhou continua com o desconto combinado, mesmo se você desligar a promoção depois. "Por alguns meses": depois desse tempo, a pessoa passa a pagar o preço normal sozinha.</p>
+          <p class="ass-erro" id="promo-erro" role="alert" hidden></p>
+          <div class="ass-acoes"><button type="submit" class="ass-btn ass-btn-forte">Salvar promoção</button></div>
+        </form>
+      </div>
+    </section>
+
     <section aria-labelledby="t-saude">
       <h2 class="ass-h2" id="t-saude">Saúde do sistema</h2>
       <div class="dono-saude" id="dono-saude"><p class="ass-carregando">Conferindo…</p></div>
@@ -54,6 +75,24 @@
     </section>
   </main>
 
+  <div class="ass-modal-fundo" id="desc-modal" hidden>
+    <form class="ass-modal" role="dialog" aria-modal="true" aria-labelledby="desc-titulo" id="desc-form">
+      <h2 class="ass-h2" id="desc-titulo" style="margin-top:0">Desconto</h2>
+      <p class="ass-texto" id="desc-quem"></p>
+      <label class="ass-campo">Desconto (%)<input type="number" id="desc-pct" min="1" max="99" step="1" inputmode="numeric" required /></label>
+      <label class="ass-campo">Por quanto tempo
+        <select id="desc-duracao"><option value="sempre">Para sempre</option><option value="meses">Por alguns meses</option></select></label>
+      <label class="ass-campo" id="desc-meses-campo">Quantos meses<input type="number" id="desc-meses" min="1" max="120" step="1" inputmode="numeric" /></label>
+      <p class="ass-miudo" id="desc-explica"></p>
+      <p class="ass-erro" id="desc-erro" role="alert" hidden></p>
+      <div class="ass-acoes">
+        <button type="submit" class="ass-btn ass-btn-forte" id="desc-salvar">Aplicar desconto</button>
+        <button type="button" class="ass-btn ass-btn-perigo" id="desc-remover" hidden>Tirar desconto</button>
+        <button type="button" class="ass-btn" id="desc-fechar">Voltar</button>
+      </div>
+    </form>
+  </div>
+
   <div class="ass-modal-fundo" id="ass-modal" hidden>
     <div class="ass-modal" role="dialog" aria-modal="true" aria-labelledby="ass-modal-titulo">
       <h2 class="ass-h2" id="ass-modal-titulo" style="margin-top:0"></h2>
@@ -64,6 +103,6 @@
       </div>
     </div>
   </div>
-  <script src="js/dono.js?v=20261115"></script>
+  <script src="js/dono.js?v=20261118"></script>
 </body>
 </html>

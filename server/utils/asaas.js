@@ -84,6 +84,8 @@ const asaas = {
   cancelarAssinatura: (id) => chamar('DELETE', `/subscriptions/${encodeURIComponent(id)}`),
   cobrancasDaAssinatura: (id) => chamar('GET', `/subscriptions/${encodeURIComponent(id)}/payments?limit=100`),
   buscarCobranca: (id) => chamar('GET', `/payments/${encodeURIComponent(id)}`),
+  // leitura mínima, só pra chave não ficar "sem uso" (o Asaas desativa chaves paradas por 3 meses)
+  manterChaveAtiva: () => chamar('GET', '/customers?limit=1'),
 };
 
 module.exports = { asaas, asaasConfigurado, problemaNaConfiguracao, ambiente, ErroAsaas };

@@ -107,15 +107,15 @@ Estas são as áreas do CRM, acessíveis pela barra lateral:
 - **Dashboard**: métricas do período (novos leads, em negociação, vendido, taxa de conversão), meta de vendas individual e da equipe, gráfico de leads captados, funil por etapa, últimos leads e tarefas abertas. Os painéis podem ser recolhidos clicando na seta ao lado do título.
 - **Pipeline**: o quadro Kanban principal, com colunas que representam etapas do funil de vendas (ex: Leads, Qualificação, Negociação, Fechado, Perdido). Dá pra ter vários funis diferentes (aba "Funil Principal" + "Novo funil"). Os clientes (cards) são arrastados entre colunas — no computador com o mouse, no celular segurando e arrastando o card. Cada card mostra nome, valor, temperatura (frio/morno/quente), telefone com botão de WhatsApp direto. Dentro de cada card tem um botão "Extras" que abre Etiquetas, Anexos, Tarefas e Histórico de contato daquele cliente. Também dá pra filtrar por mês ou ver "Esfriando" (leads parados há mais de 7 dias).
 - **Leads**: tabela com todos os clientes cadastrados, com filtros e exportação para CSV.
-- **Conversas**: histórico de mensagens de WhatsApp trocadas com os clientes (quando o WhatsApp Business está conectado).
+- **Automações**: regras simples por coluna — quando um cliente entra numa coluna (ou fica parado nela X dias), cria uma tarefa ou move o cliente pra outra coluna.
 - **Comissões**: calcula automaticamente a comissão de cada contrato vendido, mês a mês, com base no valor da venda e nas regras de comissão configuradas (engrenagem).
 - **Relatórios**: análises do desempenho de vendas, com exportação em PDF.
-- **Fluxos**: sequências automatizadas — por exemplo, "quando um lead entra na coluna X, espera 2 dias e manda uma mensagem de WhatsApp automaticamente, depois move pra outra coluna".
+- **Fluxos**: sequências automatizadas — por exemplo, "quando um lead entra na coluna X, cria uma tarefa de ligar, espera 2 dias e move pra outra coluna". O CRM não envia mensagens de WhatsApp sozinho: o botão de WhatsApp no cliente abre a conversa no WhatsApp da própria pessoa.
 - **Importar/Exportar**: permite subir uma planilha (Excel ou CSV) de leads pra importar em massa, e exportar os leads existentes.
 - **Equipe**: chat interno entre os membros da equipe, e (pra quem é Gestor) supervisão do desempenho de todos e ranking.
 - **Agenda/Tarefas**: tem duas abas. "Calendário" mostra as tarefas do CRM junto com os compromissos do Google Agenda (se conectado), num calendário mensal. "Rotina" é uma grade semanal (segunda a sexta, 8h às 19h) onde a pessoa planeja blocos de horário pra cada atividade — os blocos podem durar mais de 30 minutos e a grade mescla as células automaticamente. A Rotina também tem botões de exportar/importar em planilha Excel.
 - **Trocar de aplicativo** (no fim da barra lateral): o Livro-Caixa tem dois aplicativos com a mesma conta — este CRM e o **Controle financeiro** (receitas, despesas, cartões, investimentos, objetivos e lucro). As vendas fechadas no CRM (ou as comissões, conforme a configuração escolhida no Controle financeiro) entram sozinhas como receitas lá, pra mostrar o lucro de verdade.
-- **Configurações**: perfil (nome, foto, senha, 2FA), integrações (WhatsApp Business, Google Agenda, Instagram, templates de mensagem), aparência (cor de destaque, modo claro/escuro), campos personalizados, e manutenção (backup dos dados).
+- **Configurações**: perfil (nome, foto, senha, 2FA), integrações (Google Agenda, link de agenda, webhooks, link de agendamento), aparência (cor de destaque, modo claro/escuro), campos personalizados, e manutenção (backup dos dados).
 
 E estas são as áreas do Controle financeiro:
 

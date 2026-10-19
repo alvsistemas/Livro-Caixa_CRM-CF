@@ -17,6 +17,7 @@
 
   let situacao = null;
   let planoEscolhido = params.get('plano');
+  let cicloEscolhido = params.get('ciclo') === 'anual' ? 'anual' : 'mensal';
 
   async function api(metodo, caminho, corpo){
     const res = await fetch('/api/assinatura' + caminho, {
@@ -61,6 +62,21 @@
   };
   const nomeDoPlano = (id) => { const p = (situacao.planos || []).find((x) => x.id === id); return p ? p.nome : id; };
   const valorDoPlano = (id) => { const p = (situacao.planos || []).find((x) => x.id === id); return p ? p.valor : 0; };
+  const porCiclo = (c) => c === 'anual' ? '/ano' : '/mês';
+  // preço desta pessoa (com desconto pessoal ou promoção), por plano e ciclo
+  const oferta = (id, ciclo) => {
+    const o = situacao.ofertas && situacao.ofertas[id] && situacao.ofertas[id][ciclo];
+    if(o) return o;
+    const p = (situacao.planos || []).find((x) => x.id === id) || {};
+    const v = ciclo === 'anual' ? p.valorAnual : p.valor;
+    return { base:v, final:v };
+  };
+  // "nos primeiros 3 meses" / "para sempre" / "até 10/01/2027"
+  function textoDoDesconto(d, jaAssina){
+    if(!d) return '';
+    const quando = d.ate ? `até ${data(d.ate)}` : d.meses ? `nos primeiros ${d.meses} ${d.meses === 1 ? 'mês' : 'meses'}` : 'para sempre';
+    return `${String(d.percentual).replace('.', ',')}% de desconto ${quando}${d.origem === 'promocao' && !jaAssina ? ' (promoção para novos clientes)' : ''}`;
+  }
 
   function textoDoTopo(s){
     if(!s.cobranca) return { titulo:'Sua assinatura', sub:'A cobrança ainda não está ligada neste servidor, então tudo está liberado.' };
@@ -86,7 +102,8 @@
     const st = s.emTeste && !s.temAssinatura ? { rotulo:'Tudo liberado', classe:'ok' } : (STATUS[s.status] || { rotulo:s.status, classe:'' });
     const linhas = [];
     if(s.temAssinatura || s.status === 'cancelada' || s.pagoAte){
-      linhas.push(`<div class="ass-dado">Valor<b>${brl(valorDoPlano(s.plano))}/mês</b></div>`);
+      const valor = s.valorAtual != null ? s.valorAtual : oferta(s.plano, s.ciclo || 'mensal').final;
+      linhas.push(`<div class="ass-dado">Valor<b>${brl(valor)}${porCiclo(s.ciclo)}</b></div>`);
     }
     if(s.emTeste && s.testeAte) linhas.push(`<div class="ass-dado">Teste grátis até<b>${data(s.testeAte)}</b></div>`);
     if(s.pagoAte) linhas.push(`<div class="ass-dado">${s.status === 'cancelada' ? 'Acesso até' : 'Pago até'}<b>${data(s.pagoAte)}</b></div>`);
@@ -97,7 +114,8 @@
     if(s.linkPagamento && s.status !== 'cancelada') botoes.push(`<a class="ass-btn ass-btn-forte" href="${esc(s.linkPagamento)}" target="_blank" rel="noopener">Pagar a fatura em aberto</a>`);
     if(s.temAssinatura) botoes.push(`<button type="button" class="ass-btn" id="ass-atualizar">Já paguei — atualizar</button>`);
     if(s.temAssinatura) botoes.push(`<button type="button" class="ass-btn ass-btn-perigo" id="ass-cancelar">Cancelar assinatura</button>`);
-    const titulo = s.temAssinatura || s.status === 'cancelada' ? `Plano ${esc(nomeDoPlano(s.plano))}` : 'Teste grátis';
+    const titulo = s.temAssinatura || s.status === 'cancelada' ? `Plano ${esc(nomeDoPlano(s.plano))} ${s.ciclo === 'anual' ? 'anual' : 'mensal'}` : 'Teste grátis';
+    if(s.desconto && (s.temAssinatura || s.status === 'cancelada')) aviso += `<p class="ass-texto">${esc(textoDoDesconto(s.desconto, true))}.</p>`;
     el.innerHTML = `
       <div class="ass-status-linha"><span class="ass-plano-nome">${titulo}</span><span class="ass-selo ${st.classe}">${esc(st.rotulo)}</span></div>
       ${linhas.length ? `<div class="ass-dados">${linhas.join('')}</div>` : ''}
@@ -119,12 +137,25 @@
     const sec = $('ass-planos-sec');
     if(!s.cobranca || s.status === 'cortesia'){ sec.hidden = true; return; }
     $('ass-planos-titulo').textContent = s.temAssinatura ? 'Trocar de plano' : 'Escolha seu plano';
+    if(s.temAssinatura && !params.get('ciclo') && !desenharPlanos.jaEscolheuCiclo) cicloEscolhido = s.ciclo || 'mensal';
+    const economia = (s.planos || []).map((p) => 1 - p.valorAnual / (p.valor * 12)).reduce((a, b) => Math.min(a, b), 1);
+    $('ass-ciclo').innerHTML = ['mensal', 'anual'].map((c) => `<button type="button" class="ass-ciclo-opcao ${cicloEscolhido === c ? 'ativo' : ''}" data-ciclo="${c}" role="radio" aria-checked="${cicloEscolhido === c}">${c === 'mensal' ? 'Mensal' : `Anual <span>economize ${Math.round(economia * 100)}%</span>`}</button>`).join('');
+    document.querySelectorAll('[data-ciclo]').forEach((b) => b.addEventListener('click', () => { cicloEscolhido = b.dataset.ciclo; desenharPlanos.jaEscolheuCiclo = true; desenharPlanos(situacao); if(!$('ass-checkout').hidden) abrirCheckout(); }));
+    const notaDesconto = s.desconto && !s.temAssinatura ? `<p class="ass-faixa ass-faixa-desconto">${esc(textoDoDesconto(s.desconto, false))}. O preço abaixo já tem o desconto.</p>` : '';
+    $('ass-desconto-nota').innerHTML = notaDesconto;
     $('ass-planos').innerHTML = (s.planos || []).map((p) => {
-      const atual = s.temAssinatura && p.id === s.plano;
-      const texto = atual ? 'Seu plano atual' : s.temAssinatura ? `Mudar para o ${p.nome}` : `Assinar o ${p.nome}`;
+      const atual = s.temAssinatura && p.id === s.plano && cicloEscolhido === (s.ciclo || 'mensal');
+      const texto = atual ? 'Seu plano atual' : s.temAssinatura ? `Mudar para o ${p.nome} ${cicloEscolhido}` : `Assinar o ${p.nome}`;
+      const o = oferta(p.id, cicloEscolhido);
+      const temDesconto = o.final < o.base;
+      const sub = cicloEscolhido === 'anual'
+        ? `equivale a ${brl(o.final / 12)}/mês · ${brl(p.valor * 12 - p.valorAnual)} a menos que 12 mensalidades`
+        : '';
       return `<div class="ass-plano ${atual ? 'atual' : ''}">
         <div class="ass-plano-topo">${esc(p.nome)}</div>
-        <div class="ass-preco">${brl(p.valor)}<small>/mês</small></div>
+        ${temDesconto ? `<div class="ass-preco-antigo">${brl(o.base)}${porCiclo(cicloEscolhido)}</div>` : ''}
+        <div class="ass-preco">${brl(o.final)}<small>${porCiclo(cicloEscolhido)}</small></div>
+        ${sub ? `<div class="ass-preco-sub">${sub}</div>` : ''}
         <ul>${p.itens.map((i) => `<li>${esc(i)}</li>`).join('')}</ul>
         <button type="button" class="ass-btn ${atual ? '' : 'ass-btn-forte'}" data-plano="${esc(p.id)}" ${atual ? 'disabled' : ''}>${esc(texto)}</button>
       </div>`;
@@ -135,9 +166,13 @@
 
   async function escolherPlano(id, botao){
     if(situacao.temAssinatura){
-      const novo = valorDoPlano(id);
-      const ok = await confirmar({ titulo:`Mudar para o ${nomeDoPlano(id)}?`, texto:`A partir da fatura em aberto, o valor passa a ser ${brl(novo)}/mês. A mudança no que você pode usar vale na hora.`, sim:'Sim, mudar' });
-      if(ok) acao(botao, async () => { situacao = (await api('POST', '/trocar-plano', { plano:id })).situacao; desenhar(); });
+      const o = oferta(id, cicloEscolhido);
+      const mudaCiclo = cicloEscolhido !== (situacao.ciclo || 'mensal');
+      const quando = mudaCiclo
+        ? `A cobrança ${cicloEscolhido} começa quando o período que você já pagou terminar`
+        : 'O novo valor vale a partir da próxima fatura';
+      const ok = await confirmar({ titulo:`Mudar para o ${nomeDoPlano(id)} ${cicloEscolhido}?`, texto:`${quando}: ${brl(o.final)}${porCiclo(cicloEscolhido)}. O que você já pagou continua valendo, e a mudança no que você pode usar vale na hora.`, sim:'Sim, mudar' });
+      if(ok) acao(botao, async () => { situacao = (await api('POST', '/trocar-plano', { plano:id, ciclo:cicloEscolhido })).situacao; desenhar(); });
       return;
     }
     planoEscolhido = id;
@@ -150,7 +185,10 @@
     if(!p) return;
     const hoje = new Date().toISOString().slice(0, 10);
     const venc = s.emTeste && s.testeAte && s.testeAte.slice(0, 10) > hoje ? data(s.testeAte) : 'hoje';
-    $('ass-checkout-resumo').innerHTML = `Plano <b>${esc(p.nome)}</b>, <b>${brl(p.valor)}/mês</b>. A primeira cobrança vence <b>${venc}</b>${venc !== 'hoje' ? ', quando o teste grátis acaba (você pode pagar antes, se preferir)' : ''}. Depois, todo mês no mesmo dia. Você pode cancelar quando quiser.`;
+    const o = oferta(p.id, cicloEscolhido);
+    const repete = cicloEscolhido === 'anual' ? 'Depois, todo ano na mesma data' : 'Depois, todo mês no mesmo dia';
+    const desconto = s.desconto ? ` ${esc(textoDoDesconto(s.desconto, false))}; depois disso, ${brl(o.base)}${porCiclo(cicloEscolhido)}.` : '';
+    $('ass-checkout-resumo').innerHTML = `Plano <b>${esc(p.nome)} ${cicloEscolhido}</b>, <b>${brl(o.final)}${porCiclo(cicloEscolhido)}</b>.${s.desconto && s.desconto.meses == null && !s.desconto.ate ? ` ${esc(textoDoDesconto(s.desconto, false))}.` : desconto} A primeira cobrança vence <b>${venc}</b>${venc !== 'hoje' ? ', quando o teste grátis acaba (você pode pagar antes, se preferir)' : ''}. ${repete}. Você pode cancelar quando quiser.`;
     if(!$('ass-nome').value) $('ass-nome').value = s.nome || '';
     $('ass-erro').hidden = true;
     $('ass-checkout').hidden = false;
@@ -179,7 +217,7 @@
     const botao = $('ass-enviar');
     botao.disabled = true; botao.textContent = 'Gerando a fatura…';
     try{
-      const r = await api('POST', '/assinar', { plano:planoEscolhido, nome, cpfCnpj:doc });
+      const r = await api('POST', '/assinar', { plano:planoEscolhido, ciclo:cicloEscolhido, nome, cpfCnpj:doc });
       situacao = r.situacao;
       $('ass-checkout').hidden = true;
       desenhar();

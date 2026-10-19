@@ -15,13 +15,10 @@ const calendarRoutes = require('./routes/calendar');
 const comissoesRoutes = require('./routes/comissoes');
 const regrasComissaoRoutes = require('./routes/regrasComissao');
 const aiRoutes = require('./routes/ai');
-const whatsappRoutes = require('./routes/whatsapp');
 const funisRoutes = require('./routes/funis');
 const equipeRoutes = require('./routes/equipe');
 const automacoesRoutes = require('./routes/automacoes');
-const instagramRoutes = require('./routes/instagram');
 const fluxosRoutes = require('./routes/fluxos');
-const agendamentosRoutes = require('./routes/agendamentos');
 const camposPersonalizadosRoutes = require('./routes/camposPersonalizados');
 const possiveisLeadsRoutes = require('./routes/possiveisLeads');
 const metasRoutes = require('./routes/metas');
@@ -72,16 +69,7 @@ process.on('unhandledRejection', (motivo) => {
 });
 
 app.use(cors());
-// Guarda o corpo CRU só dos webhooks (Meta e YCloud) — a conferência da assinatura (X-Hub-Signature-256)
-// precisa dos bytes exatos que a Meta mandou, e depois do parse do JSON isso se perde.
-app.use(express.json({
-  limit: '50mb',
-  verify: (req, _res, buf) => {
-    if (req.originalUrl.startsWith('/api/whatsapp/webhook') || req.originalUrl.startsWith('/api/whatsapp/ycloud-webhook') || req.originalUrl.startsWith('/api/instagram/webhook')) {
-      req.rawBody = buf;
-    }
-  },
-}));
+app.use(express.json({ limit: '50mb' }));
 
 // API (auth e config são públicas; as outras exigem login dentro de cada rota)
 app.use('/api/config', configRoutes);
@@ -94,13 +82,10 @@ app.use('/api/calendar', calendarRoutes);
 app.use('/api/comissoes', comissoesRoutes);
 app.use('/api/regras-comissao', regrasComissaoRoutes);
 app.use('/api/ai', aiRoutes);
-app.use('/api/whatsapp', whatsappRoutes);
 app.use('/api/funis', funisRoutes);
 app.use('/api/equipe', equipeRoutes);
 app.use('/api/automacoes', automacoesRoutes);
-app.use('/api/instagram', instagramRoutes);
 app.use('/api/fluxos', fluxosRoutes);
-app.use('/api/agendamentos', agendamentosRoutes);
 app.use('/api/campos-personalizados', camposPersonalizadosRoutes);
 app.use('/api/possiveis-leads', possiveisLeadsRoutes);
 app.use('/api/metas', metasRoutes);
@@ -128,7 +113,6 @@ app.use(express.static(path.join(__dirname, '..', 'public')));
 
 const { verificarAutomacoesPorTempo } = require('./utils/automacaoScheduler');
 const { processarFluxos } = require('./utils/fluxoScheduler');
-const { processarAgendamentos } = require('./utils/agendamentoScheduler');
 const { enviarLembretesDeTarefas } = require('./utils/lembreteScheduler');
 const { enviarLembretesFinanceiros } = require('./utils/lembreteFinanceiro');
 const { sincronizarPendentes: conferirAssinaturas, cobrancaLigada } = require('./utils/assinatura');
@@ -168,8 +152,6 @@ async function start() {
     setInterval(verificarAutomacoesPorTempo, UMA_HORA);
     setTimeout(processarFluxos, 45 * 1000);
     setInterval(processarFluxos, UMA_HORA);
-    setTimeout(processarAgendamentos, 15 * 1000);
-    setInterval(processarAgendamentos, CINCO_MINUTOS);
     // lembretes de tarefa por notificação push (a cada 2 min) e backup semanal por e-mail (confere de 6 em 6 horas)
     setTimeout(enviarLembretesDeTarefas, 20 * 1000);
     setInterval(enviarLembretesDeTarefas, 2 * 60 * 1000);
@@ -182,6 +164,11 @@ async function start() {
     const conferirComSeguranca = () => conferirAssinaturas().catch((err) => console.error('Falha ao conferir assinaturas:', err.message));
     setTimeout(conferirComSeguranca, 2 * 60 * 1000);
     setInterval(conferirComSeguranca, UMA_HORA);
+    // e-mails da assinatura (teste acabando, fatura vencendo...) — só com o e-mail configurado
+    const { enviarAvisosAssinatura } = require('./utils/avisosAssinatura');
+    const avisarComSeguranca = () => enviarAvisosAssinatura().catch((err) => console.error('Falha nos avisos de assinatura:', err.message));
+    setTimeout(avisarComSeguranca, 3 * 60 * 1000);
+    setInterval(avisarComSeguranca, UMA_HORA);
     setTimeout(enviarBackupsSemanais, 90 * 1000);
     setInterval(enviarBackupsSemanais, 6 * UMA_HORA);
   } catch (err) {

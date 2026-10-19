@@ -2,7 +2,7 @@
    Provedor de IA do painel
    ================================================================
    Todo recurso de IA (assistente flutuante, sugestão de mensagem e de tarefa,
-   insights do funil, IA proativa/agente do WhatsApp) passa por aqui, então trocar
+   insights do funil, assistente) passa por aqui, então trocar
    de provedor não mexe em mais nenhum arquivo.
 
    Provedores suportados (escolhidos pelas variáveis de ambiente):

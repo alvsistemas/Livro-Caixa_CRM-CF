@@ -40,6 +40,14 @@
 .ass-btn-perigo:hover{ border-color:var(--danger); }
 
 #ass-checkout{ margin-top:18px; }
+.ass-ciclo{ display:inline-flex; gap:4px; padding:4px; border:1px solid var(--line); border-radius:999px; background:var(--paper); margin:0 0 14px; }
+.ass-ciclo-opcao{ min-height:36px; padding:6px 16px; border:none; border-radius:999px; background:none; color:var(--ink-soft); font:600 13px 'IBM Plex Sans',sans-serif; cursor:pointer; }
+.ass-ciclo-opcao span{ font-weight:500; font-size:12px; margin-left:4px; }
+.ass-ciclo-opcao.ativo{ background:var(--ink); color:var(--bg); }
+.ass-faixa-desconto{ background:#DCEFE3; color:#1F5B3A; border:1px solid #BFE0CB; }
+[data-theme="dark"] .ass-faixa-desconto{ background:#1E3A2A; color:#8FD3AA; border-color:#2C5A40; }
+.ass-preco-antigo{ font-size:14px; color:var(--ink-soft); text-decoration:line-through; margin-bottom:-6px; }
+.ass-preco-sub{ font-size:12.5px; color:var(--ink-soft); margin-top:-4px; }
 .ass-planos{ display:grid; grid-template-columns:1fr 1fr; gap:16px; }
 .ass-plano{ background:var(--paper); border:1px solid var(--line); border-radius:16px; padding:22px; display:flex; flex-direction:column; gap:10px; }
 .ass-plano.atual{ border:2px solid var(--ink); }

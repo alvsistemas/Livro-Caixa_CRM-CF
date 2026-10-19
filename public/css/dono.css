@@ -53,3 +53,14 @@
 .dono-add input{ flex:1 1 240px; min-height:42px; padding:8px 12px; border-radius:10px; border:1px solid var(--line); background:var(--bg); color:var(--ink); font:15px 'IBM Plex Sans',sans-serif; }
 .dono-btn-mini{ min-height:34px; padding:6px 12px; font-size:12px; }
 .dono-tabela .ass-selo{ white-space:nowrap; }
+.dono-toggle{ max-width:360px; }
+.dono-campos{ display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:0 16px; }
+.ass-campo select{ display:block; width:100%; box-sizing:border-box; margin-top:6px; min-height:44px; padding:10px 12px; border-radius:10px; border:1px solid var(--line); background:var(--bg); color:var(--ink); font:16px 'IBM Plex Sans',sans-serif; }
+.ass-campo[hidden]{ display:none; }
+.dono-desc{ font-size:11.5px; color:#1F5B3A; background:#DCEFE3; border-radius:999px; padding:2px 8px; white-space:nowrap; display:inline-block; margin-top:4px; }
+[data-theme="dark"] .dono-desc{ background:#1E3A2A; color:#8FD3AA; }
+.dono-tabela .acao{ text-align:right; }
+#desc-form{ max-height:calc(100vh - 32px); overflow:auto; }
+.sr-only{ position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap; }
+.dono-tabela .acao{ white-space:nowrap; width:1%; }
+.dono-tabela td, .dono-tabela th{ padding-left:12px; padding-right:12px; }

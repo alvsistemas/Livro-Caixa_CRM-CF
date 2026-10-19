@@ -104,4 +104,5 @@ module.exports = {
   montarEmailSenhaAlterada,
   montarEmailBackup,
   escaparHtml,
+  moldeEmail,
 };

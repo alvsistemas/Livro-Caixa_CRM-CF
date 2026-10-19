@@ -6,7 +6,6 @@ const Message = require('../models/Message');
 const User = require('../models/User');
 const { gerarComissaoAutomaticaSeGanho } = require('./comissaoAutomatica');
 
-const { enviarTexto: enviarMensagemGraphSimples } = require('./whatsappEnvio');
 
 // Roda periodicamente (chamado de server.js via setInterval). Pra cada execução de
 // fluxo em andamento, confere se já chegou a hora da próxima etapa e, se sim, executa.
@@ -54,39 +53,8 @@ async function processarFluxos() {
             const atualizado = await Card.findByIdAndUpdate(card._id, { columnId: destino }, { new: true });
             gerarComissaoAutomaticaSeGanho(exec.userId, atualizado, destino);
           }
-        } else if (etapa.tipo === 'mensagem') {
-          const texto = (etapa.params && etapa.params.texto) || '';
-          if (texto && card.telefoneNormalizado) {
-            const user = await User.findById(exec.userId);
-            if (user && user.whatsappBusiness && user.whatsappBusiness.accessToken) {
-              // mesma trava de segurança do agente de IA: não manda por cima de um humano
-              const ultimaHumana = await Message.findOne({
-                cardId: card._id,
-                direction: 'out',
-                enviadoPorAgente: { $ne: true },
-              }).sort({ timestamp: -1 });
-              const humanoRecente = ultimaHumana && Date.now() - new Date(ultimaHumana.timestamp).getTime() < 30 * 60 * 1000;
-
-              if (!humanoRecente) {
-                try {
-                  const data = await enviarMensagemGraphSimples(user, card, texto);
-                  await Message.create({
-                    userId: exec.userId,
-                    cardId: card._id,
-                    direction: 'out',
-                    texto,
-                    whatsappMessageId: data.messages && data.messages[0] && data.messages[0].id,
-                    status: 'sent',
-                    timestamp: new Date(),
-                    enviadoPorAgente: true,
-                  });
-                } catch (e) {
-                  console.error('Erro ao enviar mensagem do fluxo:', e.message);
-                }
-              }
-            }
-          }
         }
+        // etapa 'mensagem' (WhatsApp) saiu: é só pulada
 
         exec.etapaAtual += 1;
         if (exec.etapaAtual >= fluxo.etapas.length) exec.concluido = true;

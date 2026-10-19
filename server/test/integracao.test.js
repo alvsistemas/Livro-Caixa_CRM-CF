@@ -64,10 +64,9 @@ describe('API com PostgreSQL (integração)', { skip: pular }, () => {
 
   test('todas as listagens respondem sem erro', async () => {
     const t = contas.ana.token;
-    const rotas = ['/api/auth/me', '/api/funis', '/api/tasks', '/api/comissoes', '/api/regras-comissao', '/api/agendamentos',
+    const rotas = ['/api/auth/me', '/api/funis', '/api/tasks', '/api/comissoes', '/api/regras-comissao',
       '/api/auditoria', '/api/automacoes', '/api/fluxos', '/api/campos-personalizados', '/api/possiveis-leads',
-      '/api/webhooks-saida', '/api/whatsapp/status', '/api/whatsapp/menu-triagem', '/api/whatsapp/conversas',
-      '/api/instagram/status', '/api/calendar/status', '/api/calendar/ics-status', '/api/config/integracoes',
+      '/api/webhooks-saida', '/api/calendar/status', '/api/calendar/ics-status', '/api/config/integracoes',
       '/api/equipe', '/api/metas/2026-10', '/api/gerot/2026-10-12', '/api/backup/automatico', '/api/financeiro',
       '/api/push/chave'];
     for (const rota of rotas) {
@@ -366,35 +365,23 @@ describe('API com PostgreSQL (integração)', { skip: pular }, () => {
     assert.ok(!boardAna.dados.cards.some((c) => c.cliente === 'Do Mongo'));
   });
 
-  test('WhatsApp: mensagem recebida cria o lead e aparece nas conversas', async () => {
-    const User = require('../models/User');
-    await User.findByIdAndUpdate(contas.caio.id, { 'whatsappBusiness.phoneNumberId': 'PN-TESTE', 'whatsappBusiness.accessToken': 'tk' });
-    const webhook = {
-      entry: [{ changes: [{ field: 'messages', value: {
-        metadata: { phone_number_id: 'PN-TESTE' },
-        contacts: [{ profile: { name: 'Zé do Teste' }, wa_id: '5515999990001' }],
-        messages: [{ from: '5515999990001', id: 'wamid.teste1', timestamp: String(Math.floor(Date.now() / 1000)), type: 'text', text: { body: 'Olá, quero um orçamento' } }],
-      } }] }],
-    };
-    const r = await api('POST', '/api/whatsapp/webhook', webhook);
-    assert.equal(r.status, 200);
-    await new Promise((ok) => setTimeout(ok, 600));
-    const login = await api('POST', '/api/auth/login', { email: 'caio@teste.com', senha: 'senha123' });
-    contas.caio.token = login.dados.token;
-    const conv = await api('GET', '/api/whatsapp/conversas', undefined, contas.caio.token);
-    assert.equal(conv.status, 200, JSON.stringify(conv.dados));
-    assert.equal(conv.dados.conversas.length, 1, JSON.stringify(conv.dados));
-    assert.equal(conv.dados.conversas[0].ultimaMensagem, 'Olá, quero um orçamento');
-    const hist = await api('GET', `/api/whatsapp/conversas/${conv.dados.conversas[0].card.id}`, undefined, contas.caio.token);
-    assert.equal(hist.dados.mensagens.length, 1);
-    // repetir o mesmo evento não duplica a mensagem
-    await api('POST', '/api/whatsapp/webhook', webhook);
-    await new Promise((ok) => setTimeout(ok, 400));
-    const hist2 = await api('GET', `/api/whatsapp/conversas/${conv.dados.conversas[0].card.id}`, undefined, contas.caio.token);
-    assert.equal(hist2.dados.mensagens.length, 1);
+  test('WhatsApp e Instagram foram retirados: rotas fora do ar e fluxo sem etapa de mensagem', async () => {
+    const t = contas.ana.token;
+    for (const rota of ['/api/whatsapp/status', '/api/whatsapp/conversas', '/api/instagram/status', '/api/agendamentos']) {
+      const r = await api('GET', rota, undefined, t);
+      assert.equal(r.status, 404, rota);
+    }
+    assert.equal((await api('POST', '/api/whatsapp/webhook', { entry: [] })).status, 404);
+    const board = await api('GET', '/api/board', undefined, t);
+    const col = board.dados.columns[0];
+    const f = await api('POST', '/api/fluxos', { nome: 'Antigo', colunaGatilhoId: col.id, etapas: [{ diasAposInicio: 0, tipo: 'mensagem', params: { texto: 'oi' } }] }, t);
+    assert.equal(f.status, 400);
+    assert.match(f.dados.error, /WhatsApp/);
+    const cfg = await api('GET', '/api/config/integracoes');
+    assert.equal(cfg.dados.whatsappWebhook, undefined);
   });
 
-  test('agendadores rodam sem erro (automação por tempo, fluxos, mensagens, lembretes)', async () => {
+  test('agendadores rodam sem erro (automação por tempo, fluxos, lembretes)', async () => {
     const t = contas.ana.token;
     const board = await api('GET', '/api/board', undefined, t);
     const leads = board.dados.columns.find((c) => c.nome === 'Leads');
@@ -414,7 +401,6 @@ describe('API com PostgreSQL (integração)', { skip: pular }, () => {
       await require('../utils/automacaoScheduler').verificarAutomacoesPorTempo();
       await new Promise((ok) => setTimeout(ok, 300));
       await require('../utils/fluxoScheduler').processarFluxos();
-      await require('../utils/agendamentoScheduler').processarAgendamentos();
       await require('../utils/lembreteScheduler').enviarLembretesDeTarefas();
       await require('../utils/backupScheduler').enviarBackupsSemanais();
     } finally {
@@ -489,10 +475,6 @@ describe('API com PostgreSQL (integração)', { skip: pular }, () => {
     assert.ok(wh.status < 300, JSON.stringify(wh.dados));
     assert.ok((await api('PUT', `/api/webhooks-saida/${wh.dados.id}`, { ativo: false }, t)).status < 300);
     assert.ok((await api('DELETE', `/api/webhooks-saida/${wh.dados.id}`, undefined, t)).status < 300);
-    const board = await api('GET', '/api/board', undefined, t);
-    const agend = await api('POST', '/api/agendamentos', { cardId: board.dados.cards[0].id, texto: 'Lembrete', agendadoPara: new Date(Date.now() + 3600000).toISOString() }, t);
-    assert.ok(agend.status < 300, JSON.stringify(agend.dados));
-    assert.ok((await api('POST', `/api/agendamentos/${agend.dados.id}/cancelar`, {}, t)).status < 300);
     assert.ok((await api('PUT', '/api/auth/nome', { nome: 'Bia Souza' }, t)).status < 300);
     const me = await api('GET', '/api/auth/me', undefined, t);
     assert.equal(me.dados.user.nome, 'Bia Souza');
@@ -606,31 +588,123 @@ describe('API com PostgreSQL (integração)', { skip: pular }, () => {
       const repetido = await (await aviso({ id: 'evt_1', event: 'PAYMENT_RECEIVED', payment: { subscription: sub.id } }, 'token-do-webhook-teste')).json();
       assert.equal(repetido.repetido, true);
 
-      // troca pro Essencial: muda o valor no Asaas e a IA passa a pedir o Completo
+      // validação de saque: recusa sempre, com ou sem token certo
+      process.env.ASAAS_SAQUE_TOKEN = 'token-saque-teste';
+      for (const tk of ['token-saque-teste', 'errado']) {
+        const vs = await fetch(`${base}/api/assinatura/validar-saque`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'asaas-access-token': tk }, body: JSON.stringify({ type: 'TRANSFER', transfer: { id: 'tr_1', value: 5000 } }) });
+        assert.equal(vs.status, 200);
+        assert.equal((await vs.json()).status, 'REFUSED');
+      }
+
+      // estorno: o acesso pago some; pago de novo: volta
+      fake.cobrancas[0].status = 'REFUNDED';
+      assert.equal((await api('POST', '/api/assinatura/atualizar', {}, t)).dados.situacao.liberado, false);
+      fake.cobrancas[0].status = 'RECEIVED';
+      assert.equal((await api('POST', '/api/assinatura/atualizar', {}, t)).dados.situacao.liberado, true);
+
+      // troca pro Essencial: o sistema cria uma assinatura nova (a partir do próximo vencimento)
+      // e apaga a antiga; o mês já pago continua valendo
+      const ativa = (clienteId) => Object.values(fake.assinaturas).filter((a) => a.customer === clienteId && !a.deleted);
       const troca = await api('POST', '/api/assinatura/trocar-plano', { plano: 'essencial' }, t);
       assert.equal(troca.status, 200, JSON.stringify(troca.dados));
-      assert.equal(fake.assinaturas[sub.id].value, 29.9);
+      assert.equal(fake.assinaturas[sub.id].deleted, true, 'a antiga é apagada');
+      const sub2 = ativa(sub.customer);
+      assert.equal(sub2.length, 1, 'só uma assinatura ativa');
+      assert.equal(sub2[0].value, 29.9);
+      assert.equal(sub2[0].cycle, 'MONTHLY');
+      assert.equal(sub2[0].nextDueDate, A.somarMeses(sub.nextDueDate, 1), 'começa quando o mês pago acaba');
+      assert.equal(troca.dados.situacao.liberado, true);
+      assert.equal(troca.dados.situacao.plano, 'essencial');
       const ia = await api('POST', '/api/ai/assistente', { mensagens: [{ role: 'user', content: 'oi' }] }, t);
       assert.equal(ia.status, 403);
       assert.equal(ia.dados.recurso, 'ia');
-      assert.equal((await api('GET', '/api/whatsapp/status', undefined, t)).status < 400, true);
+      // aviso da assinatura antiga apagada chega depois: é ignorado
+      assert.equal((await aviso({ id: 'evt_old', event: 'SUBSCRIPTION_DELETED', subscription: { id: sub.id, deleted: true } }, 'token-do-webhook-teste')).status, 200);
+      await new Promise((r2) => setTimeout(r2, 200));
+      assert.equal((await api('GET', '/api/assinatura', undefined, t)).dados.status, 'ativa', 'troca com mês pago continua em dia');
 
-      // cancela: as próximas cobranças somem, mas o mês pago continua valendo
+      // vira anual: nova assinatura YEARLY de R$ 300, começando no fim do período pago
+      const anual = await api('POST', '/api/assinatura/trocar-plano', { plano: 'essencial', ciclo: 'anual' }, t);
+      assert.equal(anual.status, 200, JSON.stringify(anual.dados));
+      const sub3 = ativa(sub.customer);
+      assert.equal(sub3.length, 1);
+      assert.equal(sub3[0].cycle, 'YEARLY');
+      assert.equal(sub3[0].value, 300);
+      assert.equal(anual.dados.situacao.ciclo, 'anual');
+      assert.equal(anual.dados.situacao.liberado, true);
+
+      // cancela: as próximas cobranças somem, mas o período pago continua valendo
       const canc = await api('POST', '/api/assinatura/cancelar', {}, t);
       assert.equal(canc.status, 200, JSON.stringify(canc.dados));
-      assert.equal(fake.assinaturas[sub.id].deleted, true);
+      assert.equal(ativa(sub.customer).length, 0);
       assert.equal(canc.dados.situacao.status, 'cancelada');
       assert.equal(canc.dados.situacao.liberado, true);
-      // o aviso de assinatura apagada chega depois: o mês pago continua valendo
-      assert.equal((await aviso({ id: 'evt_2', event: 'SUBSCRIPTION_DELETED', subscription: { id: sub.id, deleted: true } }, 'token-do-webhook-teste')).status, 200);
+      assert.equal((await aviso({ id: 'evt_2', event: 'SUBSCRIPTION_DELETED', subscription: { id: sub3[0].id, deleted: true } }, 'token-do-webhook-teste')).status, 200);
       await new Promise((r2) => setTimeout(r2, 300));
       s = await api('GET', '/api/assinatura', undefined, t);
       assert.equal(s.dados.status, 'cancelada');
       assert.equal(s.dados.liberado, true, 'cancelar não pode tirar o mês já pago');
       assert.ok(s.dados.pagoAte);
-      // o pagamento é estornado no Asaas: o acesso pago some
-      fake.cobrancas[0].status = 'REFUNDED';
-      assert.equal((await api('POST', '/api/assinatura/atualizar', {}, t)).dados.situacao.liberado, false);
+
+      // assina de novo: não perde o período pago, a 1ª fatura vence quando ele acaba
+      const volta = await api('POST', '/api/assinatura/assinar', { plano: 'completo', nome: 'Dani Souza', cpfCnpj: '52998224725' }, t);
+      assert.equal(volta.status, 200, JSON.stringify(volta.dados));
+      assert.equal(volta.dados.situacao.liberado, true, 'voltar a assinar não tira o período já pago');
+      assert.equal(volta.dados.vencimento, A.somarMeses(sub.nextDueDate, 1));
+
+      // ---- desconto pessoal dado pelo dono: 50% por 2 meses ----
+      process.env.DONOS_EMAILS = 'dona@teste.com';
+      const dona = await api('POST', '/api/auth/register', { nome: 'Dona', email: 'dona@teste.com', senha: 'senha123' });
+      const td = dona.dados.token;
+      assert.equal((await api('PUT', `/api/dono/clientes/${id}/desconto`, { percentual: 50, meses: 2 }, t)).status, 403, 'cliente não dá desconto');
+      const desc = await api('PUT', `/api/dono/clientes/${id}/desconto`, { percentual: 50, meses: 2 }, td);
+      assert.equal(desc.status, 200, JSON.stringify(desc.dados));
+      let s4 = ativa(sub.customer);
+      assert.equal(s4.length, 1);
+      assert.equal(s4[0].value, 19.95, '50% de R$ 39,90');
+      s = await api('GET', '/api/assinatura', undefined, t);
+      assert.equal(s.dados.desconto.percentual, 50);
+      assert.equal(s.dados.desconto.origem, 'pessoal');
+      assert.equal(s.dados.valorAtual, 19.95);
+      // os 2 meses passaram: na próxima conferência o valor volta ao normal
+      await query("UPDATE assinaturas SET desconto_ate = (now() - interval '1 day')::date WHERE user_id = $1", [id]);
+      await api('POST', '/api/assinatura/atualizar', {}, t);
+      s4 = ativa(sub.customer);
+      assert.equal(s4.length, 1);
+      assert.equal(s4[0].value, 39.9, 'desconto acabou: preço cheio');
+      // tirar o desconto de vez
+      assert.equal((await api('PUT', `/api/dono/clientes/${id}/desconto`, { percentual: 0 }, td)).status, 200);
+
+      // ---- promoção para novos: 20% para sempre ----
+      assert.equal((await api('PUT', '/api/dono/promocao', { ativa: true, percentual: 95 }, td)).status, 400);
+      const promo = await api('PUT', '/api/dono/promocao', { ativa: true, percentual: 20, meses: null }, td);
+      assert.equal(promo.status, 200, JSON.stringify(promo.dados));
+      const novo = await api('POST', '/api/auth/register', { nome: 'Edu', email: 'edu@teste.com', senha: 'senha123' });
+      const te = novo.dados.token;
+      const precos = await api('GET', '/api/assinatura', undefined, te);
+      assert.equal(precos.dados.ofertas.completo.mensal.final, 31.92, '20% de R$ 39,90');
+      assert.equal(precos.dados.ofertas.essencial.anual.final, 240, '20% de R$ 300');
+      assert.equal(precos.dados.desconto.origem, 'promocao');
+      const assEdu = await api('POST', '/api/assinatura/assinar', { plano: 'essencial', ciclo: 'anual', nome: 'Edu Lima', cpfCnpj: '11.222.333/0001-81' }, te);
+      assert.equal(assEdu.status, 200, JSON.stringify(assEdu.dados));
+      assert.equal(assEdu.dados.valor, 240);
+      const subEdu = Object.values(fake.assinaturas).find((a) => fake.clientes[a.customer].cpfCnpj === '11222333000181');
+      assert.equal(subEdu.cycle, 'YEARLY');
+      assert.equal(subEdu.value, 240);
+      // promoção desligada depois: quem já assinou mantém (para sempre)
+      await api('PUT', '/api/dono/promocao', { ativa: false }, td);
+      const edu2 = await api('POST', '/api/assinatura/atualizar', {}, te);
+      assert.equal(edu2.dados.situacao.desconto.percentual, 20);
+      assert.equal(Object.values(fake.assinaturas).filter((a) => a.customer === subEdu.customer && !a.deleted)[0].value, 240);
+      // pago o anual: acesso por 12 meses
+      fake.cobrancas.find((c) => c.subscription === subEdu.id).status = 'CONFIRMED';
+      const edu3 = await api('POST', '/api/assinatura/atualizar', {}, te);
+      assert.equal(edu3.dados.situacao.pagoAte.slice(0, 7), A.somarMeses(subEdu.nextDueDate, 12).slice(0, 7));
+      // painel do dono: receita em equivalente mensal e anuais contados
+      const resumo = await api('GET', '/api/dono/resumo', undefined, td);
+      assert.equal(resumo.status, 200);
+      assert.equal(resumo.dados.totais.anuais >= 1, true);
+      assert.equal(resumo.dados.clientes.find((c) => c.email === 'edu@teste.com').desconto.percentual, 20);
       assert.equal(fake.semChave, 0);
     } finally {
       for (const k of Object.keys(process.env)) if (!(k in antes)) delete process.env[k];
@@ -672,6 +746,49 @@ describe('API com PostgreSQL (integração)', { skip: pular }, () => {
       assert.equal((await api('GET', '/api/dono/resumo', undefined, ts)).status, 403);
     } finally {
       if (antes === undefined) delete process.env.DONOS_EMAILS; else process.env.DONOS_EMAILS = antes;
+    }
+  });
+
+  test('avisos por e-mail da assinatura: teste acabando, fatura vencendo, nunca duas vezes', async () => {
+    const { enviarAvisosAssinatura } = require('../utils/avisosAssinatura');
+    const A = require('../utils/assinatura');
+    const { query } = require('../db/pool');
+    const antes = { ...process.env };
+    const fetchReal = global.fetch;
+    const enviados = [];
+    global.fetch = async (url, opts) => {
+      if (String(url).includes('resend.com')) { enviados.push(JSON.parse(opts.body)); return new Response('{"id":"x"}', { status: 200 }); }
+      return fetchReal(url, opts);
+    };
+    Object.assign(process.env, { ASAAS_API_KEY: '$aact_hmlg_avisos', RESEND_API_KEY: 're_teste', EMAIL_FROM: 'Livro-Caixa <oi@teste.com>', APP_URL: 'https://app.teste', DONOS_EMAILS: 'chefe-avisos@teste.com' });
+    try {
+      const mk = async (nome, email) => { const r = await api('POST', '/api/auth/register', { nome, email, senha: 'senha123' }); await api('GET', '/api/assinatura', undefined, r.dados.token); return r.dados.user.id; };
+      const fabi = await mk('Fabi Rocha', 'fabi@teste.com');
+      const gui = await mk('Gui', 'gui@teste.com');
+      const chefe = await mk('Chefe', 'chefe-avisos@teste.com');
+      const meioDia = new Date();
+      meioDia.setUTCHours(15, 0, 0, 0); // 12h em Brasília
+      await query("UPDATE assinaturas SET teste_ate = $2::timestamptz + interval '1 day' WHERE user_id = ANY($1)", [[fabi, chefe], meioDia.toISOString()]);
+      const venc = A.hojeEmBrasilia(new Date(meioDia.getTime() + 2 * 86400000));
+      await query("UPDATE assinaturas SET teste_ate = now() - interval '20 days', status = 'aguardando', asaas_assinatura_id = 'sub_gui', plano = 'essencial', valor_contratado = 29.9, proximo_vencimento = $2, ultimo_link_pagamento = 'https://asaas/i/gui' WHERE user_id = $1", [gui, venc]);
+      const n = await enviarAvisosAssinatura(meioDia);
+      const para = enviados.map((e) => `${e.to[0]}|${e.subject}`);
+      assert.ok(para.some((x) => x.startsWith('fabi@teste.com|') && /acaba em 2 dias/.test(x)), para.join('\n'));
+      assert.ok(para.some((x) => x.startsWith('gui@teste.com|') && /vence em/.test(x)), para.join('\n'));
+      assert.ok(!para.some((x) => x.startsWith('chefe-avisos@')), 'dono não recebe aviso de cobrança');
+      assert.ok(enviados.find((e) => e.to[0] === 'gui@teste.com').html.includes('R$'));
+      assert.equal(n, enviados.length);
+      // de novo: nada repetido
+      const quantos = enviados.length;
+      await enviarAvisosAssinatura(meioDia);
+      assert.equal(enviados.length, quantos, 'o mesmo aviso não sai duas vezes');
+      // de madrugada não manda nada
+      const madrugada = new Date(meioDia); madrugada.setUTCHours(6, 0, 0, 0);
+      assert.equal(await enviarAvisosAssinatura(madrugada), 0);
+    } finally {
+      global.fetch = fetchReal;
+      for (const k of Object.keys(process.env)) if (!(k in antes)) delete process.env[k];
+      Object.assign(process.env, antes);
     }
   });
 
