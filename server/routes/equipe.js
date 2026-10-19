@@ -318,7 +318,7 @@ router.get('/supervisao', async (req, res) => {
       cards.forEach((c) => {
         const col = colunas.find((k) => k._id.toString() === c.columnId.toString());
         if (!col) return;
-        if (col.tipo === 'ganho') ganhoValor += Number(c.valor) || 0;
+        if (col.tipo === 'ganho') ganhoValor += (c.fechamento && Number.isFinite(Number(c.fechamento.valorFinal))) ? Number(c.fechamento.valorFinal) : (Number(c.valor) || 0); // valor final do fechamento, se houver
         else if (col.tipo === 'perdido') perdidoValor += Number(c.valor) || 0;
         else if (col.tipo === 'aberto') abertoValor += Number(c.valor) || 0;
       });

@@ -182,7 +182,8 @@ async function enviarPendentes() {
   salvamento.pendentes.clear();
   const falharam = [];
   for (const secao of secoes) {
-    try { await api("PUT", `/financeiro/${secao}`, { valor: state[SECAO_ESTADO[secao]] }); }
+    // carregadoEm: o servidor não apaga as receitas que o CRM criou depois que esta tela carregou
+    try { await api("PUT", `/financeiro/${secao}`, { valor: state[SECAO_ESTADO[secao]], carregadoEm: secao === "transacoes" ? state.carregadoEm : undefined }); }
     catch (e) { falharam.push(secao); salvamento.erro = e.message; }
   }
   salvamento.salvando = false;
@@ -288,6 +289,7 @@ function crmRowsForMonth(month) {
     const ganho = new Set(state.crm.columns.filter((c) => c.tipo === "ganho").map((c) => c.id));
     state.crm.cards.forEach((c) => {
       if (!ganho.has(c.columnId)) return;
+      if (c.fechamento) return; // fechamento feito: as parcelas já são lançamentos de verdade
       const data = dataVendaDoCard(c);
       if (monthKey(data) !== month) return;
       const value = Number(c.valor) || 0;
@@ -486,6 +488,7 @@ function accountSelectInline(tx) {
 }
 // "Nubank" / "Conta Itaú" embaixo da forma de pagamento
 function origemDoLancamento(tx) {
+  if (tx.crmFechamento) return `<a href="../index.html" class="origem-crm" title="Criado pelo fechamento da venda no CRM">CRM · venda</a>`;
   if (tx.account === Calculos.CARTAO) { const c = Calculos.cartaoDoLancamento(tx, state.cards); return c ? `💳 ${escapeHtml(c.name)}` : (state.cards.length > 1 ? `<span class="aviso-mini">escolha o cartão</span>` : ""); }
   const conta = tx.contaId && state.contas.find((k) => k.id === tx.contaId);
   return conta ? `🏦 ${escapeHtml(conta.name)}` : "";
@@ -779,7 +782,7 @@ function renderObjetivos() {
 function opcoesIntegracaoHtml() {
   const modo = modoIntegracao();
   const opcoes = [
-    ["vendas", "Valor das vendas", "Sou dono(a) do negócio: cada venda fechada no CRM entra como receita da Empresa."],
+    ["vendas", "Valor das vendas", "Sou dono(a) do negócio: cada venda fechada no CRM entra como receita da Empresa, com o valor final e as parcelas que você informa ao fechar."],
     ["comissoes", "Minhas comissões", "Sou vendedor(a): as parcelas de comissão do CRM entram como minha receita."],
     ["nenhum", "Não usar o CRM", "Só os lançamentos feitos aqui no Controle financeiro."],
   ];
@@ -1027,7 +1030,7 @@ function attachMainEvents() {
   /* Lucro / integração com o CRM */
   document.querySelectorAll("[data-goto]").forEach((a) => a.addEventListener("click", (e) => { e.preventDefault(); irParaAba(a.dataset.goto); }));
   document.querySelectorAll("[data-integracao]").forEach((btn) => btn.addEventListener("click", () => {
-    state.config = { ...state.config, integracaoCrm: btn.dataset.integracao };
+    state.config = { ...state.config, integracaoCrm: btn.dataset.integracao, integracaoCrmPerguntado: true };
     saveConfig(); render();
   }));
   const descontar = document.getElementById("descontar-comissoes");
@@ -1621,7 +1624,42 @@ function startApp() {
   render();
   atualizarStatusSalvamento();
   ligarAssistenteIA();
+  perguntarModoCrm();
 }
+
+// Primeiro acesso: como o financeiro trata o que vem do CRM (uma vez só; muda depois em Lucro)
+function perguntarModoCrm() {
+  const c = state.config || {};
+  if (c.integracaoCrmPerguntado || state.modoCrmJaSalvo) return;
+  const opcoes = [
+    ["vendas", "Eu vendo produtos ou serviços", "Cada venda fechada no CRM vira receita aqui, com o valor final e as parcelas."],
+    ["comissoes", "Eu ganho comissão sobre as vendas", "Entra aqui só a sua comissão, da aba Comissões do CRM."],
+    ["nenhum", "Não quero ligar ao CRM", "O CRM e o financeiro ficam separados."],
+  ];
+  openModal("Uma pergunta rápida", `
+    <p class="modo-crm-texto">O Livro-Caixa também tem um CRM. Como o financeiro deve tratar o que você fecha lá? Dá pra mudar depois na aba Lucro.</p>
+    <div class="integ-opcoes modo-crm-opcoes">${opcoes.map(([k, t, d]) => `<button type="button" class="integ-opcao" data-modo-crm="${k}"><span class="integ-titulo">${t}</span><span class="integ-desc">${d}</span></button>`).join("")}</div>`);
+  document.querySelectorAll("[data-modo-crm]").forEach((b) => b.addEventListener("click", () => {
+    state.config = { ...state.config, integracaoCrm: b.dataset.modoCrm, integracaoCrmPerguntado: true };
+    saveConfig(); closeModal(); render();
+  }));
+  // fechar sem responder: pergunta de novo na próxima vez
+}
+
+// Voltou pra esta aba (ex.: fechou uma venda no CRM em outra aba): busca os lançamentos de novo
+async function recarregarAoVoltar() {
+  if (document.visibilityState !== "visible" || !state.carregadoEm) return;
+  if (salvamento.pendentes.size || salvamento.salvando) return;
+  if (document.getElementById("modal-root").innerHTML.trim()) return; // não mexe com janela aberta
+  try {
+    const [fin] = await Promise.all([api("GET", "/financeiro"), carregarCrm()]);
+    if (salvamento.pendentes.size || salvamento.salvando) return; // mexeram enquanto buscava
+    state.txs = (fin.dados && fin.dados.transacoes) || state.txs;
+    state.carregadoEm = fin.carregadoEm || state.carregadoEm;
+    render();
+  } catch (e) { /* sem internet: fica com o que tem */ }
+}
+document.addEventListener("visibilitychange", recarregarAoVoltar);
 // Assistente de IA (bolinha): o mesmo do CRM, em ../js/assistente-ia.js
 let iaDisponivel = true;
 function ligarAssistenteIA() {
@@ -1637,6 +1675,7 @@ function ligarAssistenteIA() {
         await salvarTudoAgora();
         const fin = await api("GET", "/financeiro");
         state.txs = (fin.dados && fin.dados.transacoes) || state.txs;
+        if (fin.carregadoEm) state.carregadoEm = fin.carregadoEm;
         render();
         toast("Lançamento criado pela conversa. Confira em Lançamentos.", "ok");
       } catch (e) { /* na próxima abertura aparece */ }
@@ -1665,12 +1704,14 @@ async function iniciar() {
     const [me, fin] = await Promise.all([api("GET", "/auth/me").catch(() => null), api("GET", "/financeiro"), carregarCrm()]);
     if (me && me.user) { state.user = me.user; localStorage.setItem("user", JSON.stringify(me.user)); }
     const d = fin.dados || {};
+    state.carregadoEm = fin.carregadoEm || null;
     state.txs = d.transacoes || [];
     state.cards = d.cartoes || [];
     state.invs = d.investimentos || [];
     state.goals = d.objetivos || [];
     state.profile = d.perfil || null;
     state.config = { integracaoCrm: "vendas", descontarComissoes: false, ...(d.config || {}) };
+    state.modoCrmJaSalvo = !!(d.config && d.config.integracaoCrm !== undefined); // escolheu antes desta pergunta existir
     state.contas = d.contas || [];
     state.transferencias = d.transferencias || [];
     state.dividas = d.dividas || [];

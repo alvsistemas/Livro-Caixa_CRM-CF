@@ -467,6 +467,24 @@ usuário" — é uma camada nova, sem mexer em nenhum dado que já existia:
 - Uma pessoa só pode estar em **uma equipe por vez**. Sair da equipe
   (ou ser removido) não apaga nada do funil dela
 
+## Fechamento da venda (CRM → Controle financeiro)
+
+Quem usa o financeiro no modo **Valor das vendas** (pergunta feita uma vez, no
+primeiro acesso) vê a janela **Fechamento da venda** quando um cliente entra numa
+coluna de ganho: valor final (ou desconto em %), à vista / parcelado / entrada +
+parcelas, data do primeiro pagamento e meio de pagamento. Confirmar cria uma
+**Receita por parcela** no financeiro (categoria Vendas, escopo Empresa, selo
+"CRM · venda"), que a pessoa pode marcar como recebida, editar ou apagar lá.
+"Agora não" deixa o selo **Falta o fechamento** no card; a ficha do cliente tem o
+botão pra refazer. Os totais de ganho do CRM passam a usar o valor final.
+
+- Código: `public/js/fechamento.js`, `server/utils/fechamento.js`, rotas
+  `/api/financeiro/fechamento/...`, migração `007_fechamento_venda.sql`.
+- Cartão da maquininha entra como "Conta Corrente" (no financeiro, "Cartão de
+  Crédito" é o cartão da própria pessoa, para despesas).
+- Uma tela do financeiro aberta antes do fechamento não apaga as receitas novas
+  ao salvar (o servidor compara com a hora em que a tela carregou).
+
 ## Comissão automática ao fechar venda
 
 Quando um cliente entra numa coluna do tipo **"ganho"** (fechado) — seja

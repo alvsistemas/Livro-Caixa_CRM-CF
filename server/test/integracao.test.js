@@ -297,6 +297,100 @@ describe('API com PostgreSQL (integração)', { skip: pular }, () => {
     assert.equal(cfg.corDestaque, '#1D4E89');
   });
 
+  test('fechamento da venda: vira receitas no financeiro, refaz sem duplicar e sobrevive a uma tela velha', async () => {
+    const reg = await api('POST', '/api/auth/register', { nome: 'Edu', email: 'edu.fechamento@teste.com', senha: 'senha123' });
+    const t = reg.dados.token;
+    const board = await api('GET', '/api/board', undefined, t);
+    const leads = board.dados.columns.find((c) => c.tipo === 'aberto');
+    const ganho = board.dados.columns.find((c) => c.tipo === 'ganho');
+    // modo: ainda não perguntado
+    let modo = await api('GET', '/api/financeiro/fechamento/modo', undefined, t);
+    assert.deepEqual(modo.dados, { modo: 'vendas', perguntado: false });
+    // a tela do financeiro abre ANTES da venda (vai ficar velha)
+    const telaVelha = await api('GET', '/api/financeiro', undefined, t);
+    assert.ok(telaVelha.dados.carregadoEm);
+    await api('PUT', '/api/financeiro/transacoes', { valor: [{ id: 'm1', date: '2026-10-01', desc: 'Luz', type: 'Despesa', value: 100 }], carregadoEm: telaVelha.dados.carregadoEm }, t);
+
+    const c = await api('POST', '/api/cards', { cliente: 'Loja da Rua', columnId: leads.id, valor: 1000 }, t);
+    // fora da coluna de ganho não fecha
+    const cedo = await api('POST', `/api/financeiro/fechamento/${c.dados.id}`, { valorFinal: 900, forma: 'avista', primeiraData: '2026-10-19', meio: 'pix' }, t);
+    assert.equal(cedo.status, 400);
+    await api('PUT', `/api/cards/${c.dados.id}/move`, { columnId: ganho.id }, t);
+    // "Agora não" marca o selo
+    const depois = await api('POST', `/api/financeiro/fechamento/${c.dados.id}/depois`, undefined, t);
+    assert.equal(depois.dados.card.fechamentoPendente, true);
+    // dados errados
+    const ruim = await api('POST', `/api/financeiro/fechamento/${c.dados.id}`, { valorFinal: 900, forma: 'entrada', entrada: 900, parcelas: 2, primeiraData: '2026-10-19', meio: 'pix' }, t);
+    assert.equal(ruim.status, 400);
+    assert.match(ruim.dados.error, /entrada/);
+    // fecha: 10% de desconto, entrada de 300 + 2 parcelas
+    const ok = await api('POST', `/api/financeiro/fechamento/${c.dados.id}`, { descontoPct: 10, forma: 'entrada', entrada: 300, parcelas: 2, primeiraData: '2026-10-19', meio: 'pix', recebido: true }, t);
+    assert.equal(ok.status, 200, JSON.stringify(ok.dados));
+    assert.equal(ok.dados.card.fechamento.valorFinal, 900);
+    assert.equal(ok.dados.card.fechamento.desconto, 100);
+    assert.equal(ok.dados.card.fechamentoPendente, false);
+    assert.equal(ok.dados.lancamentos, 3);
+    let fin = await api('GET', '/api/financeiro', undefined, t);
+    let vendas = fin.dados.dados.transacoes.filter((x) => x.crmFechamento);
+    assert.deepEqual(vendas.map((x) => [x.desc, x.value, x.status, x.date]), [
+      ['Venda — Loja da Rua (entrada)', 300, 'Pago', '2026-10-19'],
+      ['Venda — Loja da Rua (1/2)', 300, 'Agendado', '2026-11-19'],
+      ['Venda — Loja da Rua (2/2)', 300, 'Agendado', '2026-12-19'],
+    ]);
+    assert.equal(vendas[0].type, 'Receita');
+    assert.equal(vendas[0].category, 'Vendas');
+
+    // a tela velha (que não conhecia as receitas) salva: as receitas NÃO somem
+    await api('PUT', '/api/financeiro/transacoes', { valor: telaVelha.dados.dados.transacoes.concat([{ id: 'm1', date: '2026-10-01', desc: 'Luz', type: 'Despesa', value: 120 }]), carregadoEm: telaVelha.dados.carregadoEm }, t);
+    fin = await api('GET', '/api/financeiro', undefined, t);
+    assert.equal(fin.dados.dados.transacoes.filter((x) => x.crmFechamento).length, 3);
+    assert.equal(fin.dados.dados.transacoes.find((x) => x.id === 'm1').value, 120);
+    // tela antiga sem carregadoEm também não apaga
+    await api('PUT', '/api/financeiro/transacoes', { valor: [{ id: 'm1', date: '2026-10-01', desc: 'Luz', type: 'Despesa', value: 120 }] }, t);
+    fin = await api('GET', '/api/financeiro', undefined, t);
+    assert.equal(fin.dados.dados.transacoes.filter((x) => x.crmFechamento).length, 3);
+
+    // a pessoa marca a 1ª parcela como recebida no financeiro (tela atualizada)
+    const atual = fin.dados;
+    const editadas = atual.dados.transacoes.map((x) => (x.crmFechamento && x.crmFechamento.parcela === 2 ? { ...x, status: 'Pago' } : x));
+    await api('PUT', '/api/financeiro/transacoes', { valor: editadas, carregadoEm: atual.carregadoEm }, t);
+
+    // refaz: 850 em 2x no boleto — troca as 3 parcelas por 2, sem duplicar; as já recebidas (1ª e 2ª) continuam recebidas
+    const refaz = await api('POST', `/api/financeiro/fechamento/${c.dados.id}`, { valorFinal: 850, forma: 'parcelado', parcelas: 2, primeiraData: '2026-10-19', meio: 'boleto' }, t);
+    assert.equal(refaz.dados.substituidos, 3);
+    fin = await api('GET', '/api/financeiro', undefined, t);
+    vendas = fin.dados.dados.transacoes.filter((x) => x.crmFechamento);
+    assert.deepEqual(vendas.map((x) => [x.value, x.status, x.account]), [[425, 'Pago', 'Boleto'], [425, 'Pago', 'Boleto']]);
+    // a tela "atual" de antes do refazer salva de novo: as parcelas antigas não voltam
+    await api('PUT', '/api/financeiro/transacoes', { valor: editadas, carregadoEm: atual.carregadoEm }, t);
+    fin = await api('GET', '/api/financeiro', undefined, t);
+    assert.deepEqual(fin.dados.dados.transacoes.filter((x) => x.crmFechamento).map((x) => x.value), [425, 425]);
+    // apagar pelo financeiro, numa tela que já conhecia a receita, apaga de verdade
+    await api('PUT', '/api/financeiro/transacoes', { valor: fin.dados.dados.transacoes.filter((x) => !(x.crmFechamento && x.crmFechamento.parcela === 2)), carregadoEm: fin.dados.carregadoEm }, t);
+    fin = await api('GET', '/api/financeiro', undefined, t);
+    assert.equal(fin.dados.dados.transacoes.filter((x) => x.crmFechamento).length, 1);
+
+    // ficha do card e lançamentos ligados
+    const ver = await api('GET', `/api/financeiro/fechamento/${c.dados.id}`, undefined, t);
+    assert.equal(ver.dados.fechamento.valorFinal, 850);
+    assert.equal(ver.dados.lancamentos.length, 1);
+    // outra pessoa não vê nem fecha o card
+    assert.equal((await api('GET', `/api/financeiro/fechamento/${c.dados.id}`, undefined, contas.bia.token)).status, 404);
+    assert.equal((await api('POST', `/api/financeiro/fechamento/${c.dados.id}`, { valorFinal: 1, forma: 'avista', primeiraData: '2026-10-19', meio: 'pix' }, contas.bia.token)).status, 404);
+    // painel da equipe/CRM usa o valor final: o board devolve o fechamento
+    const b2 = await api('GET', '/api/board', undefined, t);
+    assert.equal(b2.dados.cards.find((x) => x.id === c.dados.id).fechamento.valorFinal, 850);
+
+    // modo: escolher grava sem apagar o resto da configuração
+    await api('PUT', '/api/financeiro/config', { valor: { descontarComissoes: true } }, t);
+    assert.equal((await api('PUT', '/api/financeiro/fechamento/modo', { modo: 'quebrado' }, t)).status, 400);
+    modo = await api('PUT', '/api/financeiro/fechamento/modo', { modo: 'comissoes' }, t);
+    assert.deepEqual(modo.dados, { modo: 'comissoes', perguntado: true });
+    fin = await api('GET', '/api/financeiro', undefined, t);
+    assert.equal(fin.dados.dados.config.descontarComissoes, true);
+    assert.equal(fin.dados.dados.config.integracaoCrm, 'comissoes');
+  });
+
   test('equipe: gestor vê o resumo dos membros e passa um lead pra outra pessoa', async () => {
     const ana = contas.ana.token;
     const eq = await api('POST', '/api/equipe', { nome: 'Time A' }, ana);

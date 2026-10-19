@@ -2227,7 +2227,7 @@ function relatoriosDadosMensais(mesesAtras, cardsBase){
       const bucketGanho = porKey.get(c.mes.slice(0,7));
       const col = board.columns.find(k=>k.id===c.columnId);
       if(bucketGanho && col && col.tipo==='ganho'){
-        bucketGanho.ganhoValor += Number(c.valor)||0;
+        bucketGanho.ganhoValor += valorVendido(c);
         bucketGanho.ganhoQtd++;
       }
     }
@@ -2264,7 +2264,7 @@ function exportarCsv(){
 function exportarRelatorioPdf(){
   const cardsRel = cardsParaRelatorio();
   const dados = relatoriosDadosMensais(6, cardsRel);
-  const totalGanho = cardsRel.reduce((s,c)=>{ const col=board.columns.find(k=>k.id===c.columnId); return col&&col.tipo==='ganho' ? s+(Number(c.valor)||0) : s; },0);
+  const totalGanho = cardsRel.reduce((s,c)=>{ const col=board.columns.find(k=>k.id===c.columnId); return col&&col.tipo==='ganho' ? s+valorVendido(c) : s; },0);
   const totalPerdido = cardsRel.reduce((s,c)=>{ const col=board.columns.find(k=>k.id===c.columnId); return col&&col.tipo==='perdido' ? s+(Number(c.valor)||0) : s; },0);
   const porTemp = ['quente','morno','frio'].map(t=>({ temp:t, count: cardsRel.filter(c=>c.temperatura===t).length }));
   const funilNome = relatorioFunilId ? ((funis.find(f=>f.id===relatorioFunilId)||{}).nome || '') : 'Todos os funis';
@@ -2528,10 +2528,12 @@ function visibleCards(){
   return cards;
 }
 function cardsOf(colId){ return visibleCards().filter(c=>c.columnId===colId).sort((a,b)=> (a.ordem||0) - (b.ordem||0)); }
+// valor de uma venda ganha: o valor final do fechamento (com desconto), se já foi feito
+function valorVendido(c){ return c.fechamento && Number.isFinite(Number(c.fechamento.valorFinal)) ? Number(c.fechamento.valorFinal) : (Number(c.valor)||0); }
 function sumByTipo(tipo){
   return visibleCards().reduce((s,c)=>{
     const col = board.columns.find(k=>k.id===c.columnId);
-    return (col && col.tipo===tipo && col.funilId===funilAtualId) ? s + (Number(c.valor)||0) : s;
+    return (col && col.tipo===tipo && col.funilId===funilAtualId) ? s + (tipo==='ganho' ? valorVendido(c) : (Number(c.valor)||0)) : s;
   },0);
 }
 function countByTipo(tipo){
@@ -2555,7 +2557,7 @@ function cardsDoFunilAtual(){
 function ticketMedioFunil(){
   const cards = cardsDoFunilAtual();
   if(!cards.length) return 0;
-  const total = cards.reduce((s,c)=> s + (Number(c.valor)||0), 0);
+  const total = cards.reduce((s,c)=> s + (c.fechamento ? valorVendido(c) : (Number(c.valor)||0)), 0); // venda fechada conta pelo valor final
   return total / cards.length;
 }
 function valorPonderadoFunil(){
@@ -2590,7 +2592,7 @@ function vendidoNoMesAtual(){
   const mesAtual = currentMonthKey();
   return board.cards.reduce((s,c)=>{
     const col = board.columns.find(k=>k.id===c.columnId);
-    return (col && col.tipo==='ganho' && String(c.mes||'').slice(0,7)===mesAtual) ? s + (Number(c.valor)||0) : s;
+    return (col && col.tipo==='ganho' && String(c.mes||'').slice(0,7)===mesAtual) ? s + valorVendido(c) : s;
   }, 0);
 }
 async function loadMetaVendas(){
@@ -2646,7 +2648,7 @@ function dashMetrics(){
     const col = board.columns.find(k=>k.id===c.columnId);
     if(!col) return;
     if(col.tipo === 'aberto'){ emNegociacaoValor += Number(c.valor)||0; emNegociacaoCount++; }
-    else if(col.tipo === 'ganho'){ ganhoValor += Number(c.valor)||0; ganhoCount++; }
+    else if(col.tipo === 'ganho'){ ganhoValor += valorVendido(c); ganhoCount++; }
     else if(col.tipo === 'perdido'){ perdidoCount++; }
   });
   const fechados = ganhoCount + perdidoCount;
@@ -2655,7 +2657,7 @@ function dashMetrics(){
 }
 function stageTotals(){
   return board.columns.map(col=>{
-    const total = board.cards.filter(c=>c.columnId===col.id).reduce((s,c)=> s+(Number(c.valor)||0), 0);
+    const total = board.cards.filter(c=>c.columnId===col.id).reduce((s,c)=> s+(col.tipo==='ganho' ? valorVendido(c) : (Number(c.valor)||0)), 0);
     return { col, total };
   });
 }
@@ -3069,7 +3071,7 @@ function animarComFlip(seletor, posicoesAntigas, idParaExcluir){
   });
 }
 function capturarPosicoesDosCards(){ return capturarPosicoes('.card[data-card-id]'); }
-async function moveCard(cardId, columnId, ordem){
+async function moveCard(cardId, columnId, ordem, opcoes){
   const card = board.cards.find(c=>c.id===cardId);
   if(!card) return;
   if(card.columnId===columnId && ordem===undefined) return; // mesma coluna e sem posição nova pra aplicar — nada a fazer
@@ -3111,7 +3113,10 @@ async function moveCard(cardId, columnId, ordem){
     card.ordem = anterior.ordem;
     errorMsg = 'Não foi possível mover o cliente. Tente novamente.';
     renderAppPreservandoScroll();
+    return;
   }
+  // entrou numa coluna de ganho: pede o fechamento da venda (valor final e parcelas)
+  if(!(opcoes && opcoes.semFechamento) && typeof talvezPedirFechamento === 'function') talvezPedirFechamento(card, anterior.columnId);
 }
 // Calcula em que posição um card deve entrar dentro de uma coluna, olhando pra qual
 // altura (y) o dedo/mouse está — encontra os dois cards vizinhos naquele ponto e usa o
@@ -3191,7 +3196,7 @@ async function bulkMoverLeads(columnId){
   const ids = [...leadsSelecionados];
   leadsSelecionados.clear();
   renderApp();
-  await Promise.all(ids.map(id=> moveCard(id, columnId)));
+  await Promise.all(ids.map(id=> moveCard(id, columnId, undefined, { semFechamento:true }))); // em lote: o selo "falta o fechamento" fica pra cada um
 }
 async function bulkArquivarLeads(){
   const ids = [...leadsSelecionados];
@@ -3355,6 +3360,8 @@ async function saveCardFromModal(){
   const nomeFinal = (modalForm.tipoPessoa==='juridica' ? modalForm.clienteJuridica : modalForm.clienteFisica) || '';
   if(!nomeFinal.trim()) return;
   const eraNovo = modalForm.__isNew;
+  const colunaAntesDoSalvar = eraNovo ? null : ((board.cards.find(c=>c.id===modalForm.id)||{}).columnId || null);
+  let cardSalvoId = eraNovo ? null : modalForm.id;
   const { __isNew, id, clienteFisica, clienteJuridica, __modoGestor, __atribuirParaId, ...dados } = modalForm;
   dados.cliente = nomeFinal.trim();
   // modo gestor: precisa escolher pra quem vai o lead
@@ -3378,6 +3385,7 @@ async function saveCardFromModal(){
         nomeDestino = novoCard.atribuidoParaNome; // o lead foi pra conta de outra pessoa: não entra no pipeline daqui
       } else {
         board.cards.push(novoCard);
+        cardSalvoId = novoCard.id;
       }
     } else {
       const atualizado = await apiRequest('PUT', `/cards/${id}`, dados);
@@ -3401,6 +3409,8 @@ async function saveCardFromModal(){
     }
     closeModal();
     renderApp();
+    const salvo = !nomeDestino && cardSalvoId ? board.cards.find(c=>c.id===cardSalvoId) : null;
+    if(salvo && typeof talvezPedirFechamento === 'function') talvezPedirFechamento(salvo, colunaAntesDoSalvar);
   }catch(e){
     salvandoCard = false;
     errorMsg = atribuindo && e && e.message ? e.message : 'Não foi possível salvar o cliente.';
@@ -4537,7 +4547,7 @@ function renderPipelinePage(){
 function renderColumn(col){
   const cards = cardsOf(col.id);
   const tipo = TIPOS[col.tipo] || TIPOS.aberto;
-  const total = cards.reduce((s,c)=> s + (Number(c.valor)||0), 0);
+  const total = cards.reduce((s,c)=> s + (col.tipo==='ganho' ? valorVendido(c) : (Number(c.valor)||0)), 0);
   const isEditing = editingColId === col.id;
   const menuOpen = openMenuColId === col.id;
 
@@ -4712,9 +4722,13 @@ function renderCard(card){
             <span class="temp-badge" style="color:${temp.color};background:${temp.bg}">${temp.emoji} ${temp.label}</span>
           </div>
           <div class="card-value-row">
-            <span class="card-value">${fmtBRL(card.valor)}</span>
+            ${card.fechamento && Number(card.fechamento.valorFinal) !== Number(card.valor)
+              ? `<span class="card-value" title="Valor final do fechamento (no card: ${fmtBRL(card.valor)})">${fmtBRL(card.fechamento.valorFinal)}</span>`
+              : `<span class="card-value">${fmtBRL(card.valor)}</span>`}
             ${showMonth ? `<span class="month-badge">${monthLabel(card.mesInicioContato)}</span>` : ''}
           </div>
+          ${!card.fechamento && card.fechamentoPendente && (board.columns.find(c=>c.id===card.columnId)||{}).tipo==='ganho'
+            ? `<button type="button" class="fech-selo" data-action="abrir-fechamento" data-card-id="${card.id}" title="Informar o valor final e as parcelas">Falta o fechamento</button>` : ''}
           ${(card.telefone || card.obs) ? `
             <div class="card-extra">
               ${card.telefone ? `
@@ -6564,6 +6578,9 @@ function bindAppEvents(){
   app.querySelectorAll('[data-action="open-edit-card"]').forEach(el=>{
     el.addEventListener('click', ()=> openEditCard(el.dataset.cardId));
   });
+  app.querySelectorAll('[data-action="abrir-fechamento"]').forEach(btn=>{
+    btn.addEventListener('click', (e)=>{ e.stopPropagation(); abrirFechamento(btn.dataset.cardId); });
+  });
   app.querySelectorAll('[data-action="open-whatsapp"]').forEach(btn=>{
     btn.addEventListener('click', (e)=>{
       e.stopPropagation();
@@ -7432,6 +7449,8 @@ function renderModal(){
               ${!f.__isNew && integracoesConfig.assistenteIA ? `<button type="button" class="ai-btn" id="f-ai-mensagem">${ICON_SPARKLE} Sugerir mensagem</button>` : ''}
               ${!f.__isNew ? `<button type="button" class="ai-btn" id="f-ver-historico">🕘 Ver histórico</button>` : ''}
               ${!f.__isNew ? `<button type="button" class="ai-btn" id="f-gerar-proposta">📄 Gerar proposta</button>` : ''}
+              ${!f.__isNew && (board.columns.find(c=>c.id===((board.cards.find(k=>k.id===f.id)||{}).columnId))||{}).tipo==='ganho' && typeof abrirFechamento === 'function'
+                ? `<button type="button" class="ai-btn" id="f-fechamento">💰 ${f.fechamento ? 'Fechamento: ' + fmtBRL(f.fechamento.valorFinal) : 'Fechamento da venda'}</button>` : ''}
               ${!f.__isNew ? `<button type="button" class="ai-btn" id="f-toggle-arquivar">${f.arquivado?'📦 Desarquivar':'📦 Arquivar'}</button>` : ''}
             </div>
             <div class="ai-result" id="f-ai-mensagem-result" style="display:none;"></div>
@@ -7497,6 +7516,8 @@ function renderModal(){
   if(aiTarefaBtn) aiTarefaBtn.addEventListener('click', sugerirTarefaIA);
   const verHistoricoBtn = document.getElementById('f-ver-historico');
   if(verHistoricoBtn) verHistoricoBtn.addEventListener('click', abrirHistoricoCard);
+  const fechamentoBtn = document.getElementById('f-fechamento');
+  if(fechamentoBtn) fechamentoBtn.addEventListener('click', ()=>{ const id = modalForm.id; closeModal(); abrirFechamento(id); });
   const gerarPropostaBtn = document.getElementById('f-gerar-proposta');
   if(gerarPropostaBtn) gerarPropostaBtn.addEventListener('click', abrirPropostaModal);
   const toggleArquivarBtn = document.getElementById('f-toggle-arquivar');
@@ -8026,7 +8047,7 @@ function renderRelatoriosPage(){
   const dados = relatoriosDadosMensais(12, cardsRel);
   const maxNovos = Math.max(1, ...dados.map(d=>d.novos));
   const maxGanhoValor = Math.max(1, ...dados.map(d=>d.ganhoValor));
-  const totalGanho = cardsRel.reduce((s,c)=>{ const col=board.columns.find(k=>k.id===c.columnId); return col&&col.tipo==='ganho' ? s+(Number(c.valor)||0) : s; },0);
+  const totalGanho = cardsRel.reduce((s,c)=>{ const col=board.columns.find(k=>k.id===c.columnId); return col&&col.tipo==='ganho' ? s+valorVendido(c) : s; },0);
   const totalPerdido = cardsRel.reduce((s,c)=>{ const col=board.columns.find(k=>k.id===c.columnId); return col&&col.tipo==='perdido' ? s+(Number(c.valor)||0) : s; },0);
   const porTemp = ['quente','morno','frio'].map(t=>({ temp:t, count: cardsRel.filter(c=>c.temperatura===t).length }));
 

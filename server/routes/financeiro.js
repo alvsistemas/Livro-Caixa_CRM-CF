@@ -2,6 +2,10 @@ const express = require('express');
 const auth = require('../middleware/auth');
 const { validarSecao, carregarFinanceiro, salvarSecaoFinanceiro } = require('../utils/financeiro');
 const { query } = require('../db/pool');
+const Card = require('../models/Card');
+const Column = require('../models/Column');
+const { isValidId } = require('../db/ids');
+const fechamento = require('../utils/fechamento');
 
 const router = express.Router();
 router.use(auth); // tudo do Controle financeiro exige login
@@ -9,10 +13,81 @@ router.use(auth); // tudo do Controle financeiro exige login
 // GET /api/financeiro -> todos os dados do Controle financeiro do usuário
 router.get('/', async (req, res) => {
   try {
-    res.json({ dados: await carregarFinanceiro(req.userId) });
+    // carregadoEm (hora do servidor): volta no salvamento, pra não apagar lançamentos
+    // que o CRM criou depois que esta tela abriu
+    const carregadoEm = new Date().toISOString();
+    res.json({ dados: await carregarFinanceiro(req.userId), carregadoEm });
   } catch (err) {
     console.error('Erro ao carregar o Controle financeiro:', err.message);
     res.status(500).json({ error: 'Erro ao carregar o Controle financeiro.' });
+  }
+});
+
+/* ---------- Fechamento da venda (card ganho no CRM -> receitas no financeiro) ---------- */
+
+// GET /api/financeiro/fechamento/modo -> { modo: vendas|comissoes|nenhum, perguntado }
+router.get('/fechamento/modo', async (req, res) => {
+  try { res.json(await fechamento.lerModo(req.userId)); } catch (err) {
+    console.error('Erro ao ler o modo da integração:', err.message);
+    res.status(500).json({ error: 'Erro ao carregar.' });
+  }
+});
+// PUT /api/financeiro/fechamento/modo { modo }
+router.put('/fechamento/modo', async (req, res) => {
+  try { res.json(await fechamento.definirModo(req.userId, req.body && req.body.modo)); } catch (err) {
+    if (err instanceof fechamento.ErroFechamento) return res.status(400).json({ error: err.message });
+    console.error('Erro ao salvar o modo da integração:', err.message);
+    res.status(500).json({ error: 'Erro ao salvar.' });
+  }
+});
+
+async function cardDoUsuario(req, res) {
+  const id = req.params.cardId;
+  if (!isValidId(id)) { res.status(400).json({ error: 'Cliente inválido.' }); return null; }
+  const card = await Card.findOne({ _id: id, userId: req.userId });
+  if (!card) { res.status(404).json({ error: 'Cliente não encontrado.' }); return null; }
+  return card;
+}
+
+// GET /api/financeiro/fechamento/:cardId -> fechamento atual + lançamentos ligados
+router.get('/fechamento/:cardId', async (req, res) => {
+  try {
+    const card = await cardDoUsuario(req, res);
+    if (!card) return;
+    res.json({ fechamento: card.fechamento || null, pendente: !!card.fechamentoPendente, lancamentos: await fechamento.lancamentosDoCard(req.userId, card._id) });
+  } catch (err) {
+    console.error('Erro ao ler o fechamento:', err.message);
+    res.status(500).json({ error: 'Erro ao carregar o fechamento.' });
+  }
+});
+
+// POST /api/financeiro/fechamento/:cardId { valorFinal|descontoPct, forma, parcelas, entrada, primeiraData, meio, recebido }
+router.post('/fechamento/:cardId', async (req, res) => {
+  try {
+    const card = await cardDoUsuario(req, res);
+    if (!card) return;
+    const coluna = await Column.findOne({ _id: card.columnId, userId: req.userId });
+    if (!coluna || coluna.tipo !== 'ganho') return res.status(400).json({ error: 'O fechamento é feito quando o cliente está numa coluna de ganho.' });
+    const r = await fechamento.salvarFechamento(req.userId, card, req.body || {});
+    const atualizado = await Card.findOne({ _id: card._id, userId: req.userId });
+    res.json({ card: atualizado.toJSON(), fechamento: r.fechamento, lancamentos: r.lancamentos.length, substituidos: r.substituidos });
+  } catch (err) {
+    if (err instanceof fechamento.ErroFechamento) return res.status(400).json({ error: err.message });
+    console.error('Erro ao salvar o fechamento:', err.message);
+    res.status(500).json({ error: 'Erro ao salvar o fechamento. Tente de novo.' });
+  }
+});
+
+// POST /api/financeiro/fechamento/:cardId/depois -> "Agora não": marca o selo no card
+router.post('/fechamento/:cardId/depois', async (req, res) => {
+  try {
+    const card = await cardDoUsuario(req, res);
+    if (!card) return;
+    const atualizado = await Card.findOneAndUpdate({ _id: card._id, userId: req.userId }, { fechamentoPendente: !card.fechamento }, { new: true });
+    res.json({ card: atualizado.toJSON() });
+  } catch (err) {
+    console.error('Erro ao adiar o fechamento:', err.message);
+    res.status(500).json({ error: 'Erro ao salvar.' });
   }
 });
 
@@ -23,7 +98,7 @@ router.put('/:secao', async (req, res) => {
     const { secao } = req.params;
     const resultado = validarSecao(secao, req.body ? req.body.valor : undefined);
     if (!resultado.ok) return res.status(400).json({ error: resultado.erro });
-    await salvarSecaoFinanceiro(req.userId, secao, resultado.valor);
+    await salvarSecaoFinanceiro(req.userId, secao, resultado.valor, { carregadoEm: req.body.carregadoEm });
     res.json({ ok: true, salvoEm: new Date().toISOString() });
   } catch (err) {
     console.error('Erro ao salvar o Controle financeiro:', err.message);

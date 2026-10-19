@@ -168,7 +168,11 @@ async function carregarFinanceiro(userId) {
 }
 
 // Substitui uma seção inteira (já validada por validarSecao), numa transação só
-async function salvarSecaoFinanceiro(userId, secao, valor) {
+// opcoes.carregadoEm: quando a tela do financeiro carregou os dados (hora do servidor).
+// Lançamentos criados pelo fechamento de venda do CRM (extras.crmFechamento) são protegidos:
+// - os criados depois que a tela abriu não são apagados (a tela ainda não os conhecia);
+// - um que já não existe no banco não volta (o fechamento foi refeito no CRM).
+async function salvarSecaoFinanceiro(userId, secao, valor, opcoes = {}) {
   if (SECOES_OBJETO.includes(secao)) {
     // config: preserva a marca que o servidor grava (dia do último lembrete enviado)
     const novo = secao === 'config'
@@ -190,8 +194,23 @@ async function salvarSecaoFinanceiro(userId, secao, valor) {
     porId.set(id, { item: { ...item, id }, posicao });
   });
   await transacao(async () => {
+    if (secao === 'transacoes') {
+      const doCrm = await query(`SELECT id FROM financeiro_lancamentos WHERE user_id = $1::uuid AND extras ? 'crmFechamento'`, [userId]);
+      const existentes = new Set(doCrm.rows.map((r) => r.id));
+      for (const [id, { item }] of porId) if (item.crmFechamento && !existentes.has(id)) porId.delete(id);
+    }
     const ids = [...porId.keys()];
-    await query(`DELETE FROM ${def.tabela} WHERE user_id = $1::uuid AND NOT (id = ANY($2::text[]))`, [userId, ids]);
+    if (secao === 'transacoes') {
+      const carregadoEm = typeof opcoes.carregadoEm === 'string' && !Number.isNaN(Date.parse(opcoes.carregadoEm)) ? opcoes.carregadoEm : null;
+      // sem carregadoEm (tela antiga): nunca apaga lançamento do CRM que a tela não mandou
+      await query(
+        `DELETE FROM financeiro_lancamentos WHERE user_id = $1::uuid AND NOT (id = ANY($2::text[]))
+           AND NOT (extras ? 'crmFechamento' AND ($3::timestamptz IS NULL OR created_at > $3::timestamptz))`,
+        [userId, ids, carregadoEm]
+      );
+    } else {
+      await query(`DELETE FROM ${def.tabela} WHERE user_id = $1::uuid AND NOT (id = ANY($2::text[]))`, [userId, ids]);
+    }
     const nomesCols = def.colunas.map((c) => c[0]);
     const lista = [...porId.values()];
     const LOTE = 300;
