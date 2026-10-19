@@ -211,6 +211,7 @@ let calendarSyncing = false;
 // Integrações que dependem de credenciais do servidor (não do usuário) — otimista por
 // padrão (tudo true) até a checagem real chegar, pra nunca esconder nada à toa por causa
 // de uma resposta lenta. Ver server/routes/config.js.
+let assinaturaInfo = null; // situação da assinatura (GET /api/assinatura)
 let integracoesConfig = { googleAgenda:true, assistenteIA:true, whatsappWebhook:true, instagramWebhook:true, telegramAlerta:true, emailRecuperacao:false, push:false };
 let icsStatus = null; // { ativo, url } — link de agenda (.ics), alternativa ao Google Agenda
 let icsCarregando = false;
@@ -493,6 +494,11 @@ async function apiRequestUmaVez(method, path, body, timeoutMs){
   if(res.status === 401){
     logout();
     throw new Error('Sessão expirada.');
+  }
+  if(res.status === 402){
+    // assinatura vencida ou teste grátis acabou: leva pra tela de planos
+    window.location.href = 'assinatura.html?de=crm';
+    throw new Error('Sua assinatura não está ativa.');
   }
   if(!res.ok){
     let msg = 'Erro na requisição ao servidor';
@@ -1194,6 +1200,16 @@ async function loadIntegracoesConfig(){
   try{
     const data = await apiRequest('GET', '/config/integracoes');
     integracoesConfig = { ...integracoesConfig, ...data };
+  }catch(e){
+    // se não conseguir checar, mantém tudo visível (otimista)
+  }
+  try{
+    assinaturaInfo = await apiRequest('GET', '/assinatura');
+    const r = (assinaturaInfo && assinaturaInfo.recursos) || {};
+    // recurso fora do plano some da tela (o servidor também recusa, por segurança)
+    if(r.ia === false) integracoesConfig.assistenteIA = false;
+    if(r.googleAgenda === false) integracoesConfig.planoSemGoogleAgenda = true;
+    if(r.whatsapp === false) integracoesConfig.planoSemWhatsapp = true;
   }catch(e){
     // se não conseguir checar, mantém tudo visível (otimista) — melhor mostrar um botão
     // que às vezes falha do que esconder uma integração que na verdade está configurada
@@ -6036,6 +6052,7 @@ function renderContratoCard(c){
 const CONFIG_CATEGORIAS = [
   { grupo: 'Conta', itens: [
     ['perfil', 'Seu perfil'],
+    ['assinatura', 'Assinatura'],
     ['seguranca', 'Login e segurança'],
     ['aparencia', 'Aparência'],
     ['notificacoes', 'Notificações'],
@@ -6055,6 +6072,34 @@ const CONFIG_CATEGORIAS = [
     ['manutencao', 'Manutenção'],
   ]},
 ];
+
+function renderConfigAssinatura(){
+  const s = assinaturaInfo;
+  const dataBR = (v)=> v ? new Date(/^\d{4}-\d{2}-\d{2}$/.test(v) ? v + 'T12:00:00' : v).toLocaleDateString('pt-BR', { timeZone:'America/Sao_Paulo' }) : '—';
+  const nomePlano = s && (s.planos||[]).find(p=>p.id===s.plano);
+  let status = 'Carregando…';
+  let detalhe = '';
+  if(s){
+    if(!s.cobranca){ status = 'Liberado'; detalhe = 'A cobrança ainda não está ligada neste servidor.'; }
+    else if(s.status === 'cortesia'){ status = 'Cortesia'; detalhe = 'Sua conta está liberada sem cobrança.'; }
+    else if(s.emTeste){ status = 'Teste grátis'; detalhe = `Tudo liberado até ${dataBR(s.testeAte)}${s.temAssinatura ? `. Plano escolhido: ${esc(nomePlano ? nomePlano.nome : s.plano)}` : '. Escolha um plano para continuar depois do teste'}.`; }
+    else{
+      const rotulos = { aguardando:'Aguardando pagamento', ativa:'Ativa', atrasada:'Pagamento atrasado', cancelada:'Cancelada' };
+      status = `${nomePlano ? 'Plano ' + nomePlano.nome : ''} · ${rotulos[s.status] || s.status}`;
+      detalhe = s.pagoAte ? `${s.status === 'cancelada' ? 'Acesso até' : 'Pago até'} ${dataBR(s.pagoAte)}.` : '';
+      if(s.proximoVencimento && s.status !== 'cancelada') detalhe += ` Próximo vencimento: ${dataBR(s.proximoVencimento)}.`;
+    }
+  }
+  return `
+    <div class="settings-page-section">
+      <h3>Assinatura</h3>
+      <div class="settings-page-row"><span>Situação</span><span>${esc(status)}</span></div>
+      ${detalhe ? `<p class="settings-page-note">${detalhe}</p>` : ''}
+      ${s && s.cobranca && s.status !== 'cortesia' ? `<a class="btn-primary" href="assinatura.html?de=crm" style="display:inline-block;text-decoration:none">${s.temAssinatura ? 'Gerenciar assinatura' : 'Ver planos e assinar'}</a>` : ''}
+      <p class="settings-page-note">O pagamento é feito pelo Asaas (Pix, boleto ou cartão). O Livro-Caixa nunca vê nem guarda os dados do seu cartão.</p>
+    </div>
+  `;
+}
 
 function renderConfigPerfil(){
   const temFoto = !!(currentUser && currentUser.avatarUrl);
@@ -6149,6 +6194,14 @@ function renderConfigAparencia(){
 }
 
 function renderConfigWhatsapp(){
+  if(integracoesConfig.planoSemWhatsapp){
+    return `
+    <div class="settings-page-section">
+      <h3>WhatsApp Business API</h3>
+      <p class="settings-page-note">A integração com a API do WhatsApp (conversas dentro do CRM, agente com IA e disparos) faz parte do plano Completo. <a href="assinatura.html?de=crm">Ver planos</a>.</p>
+      <p class="settings-page-note">O botão de abrir conversa no WhatsApp continua funcionando em todos os clientes com telefone cadastrado.</p>
+    </div>`;
+  }
   return `
     <div class="settings-page-section">
       <h3>WhatsApp Business API</h3>
@@ -6315,7 +6368,9 @@ function renderConfigGoogleAgenda(){
             <button class="btn-outline" data-action="disconnect-calendar">Desconectar</button>
           </div>
         `
-        : (integracoesConfig.googleAgenda
+        : (integracoesConfig.planoSemGoogleAgenda
+          ? `<p class="settings-page-note">A integração com o Google Agenda faz parte do plano Completo. <a href="assinatura.html?de=crm">Ver planos</a>. O link de agenda abaixo funciona em todos os planos.</p>`
+          : integracoesConfig.googleAgenda
           ? `<button class="btn-primary" data-action="connect-calendar">Conectar Google Agenda</button>`
           : `<p class="settings-page-note">Essa integração não está configurada neste servidor — use o link de agenda abaixo como alternativa (funciona com Google, Apple, Outlook e outros).</p>`)
       }
@@ -6698,6 +6753,7 @@ function renderConfigManutencao(){
 function renderConfiguracoesPage(){
   const CONTEUDO_CATEGORIA = {
     'perfil': renderConfigPerfil,
+    'assinatura': renderConfigAssinatura,
     'seguranca': renderConfigSeguranca,
     'aparencia': renderConfigAparencia,
     'notificacoes': renderConfigNotificacoes,

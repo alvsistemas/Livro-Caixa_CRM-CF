@@ -1,6 +1,22 @@
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 const { comoUsuario } = require('../db/contexto');
+const { situacaoDe } = require('../utils/assinatura');
+
+// Com a assinatura vencida, só estes caminhos continuam abertos: login, a própria tela de
+// assinatura, exportar os dados (os dados são da pessoa, sempre) e desligar notificações.
+const LIVRES_SEM_ASSINATURA = ['/api/auth', '/api/assinatura', '/api/backup/exportar-tudo', '/api/push', '/api/config'];
+
+// Recursos que só o plano Completo tem
+function recursoDoCaminho(caminho) {
+  if (caminho.startsWith('/api/ai/')) return 'ia';
+  if (caminho.startsWith('/api/whatsapp/') && !/^\/api\/whatsapp\/(status|desconectar)\/?$/.test(caminho)) return 'whatsapp';
+  // agenda-mes fica aberta (traz as tarefas do calendário); lá dentro os eventos do Google
+  // só entram se o plano tiver a integração
+  if (/^\/api\/calendar\/(connect-url|eventos)/.test(caminho)) return 'googleAgenda';
+  return null;
+}
+const NOME_DO_RECURSO = { ia: 'O assistente com IA', whatsapp: 'A integração com o WhatsApp', googleAgenda: 'A integração com o Google Agenda' };
 
 const JWT_SECRET = process.env.JWT_SECRET || 'troque-este-segredo-no-env';
 
@@ -28,12 +44,23 @@ module.exports = async function auth(req, res, next) {
       // token temporário de 2FA — só serve pra validar o código, nunca pra acessar rotas normais
       return res.status(401).json({ error: 'Não autenticado.' });
     }
-    const user = await User.findById(payload.sub).select('tokenVersion');
+    const user = await User.findById(payload.sub).select('tokenVersion email');
     if (!user) return res.status(401).json({ error: 'Sessão expirada ou inválida.' });
     if ((payload.tv || 0) !== (user.tokenVersion || 0)) {
       return res.status(401).json({ error: 'Sessão encerrada em outro dispositivo. Faça login novamente.' });
     }
     req.userId = String(user._id);
+    // Assinatura: sem pagamento em dia (e fora do teste grátis), bloqueia com 402
+    const assinatura = await situacaoDe(req.userId, user.email);
+    req.assinatura = assinatura;
+    const caminho = (req.originalUrl || '').split('?')[0];
+    if (!assinatura.liberado && !LIVRES_SEM_ASSINATURA.some((p) => caminho.startsWith(p))) {
+      return res.status(402).json({ error: 'Sua assinatura não está ativa.', assinatura: true, motivo: assinatura.motivo });
+    }
+    const recurso = recursoDoCaminho(caminho);
+    if (recurso && !assinatura.recursos[recurso]) {
+      return res.status(403).json({ error: `${NOME_DO_RECURSO[recurso]} faz parte do plano Completo.`, recurso, planoNecessario: 'completo' });
+    }
     // daqui em diante, toda consulta ao banco nesta requisição roda como este usuário
     // (o PostgreSQL só deixa ver e gravar as linhas dele — Row-Level Security)
     comoUsuario(req.userId, () => next());

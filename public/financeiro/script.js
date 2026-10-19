@@ -126,6 +126,7 @@ async function api(method, path, body, tentativa = 0) {
   if (body !== undefined) { opts.headers["Content-Type"] = "application/json"; opts.body = JSON.stringify(body); }
   const res = await fetch(API_BASE + path, opts);
   if (res.status === 401) { sair(); throw new Error("Sessão expirada."); }
+  if (res.status === 402) { window.location.href = "../assinatura.html?de=financeiro"; throw new Error("Sua assinatura não está ativa."); }
   let data = null;
   try { data = await res.json(); } catch (e) {}
   if (!res.ok) {
@@ -1646,6 +1647,12 @@ function ligarAssistenteIA() {
     iaDisponivel = false;
     AssistenteIA.definirHabilitado(false);
   }).catch(() => { /* sem resposta: mantém visível */ });
+  // plano sem IA (Essencial): a bolinha some
+  api("GET", "/assinatura").then((s) => {
+    state.assinatura = s;
+    if (s && s.recursos && s.recursos.ia === false) { iaDisponivel = false; AssistenteIA.definirHabilitado(false); }
+    if (state.tab === "cadastro") render();
+  }).catch(() => { /* sem resposta: mantém como está */ });
 }
 function telaDeErro(msg) {
   document.getElementById("onboarding-root").innerHTML = `<div class="carregando"><p>${escapeHtml(msg)}</p><button class="btn char" id="tentar-de-novo">Tentar de novo</button><p><a href="../inicio.html">Voltar</a></p></div>`;

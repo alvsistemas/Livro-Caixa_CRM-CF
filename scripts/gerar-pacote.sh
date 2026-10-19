@@ -67,7 +67,7 @@ if [ -z "$VERSAO_ATUAL" ]; then
 fi
 VERSAO_NOVA=$((VERSAO_ATUAL + 1))
 
-for arquivo in public/index.html public/login.html public/inicio.html public/financeiro/index.html; do
+for arquivo in public/index.html public/login.html public/inicio.html public/assinatura.html public/dono.html public/financeiro/index.html; do
   if [ -f "$arquivo" ]; then
     sed -i "s/?v=${VERSAO_ATUAL}/?v=${VERSAO_NOVA}/g" "$arquivo"
     echo "  $arquivo: ?v=${VERSAO_ATUAL} → ?v=${VERSAO_NOVA}"

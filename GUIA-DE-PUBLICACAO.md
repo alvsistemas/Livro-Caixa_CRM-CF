@@ -165,6 +165,15 @@ Siga o passo a passo no início do arquivo `server/utils/telegramAlerta.js` e cr
 
 Não tem variável no Render: cada usuário conecta o próprio WhatsApp dentro do CRM, em **Configurações → Integrações**. Como o endereço do site mudou, cadastre na YCloud o **endereço de webhook novo** que o CRM mostra nessa tela.
 
+### 5.7 Assinatura paga (Asaas)
+Siga o tutorial "Assinatura com o Asaas": primeiro no sandbox (dinheiro de mentira), depois em
+produção. Resumo das variáveis no Render: `ASAAS_API_KEY`, `ASAAS_AMBIENTE`, `ASAAS_WEBHOOK_TOKEN`,
+`ASSINATURA_LIBERADOS` (seu e-mail). Sem `ASAAS_API_KEY`, tudo continua liberado.
+
+### 5.8 Painel do dono
+No Render, crie `DONOS_EMAILS` com o e-mail que você usa para entrar no Livro-Caixa. Depois disso,
+aparece "Painel do dono" na tela inicial. Outros donos você adiciona no próprio painel.
+
 ## 6. Depois que estiver no ar
 
 - **Página de divulgação:** no `index.html` da pasta `pagina-divulgacao`, troque `SEU-APP.onrender.com` pelo seu endereço (links de Privacidade e Termos no rodapé).

@@ -34,6 +34,8 @@ const gerotRoutes = require('./routes/gerot');
 const financeiroRoutes = require('./routes/financeiro');
 const historicoContatoRoutes = require('./routes/historicoContato');
 const pushRoutes = require('./routes/push');
+const assinaturaRoutes = require('./routes/assinatura');
+const donoRoutes = require('./routes/dono');
 
 const app = express();
 // O Render (e a maioria dos serviços de hospedagem) fica atrás de um proxy: o HTTPS
@@ -111,6 +113,8 @@ app.use('/api/gerot', gerotRoutes);
 app.use('/api/financeiro', financeiroRoutes);
 app.use('/api/historico-contato', historicoContatoRoutes);
 app.use('/api/push', pushRoutes);
+app.use('/api/assinatura', assinaturaRoutes);
+app.use('/api/dono', donoRoutes);
 
 // página pública de agendamento — /agendar/<userId> (sem login, o cliente acessa direto)
 app.get('/agendar/:userId', (req, res) => {
@@ -127,6 +131,8 @@ const { processarFluxos } = require('./utils/fluxoScheduler');
 const { processarAgendamentos } = require('./utils/agendamentoScheduler');
 const { enviarLembretesDeTarefas } = require('./utils/lembreteScheduler');
 const { enviarLembretesFinanceiros } = require('./utils/lembreteFinanceiro');
+const { sincronizarPendentes: conferirAssinaturas, cobrancaLigada } = require('./utils/assinatura');
+const { problemaNaConfiguracao } = require('./utils/asaas');
 const { enviarBackupsSemanais } = require('./utils/backupScheduler');
 const UMA_HORA = 60 * 60 * 1000;
 const CINCO_MINUTOS = 5 * 60 * 1000;
@@ -170,6 +176,12 @@ async function start() {
     // contas a pagar do Controle financeiro: um resumo por dia, a partir das 8h (confere de 30 em 30 min)
     setTimeout(enviarLembretesFinanceiros, 60 * 1000);
     setInterval(enviarLembretesFinanceiros, 30 * 60 * 1000);
+    // assinaturas: confere no Asaas quem pode ter pago ou atrasado (caso algum aviso se perca)
+    if (process.env.ASAAS_API_KEY && problemaNaConfiguracao()) console.warn(`Aviso: cobrança DESLIGADA — ${problemaNaConfiguracao()}.`);
+    if (cobrancaLigada()) console.log(`Cobrança ligada (Asaas, ambiente ${require('./utils/asaas').ambiente()}).`);
+    const conferirComSeguranca = () => conferirAssinaturas().catch((err) => console.error('Falha ao conferir assinaturas:', err.message));
+    setTimeout(conferirComSeguranca, 2 * 60 * 1000);
+    setInterval(conferirComSeguranca, UMA_HORA);
     setTimeout(enviarBackupsSemanais, 90 * 1000);
     setInterval(enviarBackupsSemanais, 6 * UMA_HORA);
   } catch (err) {

@@ -217,6 +217,11 @@ esqueciForm.addEventListener('submit', async (e)=>{
 });
 
 const tokenReset = new URLSearchParams(location.search).get('reset');
+// link "Começar grátis" da página de divulgação: abre direto em "Criar conta"
+if(new URLSearchParams(location.search).get('cadastro') === '1'){
+  const aba = document.querySelector('[data-mode="register"]');
+  if(aba) aba.click();
+}
 if(tokenReset){
   mostrarSomente('reset');
 }

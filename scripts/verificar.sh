@@ -115,7 +115,7 @@ done
 # 3) <div> abrindo/fechando em número igual (index.html e login.html)
 # ---------------------------------------------------------------
 passo "4/5 — <div> do HTML"
-for arquivo in public/index.html public/login.html public/inicio.html public/financeiro/index.html; do
+for arquivo in public/index.html public/login.html public/inicio.html public/assinatura.html public/dono.html public/financeiro/index.html; do
   contar
   abre=$(grep -o "<div" "$arquivo" | wc -l)
   fecha=$(grep -o "</div>" "$arquivo" | wc -l)

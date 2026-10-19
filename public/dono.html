@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Livro-Caixa — painel do dono</title>
+<link rel="manifest" href="manifest.json" />
+<meta name="theme-color" content="#141414" />
+<link rel="icon" href="icons/icon-192.png" />
+<script>try{document.documentElement.setAttribute('data-theme',localStorage.getItem('darkMode')==='1'?'dark':'light');}catch(e){}</script>
+<link rel="stylesheet" href="css/style.css?v=20261115" />
+<link rel="stylesheet" href="css/assinatura.css?v=20261115" />
+<link rel="stylesheet" href="css/dono.css?v=20261115" />
+</head>
+<body class="ass-body">
+  <main class="ass-wrap dono-wrap">
+    <header class="ass-head dono-head">
+      <div>
+        <a class="ass-voltar" href="inicio.html">← Voltar</a>
+        <p class="ass-marca">Livro-Caixa</p>
+        <h1 class="ass-titulo">Painel do dono</h1>
+        <p class="ass-sub" id="dono-sub">Carregando…</p>
+      </div>
+      <button type="button" class="ass-btn" id="dono-atualizar">Atualizar</button>
+    </header>
+
+    <div id="dono-aviso" class="ass-faixa ass-faixa-teste" hidden></div>
+
+    <section aria-labelledby="t-clientes">
+      <h2 class="ass-h2" id="t-clientes">Clientes</h2>
+      <div class="dono-kpis" id="dono-kpis"></div>
+      <div class="dono-filtros" id="dono-filtros" role="tablist" aria-label="Filtrar clientes"></div>
+      <input type="search" class="dono-busca" id="dono-busca" placeholder="Buscar por nome ou e-mail" aria-label="Buscar cliente" />
+      <div class="dono-tabela-wrap"><table class="dono-tabela" id="dono-tabela"></table></div>
+      <p class="ass-miudo" id="dono-tabela-rodape"></p>
+    </section>
+
+    <section aria-labelledby="t-saude">
+      <h2 class="ass-h2" id="t-saude">Saúde do sistema</h2>
+      <div class="dono-saude" id="dono-saude"><p class="ass-carregando">Conferindo…</p></div>
+    </section>
+
+    <section aria-labelledby="t-donos">
+      <h2 class="ass-h2" id="t-donos">Donos</h2>
+      <div class="ass-cartao">
+        <p class="ass-texto" style="margin-top:0">Donos abrem este painel e não pagam assinatura. Quem está fixo na variável <code>DONOS_EMAILS</code> do Render só sai editando a variável.</p>
+        <ul class="dono-lista-donos" id="dono-donos"></ul>
+        <form class="dono-add" id="dono-add-form">
+          <input type="email" id="dono-add-email" placeholder="e-mail da pessoa (o mesmo do login)" aria-label="E-mail do novo dono" required />
+          <button type="submit" class="ass-btn ass-btn-forte">Adicionar dono</button>
+        </form>
+        <p class="ass-erro" id="dono-add-erro" role="alert" hidden></p>
+      </div>
+    </section>
+  </main>
+
+  <div class="ass-modal-fundo" id="ass-modal" hidden>
+    <div class="ass-modal" role="dialog" aria-modal="true" aria-labelledby="ass-modal-titulo">
+      <h2 class="ass-h2" id="ass-modal-titulo" style="margin-top:0"></h2>
+      <p class="ass-texto" id="ass-modal-texto"></p>
+      <div class="ass-acoes">
+        <button type="button" class="ass-btn ass-btn-forte" id="ass-modal-sim"></button>
+        <button type="button" class="ass-btn" id="ass-modal-nao">Voltar</button>
+      </div>
+    </div>
+  </div>
+  <script src="js/dono.js?v=20261115"></script>
+</body>
+</html>

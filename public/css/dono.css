@@ -1,0 +1,55 @@
+/* Painel do dono (usa a base visual da tela de assinatura) */
+.dono-wrap{ max-width:1080px; }
+.dono-head{ display:flex; justify-content:space-between; align-items:flex-end; gap:16px; flex-wrap:wrap; }
+.dono-head code, .ass-texto code{ font-family:'IBM Plex Mono',monospace; font-size:12px; background:var(--line); padding:1px 5px; border-radius:4px; }
+
+.dono-kpis{ display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:12px; }
+.dono-kpi{ background:var(--paper); border:1px solid var(--line); border-radius:14px; padding:16px; }
+.dono-kpi-rotulo{ font-size:12px; color:var(--ink-soft); }
+.dono-kpi-valor{ font-family:'Fraunces',serif; font-size:30px; font-weight:600; line-height:1.15; margin-top:4px; font-variant-numeric:tabular-nums; }
+.dono-kpi-sub{ font-size:12px; color:var(--ink-soft); margin-top:4px; }
+.dono-kpi.alerta{ border-color:var(--danger); }
+.dono-kpi.alerta .dono-kpi-valor{ color:var(--danger); }
+
+.dono-filtros{ display:flex; gap:8px; flex-wrap:wrap; margin:20px 0 10px; }
+.dono-filtro{ min-height:34px; padding:6px 12px; border-radius:999px; border:1px solid var(--line); background:var(--paper); color:var(--ink-soft); font:600 12px 'IBM Plex Sans',sans-serif; cursor:pointer; }
+.dono-filtro:hover{ border-color:var(--ink); }
+.dono-filtro.ativo{ background:var(--ink); color:var(--bg); border-color:var(--ink); }
+.dono-filtro span{ font-weight:500; opacity:.75; margin-left:4px; }
+.dono-busca{ width:100%; max-width:360px; box-sizing:border-box; min-height:40px; padding:8px 12px; border-radius:10px; border:1px solid var(--line); background:var(--paper); color:var(--ink); font:14px 'IBM Plex Sans',sans-serif; margin-bottom:12px; }
+
+.dono-tabela-wrap{ overflow-x:auto; border:1px solid var(--line); border-radius:14px; background:var(--paper); }
+.dono-tabela{ width:100%; border-collapse:collapse; font-size:13px; min-width:720px; }
+.dono-tabela th{ text-align:left; font-size:11px; font-weight:600; letter-spacing:.04em; text-transform:uppercase; color:var(--ink-soft); padding:10px 14px; border-bottom:1px solid var(--line); white-space:nowrap; }
+.dono-tabela td{ padding:10px 14px; border-bottom:1px solid var(--line); vertical-align:top; }
+.dono-tabela tr:last-child td{ border-bottom:none; }
+.dono-tabela .email{ color:var(--ink-soft); font-size:12px; }
+.dono-tabela .num{ font-variant-numeric:tabular-nums; white-space:nowrap; }
+.dono-vazio{ padding:24px; text-align:center; color:var(--ink-soft); }
+
+.dono-saude{ display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:12px; }
+.dono-saude .ass-cartao{ margin-bottom:0; }
+.dono-saude-titulo{ display:flex; align-items:center; gap:8px; font-weight:600; font-size:14px; }
+.dono-ponto{ width:10px; height:10px; border-radius:50%; background:var(--ink-soft); flex-shrink:0; }
+.dono-ponto.ok{ background:#2F8F5B; }
+.dono-ponto.atencao{ background:#D08A1E; }
+.dono-ponto.ruim{ background:var(--danger); }
+.dono-linha{ display:flex; justify-content:space-between; gap:10px; font-size:13px; padding:6px 0; border-bottom:1px solid var(--line); }
+.dono-linha:last-child{ border-bottom:none; }
+.dono-linha span:first-child{ color:var(--ink-soft); }
+.dono-linha span:last-child{ text-align:right; }
+.dono-largo{ grid-column:1 / -1; }
+.dono-erros{ list-style:none; margin:10px 0 0; padding:0; }
+.dono-erros li{ padding:8px 0; border-bottom:1px solid var(--line); font-size:12.5px; }
+.dono-erros li:last-child{ border-bottom:none; }
+.dono-erros .quando{ color:var(--ink-soft); font-size:11.5px; }
+.dono-erros .msg{ font-family:'IBM Plex Mono',monospace; font-size:12px; word-break:break-word; }
+
+.dono-lista-donos{ list-style:none; margin:14px 0; padding:0; }
+.dono-lista-donos li{ display:flex; align-items:center; justify-content:space-between; gap:10px; padding:10px 0; border-bottom:1px solid var(--line); font-size:14px; flex-wrap:wrap; }
+.dono-lista-donos li:last-child{ border-bottom:none; }
+.dono-lista-donos small{ color:var(--ink-soft); font-size:12px; }
+.dono-add{ display:flex; gap:10px; flex-wrap:wrap; }
+.dono-add input{ flex:1 1 240px; min-height:42px; padding:8px 12px; border-radius:10px; border:1px solid var(--line); background:var(--bg); color:var(--ink); font:15px 'IBM Plex Sans',sans-serif; }
+.dono-btn-mini{ min-height:34px; padding:6px 12px; font-size:12px; }
+.dono-tabela .ass-selo{ white-space:nowrap; }

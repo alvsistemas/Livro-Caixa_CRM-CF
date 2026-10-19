@@ -72,7 +72,8 @@
 - A aba "Comissões" de consórcio (fórmula da carta de crédito): as comissões agora vêm do CRM.
 
 ## Pendências
-- **Plano premium removido por enquanto** (a pedido): todas as abas do financeiro liberadas, sem cadeados, sem tela de bloqueio e sem o cartão "Plano". Refazer depois como sistema de assinatura de verdade (cobrança real, ligado aos planos da página de divulgação). O campo `perfil.plan` de contas antigas fica salvo, mas não é usado.
-- Trocar `SEU-APP.onrender.com` pelo endereço real (página de divulgação, README, `.env.example`, `utils/email.js`).
+- **Painel do dono** (`public/dono.html`, `/api/dono/*`): clientes por situação (teste, pagando, atrasado, cancelou, bloqueado, cortesia/dono), receita estimada, conversão do teste, saúde (servidor, banco, Asaas, integrações, erros). Donos = `DONOS_EMAILS` (fixos) + tabela `donos` (adicionados pelo painel, migração 005). Donos não pagam. Monitoramento da aba Equipe mantido.
+- **Assinatura real pelo Asaas** (substitui o antigo "premium", que foi removido; `perfil.plan` antigo não é usado): planos Essencial R$ 29,90 (CRM + financeiro) e Completo R$ 39,90 (+ IA, API do WhatsApp, Google Agenda); 7 dias grátis com tudo; tolerância de 3 dias; `billingType: UNDEFINED` (a pessoa escolhe Pix/boleto/cartão na fatura do Asaas). Desligada sem `ASAAS_API_KEY`. Webhook só dispara a consulta: o servidor confere no Asaas (`sincronizar`) e recalcula por `situacaoPelasCobrancas`; conferência de hora em hora em `sincronizarPendentes`. Bloqueio no `middleware/auth.js` (402; 403 por recurso). Tela `public/assinatura.html`. Testes em `server/test/assinatura.test.js` e no integracao.test.js (Asaas falso). Detalhes no README, seção "Assinatura paga (Asaas)".
+- Trocar `SEU-APP.onrender.com` pelo endereço real no README, `.env.example` e `utils/email.js` (na página de divulgação já foi trocado por livro-caixa-crm-cf.onrender.com).
 - E-mails de contato em `privacidade.html` e `termos.html` ainda são `SEU-EMAIL-DE-CONTATO-AQUI`.
 - WhatsApp oficial exige empresa verificada na Meta; na YCloud, cadastrar o webhook novo.

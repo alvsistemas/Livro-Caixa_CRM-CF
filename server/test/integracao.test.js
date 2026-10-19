@@ -510,6 +510,171 @@ describe('API com PostgreSQL (integração)', { skip: pular }, () => {
     }
   });
 
+  test('assinatura com o Asaas (falso): teste grátis, bloqueio, pagamento pelo aviso, plano e cancelamento', async () => {
+    const http = require('http');
+    const A = require('../utils/assinatura');
+    const { query } = require('../db/pool');
+    // Asaas de mentira: guarda clientes, assinaturas e cobranças em memória
+    const fake = { clientes: {}, assinaturas: {}, cobrancas: [], semChave: 0 };
+    let n = 0;
+    const asaasFalso = http.createServer((req, res) => {
+      let corpo = '';
+      req.on('data', (c) => { corpo += c; });
+      req.on('end', () => {
+        if (!String(req.headers.access_token || '').startsWith('$aact_hmlg_')) { fake.semChave++; res.writeHead(401); return res.end('{}'); }
+        const dados = corpo ? JSON.parse(corpo) : {};
+        const url = req.url.split('?')[0];
+        const responder = (status, obj) => { res.writeHead(status, { 'Content-Type': 'application/json' }); res.end(JSON.stringify(obj)); };
+        let m;
+        if (req.method === 'POST' && url === '/customers') { const id = `cus_${++n}`; fake.clientes[id] = { id, ...dados }; return responder(200, fake.clientes[id]); }
+        if (req.method === 'PUT' && (m = url.match(/^\/customers\/(.+)$/))) { Object.assign(fake.clientes[m[1]], dados); return responder(200, fake.clientes[m[1]]); }
+        if (req.method === 'POST' && url === '/subscriptions') {
+          if (!fake.clientes[dados.customer]) return responder(400, { errors: [{ code: 'invalid_customer', description: 'Cliente inexistente.' }] });
+          const id = `sub_${++n}`;
+          fake.assinaturas[id] = { id, status: 'ACTIVE', deleted: false, ...dados };
+          fake.cobrancas.push({ id: `pay_${++n}`, subscription: id, status: 'PENDING', dueDate: dados.nextDueDate, value: dados.value, invoiceUrl: `https://sandbox.asaas.com/i/${n}` });
+          return responder(200, fake.assinaturas[id]);
+        }
+        if ((m = url.match(/^\/subscriptions\/([^/]+)\/payments$/))) return responder(200, { data: fake.cobrancas.filter((c) => c.subscription === m[1]) });
+        if ((m = url.match(/^\/subscriptions\/([^/]+)$/))) {
+          const a = fake.assinaturas[m[1]];
+          if (!a) return responder(404, { errors: [{ description: 'Não encontrada' }] });
+          if (req.method === 'GET') return responder(200, a);
+          if (req.method === 'PUT') { Object.assign(a, dados); if (dados.updatePendingPayments) fake.cobrancas.filter((c) => c.subscription === a.id && c.status === 'PENDING').forEach((c) => { c.value = dados.value; }); return responder(200, a); }
+          if (req.method === 'DELETE') { a.deleted = true; fake.cobrancas = fake.cobrancas.filter((c) => !(c.subscription === a.id && c.status === 'PENDING')); return responder(200, { deleted: true, id: a.id }); }
+        }
+        return responder(404, { errors: [{ description: `rota falsa inexistente ${req.method} ${url}` }] });
+      });
+    });
+    await new Promise((ok) => asaasFalso.listen(0, ok));
+    const antes = { ...process.env };
+    process.env.ASAAS_API_KEY = '$aact_hmlg_teste';
+    process.env.ASAAS_URL = `http://127.0.0.1:${asaasFalso.address().port}`;
+    process.env.ASAAS_WEBHOOK_TOKEN = 'token-do-webhook-teste';
+    process.env.ASSINATURA_DIAS_TESTE = '7';
+    try {
+      const r = await api('POST', '/api/auth/register', { nome: 'Dani', email: 'dani@teste.com', senha: 'senha123' });
+      const t = r.dados.token; const id = r.dados.user.id;
+      let s = await api('GET', '/api/assinatura', undefined, t);
+      assert.equal(s.status, 200);
+      assert.equal(s.dados.cobranca, true);
+      assert.equal(s.dados.emTeste, true);
+      assert.equal(s.dados.diasDeTeste, 7);
+      assert.equal(s.dados.ambiente, 'sandbox');
+      // a pessoa logada NÃO consegue gravar na própria assinatura (RLS: só o sistema grava)
+      const { comoUsuario } = require('../db/contexto');
+      const gravou = await comoUsuario(id, () => query("UPDATE assinaturas SET status = 'cortesia' WHERE user_id = $1", [id]));
+      assert.equal(gravou.rowCount, 0);
+
+      assert.equal((await api('POST', '/api/assinatura/assinar', { plano: 'completo', nome: 'Dani Souza', cpfCnpj: '529.982.247-24' }, t)).status, 400);
+      const ass = await api('POST', '/api/assinatura/assinar', { plano: 'completo', nome: 'Dani Souza', cpfCnpj: '529.982.247-25' }, t);
+      assert.equal(ass.status, 200, JSON.stringify(ass.dados));
+      assert.match(ass.dados.link, /^https:\/\/sandbox\.asaas\.com\/i\//);
+      const sub = Object.values(fake.assinaturas)[0];
+      assert.equal(sub.billingType, 'UNDEFINED');
+      assert.equal(sub.value, 39.9);
+      assert.equal(sub.cycle, 'MONTHLY');
+      assert.equal(sub.nextDueDate, A.hojeEmBrasilia(new Date(Date.now() + 7 * 86400000)), '1ª cobrança vence no fim do teste');
+      assert.equal(fake.clientes[sub.customer].cpfCnpj, '52998224725');
+      assert.equal((await api('POST', '/api/assinatura/assinar', { plano: 'completo', nome: 'Dani Souza', cpfCnpj: '52998224725' }, t)).status, 409, 'não cria duas');
+
+      // teste acabou há 10 dias e não pagou: bloqueia tudo, menos assinatura e exportar dados
+      await query("UPDATE assinaturas SET teste_ate = now() - interval '10 days' WHERE user_id = $1", [id]);
+      A.esquecer(id);
+      const bloq = await api('GET', '/api/board', undefined, t);
+      assert.equal(bloq.status, 402);
+      assert.equal(bloq.dados.motivo, 'aguardando_pagamento');
+      assert.equal((await api('GET', '/api/assinatura', undefined, t)).dados.liberado, false);
+      assert.equal((await api('GET', '/api/backup/exportar-tudo', undefined, t)).status, 200);
+
+      // aviso falso (token errado) é recusado; aviso dizendo "pago" sem o Asaas confirmar não libera
+      const aviso = (corpo, token) => fetch(`${base}/api/assinatura/webhook`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'asaas-access-token': token }, body: JSON.stringify(corpo) });
+      assert.equal((await aviso({ id: 'evt_x', event: 'PAYMENT_RECEIVED', payment: { subscription: sub.id, status: 'RECEIVED' } }, 'errado')).status, 401);
+      assert.equal((await aviso({ id: 'evt_0', event: 'PAYMENT_RECEIVED', payment: { subscription: sub.id, status: 'RECEIVED' } }, 'token-do-webhook-teste')).status, 200);
+      await new Promise((ok) => setTimeout(ok, 300));
+      assert.equal((await api('GET', '/api/board', undefined, t)).status, 402, 'o servidor confere no Asaas, não confia no aviso');
+
+      // agora o Asaas confirma o pagamento
+      fake.cobrancas[0].status = 'RECEIVED';
+      const ok = await aviso({ id: 'evt_1', event: 'PAYMENT_RECEIVED', payment: { id: fake.cobrancas[0].id, subscription: sub.id } }, 'token-do-webhook-teste');
+      assert.equal(ok.status, 200);
+      await new Promise((r2) => setTimeout(r2, 300));
+      s = await api('GET', '/api/assinatura', undefined, t);
+      assert.equal(s.dados.status, 'ativa');
+      assert.equal(s.dados.liberado, true);
+      assert.equal((await api('GET', '/api/board', undefined, t)).status, 200);
+      const repetido = await (await aviso({ id: 'evt_1', event: 'PAYMENT_RECEIVED', payment: { subscription: sub.id } }, 'token-do-webhook-teste')).json();
+      assert.equal(repetido.repetido, true);
+
+      // troca pro Essencial: muda o valor no Asaas e a IA passa a pedir o Completo
+      const troca = await api('POST', '/api/assinatura/trocar-plano', { plano: 'essencial' }, t);
+      assert.equal(troca.status, 200, JSON.stringify(troca.dados));
+      assert.equal(fake.assinaturas[sub.id].value, 29.9);
+      const ia = await api('POST', '/api/ai/assistente', { mensagens: [{ role: 'user', content: 'oi' }] }, t);
+      assert.equal(ia.status, 403);
+      assert.equal(ia.dados.recurso, 'ia');
+      assert.equal((await api('GET', '/api/whatsapp/status', undefined, t)).status < 400, true);
+
+      // cancela: as próximas cobranças somem, mas o mês pago continua valendo
+      const canc = await api('POST', '/api/assinatura/cancelar', {}, t);
+      assert.equal(canc.status, 200, JSON.stringify(canc.dados));
+      assert.equal(fake.assinaturas[sub.id].deleted, true);
+      assert.equal(canc.dados.situacao.status, 'cancelada');
+      assert.equal(canc.dados.situacao.liberado, true);
+      // o aviso de assinatura apagada chega depois: o mês pago continua valendo
+      assert.equal((await aviso({ id: 'evt_2', event: 'SUBSCRIPTION_DELETED', subscription: { id: sub.id, deleted: true } }, 'token-do-webhook-teste')).status, 200);
+      await new Promise((r2) => setTimeout(r2, 300));
+      s = await api('GET', '/api/assinatura', undefined, t);
+      assert.equal(s.dados.status, 'cancelada');
+      assert.equal(s.dados.liberado, true, 'cancelar não pode tirar o mês já pago');
+      assert.ok(s.dados.pagoAte);
+      // o pagamento é estornado no Asaas: o acesso pago some
+      fake.cobrancas[0].status = 'REFUNDED';
+      assert.equal((await api('POST', '/api/assinatura/atualizar', {}, t)).dados.situacao.liberado, false);
+      assert.equal(fake.semChave, 0);
+    } finally {
+      for (const k of Object.keys(process.env)) if (!(k in antes)) delete process.env[k];
+      Object.assign(process.env, antes);
+      await new Promise((ok) => asaasFalso.close(ok));
+    }
+  });
+
+  test('painel do dono: só donos abrem, donos fixos e adicionados, números dos clientes', async () => {
+    const antes = process.env.DONOS_EMAILS;
+    process.env.DONOS_EMAILS = 'Chefe@Teste.com';
+    try {
+      const chefe = await api('POST', '/api/auth/register', { nome: 'Chefe', email: 'chefe@teste.com', senha: 'senha123' });
+      const socio = await api('POST', '/api/auth/register', { nome: 'Sócio', email: 'socio@teste.com', senha: 'senha123' });
+      const tc = chefe.dados.token; const ts = socio.dados.token;
+      assert.equal((await api('GET', '/api/dono/sou', undefined, tc)).dados.dono, true);
+      assert.equal((await api('GET', '/api/dono/sou', undefined, ts)).dados.dono, false);
+      assert.equal((await api('GET', '/api/dono/resumo', undefined, ts)).status, 403);
+      assert.equal((await api('GET', '/api/dono/saude', undefined, ts)).status, 403);
+      const r = await api('GET', '/api/dono/resumo', undefined, tc);
+      assert.equal(r.status, 200, JSON.stringify(r.dados));
+      assert.ok(r.dados.totais.cadastros >= 2);
+      assert.equal(r.dados.clientes.find((c) => c.email === 'chefe@teste.com').situacao, 'dono');
+      assert.equal(r.dados.clientes.find((c) => c.email === 'socio@teste.com').situacao, 'livre');
+      const sa = await api('GET', '/api/dono/saude', undefined, tc);
+      assert.equal(sa.status, 200, JSON.stringify(sa.dados));
+      assert.equal(sa.dados.banco.ok, true);
+      assert.equal(typeof sa.dados.erros.ultimas24h, 'number');
+      // adiciona o sócio como dono
+      assert.equal((await api('POST', '/api/dono/donos', { email: 'nao-e-email' }, tc)).status, 400);
+      const add = await api('POST', '/api/dono/donos', { email: ' SOCIO@teste.com ' }, tc);
+      assert.equal(add.status, 200);
+      assert.deepEqual(add.dados.donos.map((d) => [d.email, d.fixo]), [['chefe@teste.com', true], ['socio@teste.com', false]]);
+      assert.equal((await api('GET', '/api/dono/resumo', undefined, ts)).status, 200);
+      // o dono fixo não pode ser removido pelo painel; ninguém remove a si mesmo
+      assert.equal((await api('DELETE', '/api/dono/donos/chefe@teste.com', undefined, ts)).status, 400);
+      assert.equal((await api('DELETE', '/api/dono/donos/socio@teste.com', undefined, ts)).status, 400);
+      assert.equal((await api('DELETE', '/api/dono/donos/socio@teste.com', undefined, tc)).status, 200);
+      assert.equal((await api('GET', '/api/dono/resumo', undefined, ts)).status, 403);
+    } finally {
+      if (antes === undefined) delete process.env.DONOS_EMAILS; else process.env.DONOS_EMAILS = antes;
+    }
+  });
+
   test('sair de todos os aparelhos invalida o token antigo', async () => {
     const t = contas.caio.token;
     assert.equal((await api('POST', '/api/auth/logout-all', {}, t)).status, 204);

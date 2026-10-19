@@ -18,7 +18,10 @@
 .inicio-app-desc{ font-size:14px; line-height:1.5; color:var(--ink-soft); flex:1; }
 .inicio-app-acao{ font-size:13px; font-weight:600; margin-top:6px; }
 .inicio-app-fin .inicio-app-acao{ color:#2F6F4E; }
-.inicio-rodape{ margin-top:28px; display:flex; justify-content:center; }
+.inicio-rodape{ margin-top:28px; display:flex; justify-content:center; align-items:center; gap:8px; flex-wrap:wrap; }
+.inicio-assinatura{ font-size:13px; font-weight:500; color:var(--ink-soft); text-decoration:none; padding:8px 12px; border-radius:8px; }
+.inicio-assinatura:hover{ color:var(--ink); background:var(--line); }
+.inicio-assinatura.alerta{ color:var(--danger); background:var(--danger-soft); }
 .inicio-sair{ border:none; background:none; color:var(--danger); font-size:13px; font-weight:500; cursor:pointer; padding:8px 12px; border-radius:8px; }
 .inicio-sair:hover{ background:var(--danger-soft); }
 [data-theme="dark"] .inicio-app-crm .inicio-app-icone{ background:#F0F0F0; color:#141414; }

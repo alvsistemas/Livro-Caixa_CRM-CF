@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Livro-Caixa — assinatura</title>
+<link rel="manifest" href="manifest.json" />
+<meta name="theme-color" content="#141414" />
+<link rel="icon" href="icons/icon-192.png" />
+<script>try{document.documentElement.setAttribute('data-theme',localStorage.getItem('darkMode')==='1'?'dark':'light');}catch(e){}</script>
+<link rel="stylesheet" href="css/style.css?v=20261115" />
+<link rel="stylesheet" href="css/assinatura.css?v=20261115" />
+</head>
+<body class="ass-body">
+  <main class="ass-wrap">
+    <header class="ass-head">
+      <a class="ass-voltar" href="inicio.html" id="ass-voltar">← Voltar</a>
+      <p class="ass-marca">Livro-Caixa</p>
+      <h1 class="ass-titulo" id="ass-titulo">Sua assinatura</h1>
+      <p class="ass-sub" id="ass-sub"></p>
+    </header>
+
+    <div id="ass-aviso-sandbox" class="ass-faixa ass-faixa-teste" hidden>
+      <b>Modo de teste (sandbox).</b> Nenhum dinheiro de verdade é cobrado. Use os dados de teste do Asaas para simular o pagamento.
+    </div>
+
+    <section id="ass-situacao" class="ass-cartao" hidden></section>
+
+    <section id="ass-planos-sec" hidden>
+      <h2 class="ass-h2" id="ass-planos-titulo">Escolha seu plano</h2>
+      <div class="ass-planos" id="ass-planos"></div>
+    </section>
+
+    <section id="ass-checkout" class="ass-cartao" hidden>
+      <h2 class="ass-h2" style="margin-top:0">Dados para a cobrança</h2>
+      <p class="ass-texto" id="ass-checkout-resumo"></p>
+      <form id="ass-form" novalidate>
+        <label class="ass-campo">Nome completo ou razão social
+          <input id="ass-nome" autocomplete="name" required maxlength="120" />
+        </label>
+        <label class="ass-campo">CPF ou CNPJ
+          <input id="ass-doc" inputmode="numeric" autocomplete="off" required maxlength="18" placeholder="000.000.000-00" />
+        </label>
+        <p class="ass-erro" id="ass-erro" role="alert" hidden></p>
+        <div class="ass-acoes">
+          <button type="submit" class="ass-btn ass-btn-forte" id="ass-enviar">Ir para o pagamento</button>
+          <button type="button" class="ass-btn" id="ass-cancelar-checkout">Voltar</button>
+        </div>
+      </form>
+      <p class="ass-miudo">Na próxima tela, do Asaas, você escolhe <b>Pix, boleto ou cartão de crédito</b>. O Asaas pede o CPF ou CNPJ para emitir a cobrança. Os dados do cartão ficam com o Asaas: o Livro-Caixa nunca vê nem guarda o número do seu cartão.</p>
+    </section>
+
+    <footer class="ass-rodape">
+      <button type="button" class="ass-link" id="ass-exportar">Baixar uma cópia dos meus dados</button>
+      <span aria-hidden="true">·</span>
+      <button type="button" class="ass-link ass-link-perigo" id="ass-sair">Sair da conta</button>
+    </footer>
+  </main>
+
+  <div class="ass-modal-fundo" id="ass-modal" hidden>
+    <div class="ass-modal" role="dialog" aria-modal="true" aria-labelledby="ass-modal-titulo">
+      <h2 class="ass-h2" id="ass-modal-titulo" style="margin-top:0"></h2>
+      <p class="ass-texto" id="ass-modal-texto"></p>
+      <div class="ass-acoes">
+        <button type="button" class="ass-btn ass-btn-forte" id="ass-modal-sim"></button>
+        <button type="button" class="ass-btn" id="ass-modal-nao">Voltar</button>
+      </div>
+    </div>
+  </div>
+  <script src="js/assinatura.js?v=20261115"></script>
+</body>
+</html>

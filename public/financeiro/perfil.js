@@ -36,6 +36,26 @@ TELAS.aparencia = {
   },
 };
 
+/* ---------------- Assinatura ---------------- */
+TELAS.assinatura = {
+  ordemNoPerfil: 5,
+  noPerfil() {
+    const s = state.assinatura;
+    if (!s || !s.cobranca || s.status === "cortesia") return "";
+    const plano = (s.planos || []).find((p) => p.id === s.plano);
+    const data = (v) => (v ? new Date(/^\d{4}-\d{2}-\d{2}$/.test(v) ? v + "T12:00:00" : v).toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" }) : "");
+    const rotulos = { aguardando: "aguardando pagamento", ativa: "ativa", atrasada: "pagamento atrasado", cancelada: "cancelada" };
+    const texto = s.emTeste
+      ? `Teste grátis até ${data(s.testeAte)} — tudo liberado.`
+      : `${plano ? "Plano " + plano.nome : "Assinatura"}: ${rotulos[s.status] || s.status}${s.pagoAte ? ` · ${s.status === "cancelada" ? "acesso até" : "pago até"} ${data(s.pagoAte)}` : ""}.`;
+    return `<div class="card" style="margin-bottom:20px">
+      <h2 class="section-title" style="border-color:var(--char)">Assinatura</h2>
+      <p style="font-size:14px;margin:0 0 12px">${escapeHtml(texto)}</p>
+      <a class="btn char" href="../assinatura.html?de=financeiro" style="display:inline-block;text-decoration:none">${s.temAssinatura ? "Gerenciar assinatura" : "Ver planos e assinar"}</a>
+    </div>`;
+  },
+};
+
 /* ---------------- Lembretes de vencimento ---------------- */
 TELAS.lembretes = {
   ordemNoPerfil: 25,

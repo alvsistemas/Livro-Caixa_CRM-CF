@@ -883,6 +883,40 @@ melhor o horário escolhido.
 - `POST /api/instagram/configurar` — `{ pageId, pageAccessToken }` (exige token)
 - `POST /api/instagram/desconectar` — (exige token)
 
+## Assinatura paga (Asaas)
+
+Cobrança mensal por Pix, boleto ou cartão, com teste grátis. Tutorial completo (o que é, como
+funciona, sandbox → produção) no documento "Assinatura com o Asaas".
+
+- **Desligada por padrão:** sem `ASAAS_API_KEY` nada muda (tudo liberado). Variáveis no `server/.env.example`.
+- **Planos:** Essencial (R$ 29,90: CRM + financeiro) e Completo (R$ 39,90: + IA, API do WhatsApp,
+  Google Agenda), iguais aos da página de divulgação. Preço muda por variável de ambiente.
+- **Teste grátis:** 7 dias a partir do primeiro acesso depois de ligar a cobrança, com tudo do Completo.
+- **Quem diz o que foi pago é o Asaas:** o webhook (`POST /api/assinatura/webhook`, token no
+  header `asaas-access-token`) só avisa; o servidor consulta o Asaas e recalcula. Uma conferência
+  de hora em hora corrige avisos perdidos.
+- **Bloqueio:** sem pagamento (fora do teste e da tolerância de 3 dias), a API responde 402 e o
+  site leva pra `assinatura.html`. Continuam abertos: login, assinatura e exportar os dados.
+  Recursos do Completo respondem 403 no Essencial.
+- **Banco:** migração `004_assinaturas.sql` (`assinaturas`: a pessoa só LÊ a própria linha, só o
+  sistema grava; `assinatura_eventos`: avisos já processados, pra não repetir).
+- **Arquivos:** `server/utils/asaas.js`, `server/utils/assinatura.js`, `server/routes/assinatura.js`,
+  `public/assinatura.html`, `public/js/assinatura.js`, `public/css/assinatura.css`.
+- **Liberar alguém sem cobrança:** `ASSINATURA_LIBERADOS` (e-mails) ou, no Neon,
+  `SELECT set_config('app.bypass', 'on', false); UPDATE assinaturas SET status = 'cortesia' WHERE user_id = (SELECT id FROM usuarios WHERE email = 'pessoa@email.com');` (a primeira parte libera o comando por causa do RLS)
+
+## Painel do dono
+
+Página `dono.html` (link "Painel do dono" na tela inicial, só para donos): cadastros, quem está no
+teste, quem paga e em qual plano, receita mensal estimada, conversão do teste, atrasados,
+cancelamentos, lista de clientes com filtros e busca, e a saúde do sistema (servidor, banco,
+cobrança/avisos do Asaas, integrações, erros recentes).
+
+- **Donos fixos:** `DONOS_EMAILS` no Render (não podem ser removidos pelo painel).
+- **Outros donos:** adicionados e removidos no próprio painel (tabela `donos`, migração `005_donos.sql`, só o sistema lê/grava). Ninguém remove a si mesmo.
+- Donos nunca pagam assinatura. Rotas em `server/routes/dono.js` (`/api/dono/*`), conferência em `server/utils/donos.js`.
+- O monitoramento de erros da aba Equipe continua como estava.
+
 ## Recuperação de senha por e-mail ("Esqueci minha senha")
 
 Usa o [Resend](https://resend.com) (API HTTP, sem biblioteca extra). Sem as
