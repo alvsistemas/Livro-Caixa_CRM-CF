@@ -116,7 +116,7 @@ Não precisa liberar IP nem criar usuário: o Neon já aceita conexões com SSL 
    Clique em **Save, rebuild, and deploy**.
 8. Teste: abra o endereço, clique em **Criar conta**, entre e escolha **CRM** ou **Controle financeiro**.
 
-> Plano grátis: o servidor "dorme" depois de 15 minutos sem acesso, e o primeiro acesso seguinte demora até 1 minuto. Para clientes pagantes, troque para o plano **Starter** em *Settings → Instance Type*.
+> Instância grátis: o servidor "dorme" depois de 15 minutos sem acesso, e o primeiro acesso seguinte demora até 1 minuto. Para clientes pagantes, troque a instância em *Settings → Instance Type* para a paga mais barata (512 MB, US$ 7/mês em out/2026), que não dorme. Atenção: o plano do **workspace** (Hobby, Pro...) é outra coisa: ele não muda a instância, e o Hobby (grátis) já basta para este sistema.
 
 ## 5. Recursos opcionais (ligue quando quiser)
 
@@ -170,9 +170,50 @@ produção. Resumo das variáveis no Render: `ASAAS_API_KEY`, `ASAAS_AMBIENTE`, 
 No Render, crie `DONOS_EMAILS` com o e-mail que você usa para entrar no Livro-Caixa. Depois disso,
 aparece "Painel do dono" na tela inicial. Outros donos você adiciona no próprio painel.
 
+## 5.9 Domínio próprio: meulivrocaixaapp.com.br
+
+A página de divulgação já vem dentro do sistema: `https://meulivrocaixaapp.com.br/` abre a
+divulgação e o sistema continua em `/login.html`, `/inicio.html` etc. Um domínio, um serviço.
+O certificado HTTPS é criado e renovado sozinho pelo Render.
+
+**1. No Render** — abra o Web Service → **Settings → Custom Domains → + Add Custom Domain**,
+digite `meulivrocaixaapp.com.br` e salve. O Render acrescenta o `www.meulivrocaixaapp.com.br`
+sozinho (e manda quem digitar com www para o endereço sem www).
+
+**2. No Registro.br** — em **Painel → meulivrocaixaapp.com.br → DNS → Editar zona** (se
+aparecer "Configurar endereçamento", use os servidores DNS do próprio Registro.br), crie:
+
+| Tipo | Nome | Valor |
+|---|---|---|
+| A | (em branco, o próprio domínio) | `216.24.57.1` |
+| CNAME | `www` | `livro-caixa-crm-cf.onrender.com` |
+
+Se houver algum registro **AAAA**, apague. Salve e aguarde (de alguns minutos a algumas horas).
+
+**3. Volte ao Render** e clique em **Verify** ao lado de cada domínio. Quando aparecer
+"Certificate issued", abra `https://meulivrocaixaapp.com.br` e confira.
+
+**4. Atualize os endereços** (troque `livro-caixa-crm-cf.onrender.com` por `meulivrocaixaapp.com.br`):
+- Render → **Environment**: `APP_URL=https://meulivrocaixaapp.com.br` e, se usar,
+  `ASSINATURA_URL_RETORNO=https://meulivrocaixaapp.com.br/assinatura.html?pago=1`.
+- Asaas → **Integrações → Webhooks**: URL `https://meulivrocaixaapp.com.br/api/assinatura/webhook`;
+  **Mecanismos de segurança → Validação de saque**: `https://meulivrocaixaapp.com.br/api/assinatura/validar-saque`.
+  Nos dados da sua conta no Asaas, troque o site da empresa para `https://meulivrocaixaapp.com.br`
+  (o Asaas só aceita voltar para o domínio cadastrado; se não achar o campo, peça ao suporte deles).
+- Google Cloud (login com Google e Google Agenda) → **Credenciais → seu ID do cliente OAuth**:
+  em "Origens JavaScript autorizadas" adicione `https://meulivrocaixaapp.com.br`; em "URIs de
+  redirecionamento autorizados" adicione `https://meulivrocaixaapp.com.br/api/calendar/callback`.
+  Deixe os endereços antigos até tudo funcionar no novo.
+- Resend (e-mails) → **Domains → Add Domain** `meulivrocaixaapp.com.br`, crie no Registro.br os
+  registros que o Resend mostrar e depois use `EMAIL_FROM=Livro-Caixa <nao-responda@meulivrocaixaapp.com.br>`.
+
+**5. Opcional** — com tudo funcionando no endereço novo, em **Settings → Render Subdomain** dá
+para desligar o `livro-caixa-crm-cf.onrender.com`. Quem tinha o app instalado no celular pelo
+endereço antigo precisa instalar de novo pelo novo.
+
 ## 6. Depois que estiver no ar
 
-- **Página de divulgação:** no `index.html` da pasta `pagina-divulgacao`, troque `SEU-APP.onrender.com` pelo seu endereço (links de Privacidade e Termos no rodapé).
+- **Página de divulgação:** fica dentro do sistema, em `public/site/` (o endereço principal abre ela). Preços, dias de teste e a promoção do Painel do dono são lidos do próprio sistema (`/api/publico/precos`). Para trocar os prints, substitua as imagens em `public/site/img/` mantendo os nomes.
 - **Privacidade e Termos:** o e-mail de contato (alvsistemas.1710@gmail.com) já está em `public/privacidade.html` e `public/termos.html`. Se mudar, troque nos dois.
 - **Trazer os dados do CRM antigo (opcional):** no CRM antigo, vá em *Configurações → Manutenção → Backup → Exportar*. No Livro-Caixa, use *Importar* na mesma tela. Os clientes, comissões e regras antigas entram na conta nova.
 

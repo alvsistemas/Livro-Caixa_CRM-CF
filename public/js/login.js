@@ -19,10 +19,55 @@ const authDivider = document.getElementById('auth-divider');
 const googleBtnContainer = document.getElementById('google-btn-container');
 let tempToken2FA = null;
 
-/* se já tem sessão, pula direto pra escolha de aplicativo */
-if(localStorage.getItem('token')){
-  window.location.href = 'inicio.html';
+/* Vindo da página de divulgação:
+   ?cadastro=1&teste=1                        -> "Quero uma demonstração": cria a conta e cai no CRM, no teste grátis
+   ?cadastro=1&plano=essencial|completo&ciclo=mensal|anual -> cria a conta e segue pro pagamento desse plano
+   A escolha fica guardada na aba (sessionStorage) até o login terminar (inclusive com Google ou 2FA). */
+const PLANOS_DIVULGACAO = {
+  essencial: { nome: 'Essencial', mensal: 'R$ 29,90/mês', anual: 'R$ 300/ano' },
+  completo: { nome: 'Completo', mensal: 'R$ 39,90/mês', anual: 'R$ 400/ano' },
+};
+(function guardarIntencao(){
+  const q = new URLSearchParams(location.search);
+  const plano = q.get('plano');
+  if(PLANOS_DIVULGACAO[plano]){
+    try{ sessionStorage.setItem('intencaoCadastro', JSON.stringify({ plano, ciclo: q.get('ciclo') === 'anual' ? 'anual' : 'mensal' })); }catch(e){}
+  } else if(q.get('teste') === '1'){
+    try{ sessionStorage.setItem('intencaoCadastro', JSON.stringify({ teste: true })); }catch(e){}
+  }
+})();
+function lerIntencao(){
+  try{ return JSON.parse(sessionStorage.getItem('intencaoCadastro') || 'null'); }catch(e){ return null; }
 }
+// para onde ir depois de entrar: pagamento do plano escolhido, o CRM (demonstração) ou a escolha de aplicativo
+function destinoDepoisDoLogin(){
+  const i = lerIntencao();
+  try{ sessionStorage.removeItem('intencaoCadastro'); }catch(e){}
+  if(i && PLANOS_DIVULGACAO[i.plano]) return `assinatura.html?plano=${i.plano}&ciclo=${i.ciclo === 'anual' ? 'anual' : 'mensal'}&de=crm`;
+  if(i && i.teste) return 'index.html?boasvindas=1';
+  return 'inicio.html';
+}
+function irDepoisDoLogin(){ window.location.href = destinoDepoisDoLogin(); }
+
+/* se já tem sessão, pula direto (pro plano escolhido, pro CRM ou pra escolha de aplicativo) */
+if(localStorage.getItem('token')){
+  irDepoisDoLogin();
+}
+
+// aviso no topo explicando o que acontece depois de criar a conta
+(function mostrarOferta(){
+  const el = document.getElementById('auth-oferta');
+  const i = lerIntencao();
+  if(!el || !i) return;
+  if(i.plano){
+    const p = PLANOS_DIVULGACAO[i.plano];
+    el.innerHTML = `<b>Você escolheu o plano ${p.nome}</b> (${i.ciclo === 'anual' ? p.anual : p.mensal}). Crie sua conta e, em seguida, escolha como pagar: Pix, boleto ou cartão.
+      <span class="auth-oferta-sub">Prefere testar antes? Você ganha <b>7 dias grátis com tudo liberado</b>, no plano Completo, e só paga quando o teste acabar.</span>`;
+  } else {
+    el.innerHTML = `<b>7 dias grátis com tudo liberado.</b> Durante o teste você usa o plano Completo, com o assistente de IA e a integração com o Google Agenda. Não pede cartão.`;
+  }
+  el.hidden = false;
+})();
 
 document.querySelectorAll('.auth-tab').forEach(btn=>{
   btn.addEventListener('click', ()=>{
@@ -68,7 +113,7 @@ form.addEventListener('submit', async (e)=>{
 
     localStorage.setItem('token', data.token);
     localStorage.setItem('user', JSON.stringify(data.user));
-    window.location.href = 'inicio.html';
+    irDepoisDoLogin();
   }catch(err){
     errorBox.textContent = err.message;
     errorBox.style.display = 'block';
@@ -93,7 +138,7 @@ twofaForm.addEventListener('submit', async (e)=>{
 
     localStorage.setItem('token', data.token);
     localStorage.setItem('user', JSON.stringify(data.user));
-    window.location.href = 'inicio.html';
+    irDepoisDoLogin();
   }catch(err){
     errorBox.textContent = err.message;
     errorBox.style.display = 'block';
@@ -152,7 +197,7 @@ async function handleGoogleCredential(response){
 
     localStorage.setItem('token', data.token);
     localStorage.setItem('user', JSON.stringify(data.user));
-    window.location.href = 'inicio.html';
+    irDepoisDoLogin();
   }catch(err){
     errorBox.textContent = err.message;
     errorBox.style.display = 'block';
@@ -217,7 +262,7 @@ esqueciForm.addEventListener('submit', async (e)=>{
 });
 
 const tokenReset = new URLSearchParams(location.search).get('reset');
-// link "Começar grátis" da página de divulgação: abre direto em "Criar conta"
+// links da página de divulgação: abre direto em "Criar conta"
 if(new URLSearchParams(location.search).get('cadastro') === '1'){
   const aba = document.querySelector('[data-mode="register"]');
   if(aba) aba.click();

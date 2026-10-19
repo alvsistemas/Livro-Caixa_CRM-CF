@@ -191,6 +191,8 @@
     $('ass-checkout-resumo').innerHTML = `Plano <b>${esc(p.nome)} ${cicloEscolhido}</b>, <b>${brl(o.final)}${porCiclo(cicloEscolhido)}</b>.${s.desconto && s.desconto.meses == null && !s.desconto.ate ? ` ${esc(textoDoDesconto(s.desconto, false))}.` : desconto} A primeira cobrança vence <b>${venc}</b>${venc !== 'hoje' ? ', quando o teste grátis acaba (você pode pagar antes, se preferir)' : ''}. ${repete}. Você pode cancelar quando quiser.`;
     if(!$('ass-nome').value) $('ass-nome').value = s.nome || '';
     $('ass-erro').hidden = true;
+    // ainda no teste grátis e sem assinatura: dá pra deixar pra depois
+    $('ass-testar-wrap').hidden = !(s.emTeste && !s.temAssinatura);
     $('ass-checkout').hidden = false;
     $('ass-checkout').scrollIntoView({ behavior:'smooth', block:'start' });
     $('ass-nome').focus();

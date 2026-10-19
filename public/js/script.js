@@ -963,7 +963,31 @@ function renderGerotEditorHtml(){
     </div>
   `;
 }
-function exportarGerotParaPlanilha(){
+/* Bibliotecas grandes (planilha, PDF, QR code): só são baixadas quando a pessoa usa a função,
+   em vez de toda vez que o CRM abre (mais de 1 MB a menos na abertura, no celular faz diferença). */
+const BIBLIOTECAS = {
+  xlsx: { url: 'https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js', pronta: () => !!window.XLSX },
+  jspdf: { url: 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js', pronta: () => !!window.jspdf },
+  qrcode: { url: 'https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js', pronta: () => !!window.QRCode },
+};
+const bibliotecasCarregando = {};
+function carregarBiblioteca(nome){
+  const b = BIBLIOTECAS[nome];
+  if(b.pronta()) return Promise.resolve();
+  if(!bibliotecasCarregando[nome]){
+    bibliotecasCarregando[nome] = new Promise((ok, falhou)=>{
+      const tag = document.createElement('script');
+      tag.src = b.url; tag.async = true;
+      tag.onload = ()=> ok();
+      tag.onerror = ()=>{ delete bibliotecasCarregando[nome]; tag.remove(); falhou(new Error('Não foi possível carregar o recurso agora. Confira sua internet e tente de novo.')); };
+      document.head.appendChild(tag);
+    });
+  }
+  return bibliotecasCarregando[nome];
+}
+
+async function exportarGerotParaPlanilha(){
+  try{ await carregarBiblioteca('xlsx'); }catch(e){ errorMsg = e.message; renderApp(); return; }
   const [ano,mes,dia] = gerotSemanaAtual.split('-').map(Number);
   const segunda = new Date(ano, mes-1, dia);
   const datasDaSemana = GEROT_DIAS.map((_,i)=>{ const d = new Date(segunda); d.setDate(d.getDate()+i); return d; });
@@ -995,6 +1019,7 @@ function exportarGerotParaPlanilha(){
 }
 async function importarGerotDePlanilha(file){
   if(!file) return;
+  try{ await carregarBiblioteca('xlsx'); }catch(e){ errorMsg = e.message; renderApp(); return; }
   gerotImportando = true;
   gerotImportMsg = null;
   renderApp();
@@ -1289,7 +1314,8 @@ function renderPropostaModal(){
   document.getElementById('proposta-validade').addEventListener('input', (e)=> propostaModalForm.validade = e.target.value);
   document.getElementById('proposta-gerar').addEventListener('click', gerarPropostaPdf);
 }
-function gerarPropostaPdf(){
+async function gerarPropostaPdf(){
+  try{ await carregarBiblioteca('jspdf'); }catch(e){ errorMsg = e.message; renderApp(); return; }
   const f = propostaModalForm;
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF();
@@ -1546,8 +1572,9 @@ async function excluirFluxo(id){
 }
 
 /* ---------- Importar/Exportar (planilha -> possíveis leads) ---------- */
-function handlePlanilhaFileSelected(file){
+async function handlePlanilhaFileSelected(file){
   if(!file) return;
+  try{ await carregarBiblioteca('xlsx'); }catch(e){ errorMsg = e.message; renderApp(); return; }
   importPlanilhaMsg = null;
   importPlanilhaNomeArquivo = file.name;
   const reader = new FileReader();
@@ -2263,7 +2290,8 @@ function baixarCsv(cards, nomeArquivo){
 function exportarCsv(){
   baixarCsv(cardsParaRelatorio(), `leads_${currentMonthKey()}.csv`);
 }
-function exportarRelatorioPdf(){
+async function exportarRelatorioPdf(){
+  try{ await carregarBiblioteca('jspdf'); }catch(e){ errorMsg = e.message; renderApp(); return; }
   const cardsRel = cardsParaRelatorio();
   const dados = relatoriosDadosMensais(6, cardsRel);
   const totalGanho = cardsRel.reduce((s,c)=>{ const col=board.columns.find(k=>k.id===c.columnId); return col&&col.tipo==='ganho' ? s+valorVendido(c) : s; },0);
@@ -2563,14 +2591,6 @@ function ticketMedioFunil(){
   if(!cards.length) return 0;
   const total = cards.reduce((s,c)=> s + (c.fechamento ? valorVendido(c) : (Number(c.valor)||0)), 0); // venda fechada conta pelo valor final
   return total / cards.length;
-}
-function valorPonderadoFunil(){
-  return cardsDoFunilAtual().reduce((s,c)=>{
-    const col = board.columns.find(k=>k.id===c.columnId);
-    if(!col || col.tipo!=='aberto') return s;
-    const prob = (typeof col.probabilidade === 'number') ? col.probabilidade : 50;
-    return s + (Number(c.valor)||0) * (prob/100);
-  }, 0);
 }
 
 /* ---------- derivações (Dashboard) ---------- */
@@ -3276,22 +3296,6 @@ async function changeTipo(id, tipo){
     renderApp();
   }
 }
-async function salvarProbabilidadeColuna(id, valor){
-  const col = board.columns.find(c=>c.id===id);
-  if(!col) return;
-  const nova = Math.max(0, Math.min(100, parseInt(valor,10) || 0));
-  const anterior = col.probabilidade;
-  if(nova === anterior) return;
-  col.probabilidade = nova;
-  renderApp();
-  try{
-    await apiRequest('PUT', `/columns/${id}`, { probabilidade: nova });
-  }catch(e){
-    col.probabilidade = anterior;
-    errorMsg = 'Não foi possível salvar a probabilidade.';
-    renderApp();
-  }
-}
 
 async function deleteColumnById(id){
   const colIdx = board.columns.findIndex(c=>c.id===id);
@@ -3614,6 +3618,7 @@ function renderSecao2FA(){
   `;
 }
 function renderizarQrCode2FA(){
+  if(!window.QRCode){ carregarBiblioteca('qrcode').then(renderizarQrCode2FA).catch(()=>{}); return; }
   const el = document.getElementById('qrcode-2fa');
   if(el && twoFactorSetup && window.QRCode){
     el.innerHTML = '';
@@ -4095,6 +4100,7 @@ function renderApp(){
           </div>
         </div>
         ${erroParaMostrar() ? `<div class="error-banner" data-action="dismiss-error" title="Clique para fechar">⚠ ${esc(errorMsg)}</div>` : ''}
+        ${renderFaixaTeste()}
         ${pageHtml}
       </div>
     </div>
@@ -4499,7 +4505,6 @@ function renderPipelinePage(){
             ${renderStatItem('perdido', 'Perdido', fmtBRL(sumByTipo('perdido')), `${countByTipo('perdido')} ${countByTipo('perdido')===1?'cliente':'clientes'}`, 'rgba(255,255,255,.45)')}
             ${renderStatItem('quentes', 'Leads quentes', quentesAtivos())}
             ${renderStatItem('ticket', 'Ticket médio', fmtBRL(ticketMedioFunil()))}
-            ${renderStatItem('ponderado', 'Valor ponderado', fmtBRL(valorPonderadoFunil()))}
           </div>
         </div>
       </div>
@@ -4581,14 +4586,6 @@ function renderColumn(col){
                 <span class="dot" style="background:${t.color}"></span>${t.label} ${col.tipo===key?'✓':''}
               </button>
             `).join('')}
-            ${col.tipo==='aberto' ? `
-              <div class="col-menu-sep">
-                <label class="col-menu-prob-label">
-                  Chance de fechar (%) — usado no valor ponderado
-                  <input type="number" class="col-menu-prob-input" data-col-id="${col.id}" value="${col.probabilidade!=null?col.probabilidade:50}" min="0" max="100" />
-                </label>
-              </div>
-            ` : ''}
             <div class="col-menu-sep">
               <button class="col-menu-item danger" data-action="delete-col" data-col-id="${col.id}">🗑 Excluir coluna</button>
             </div>
@@ -4624,7 +4621,7 @@ document.addEventListener('mouseup', ()=>{
 // esse cálculo, ou a coluna fica curta demais (sobra espaço vazio embaixo) ou alta
 // demais (esconde atrás do resumo ao rolar até o fim da página).
 /* ---------- resumo do Pipeline: largura de cada número, redimensionável ---------- */
-const STAT_KEYS = ['aberto','ganho','perdido','quentes','ticket','ponderado'];
+const STAT_KEYS = ['aberto','ganho','perdido','quentes','ticket'];
 const STAT_LARGURA_PADRAO = 220;
 const STAT_LARGURA_MIN = 130;
 function getLargurasStats(){
@@ -5359,6 +5356,30 @@ const CONFIG_CATEGORIAS = [
     ['manutencao', 'Manutenção'],
   ]},
 ];
+
+/* Faixa do teste grátis no topo do CRM: avisa quantos dias faltam e que está tudo liberado
+   (plano Completo). Some quando a pessoa assina; fechar esconde até o dia seguinte. Quem
+   chega da página de divulgação ("Quero uma demonstração") vê a versão de boas-vindas. */
+const boasVindasTeste = new URLSearchParams(location.search).get('boasvindas') === '1';
+if(boasVindasTeste){ try{ history.replaceState(null, '', location.pathname); }catch(e){} }
+function hojeLocalISO(){ const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; }
+function renderFaixaTeste(){
+  const s = assinaturaInfo;
+  if(!s || !s.cobranca || !s.emTeste || s.temAssinatura) return '';
+  let fechadaEm = null;
+  try{ fechadaEm = localStorage.getItem('faixaTesteFechadaEm'); }catch(e){}
+  if(!boasVindasTeste && fechadaEm === hojeLocalISO()) return '';
+  const dias = s.diasDeTeste;
+  const quanto = dias === 1 ? 'falta 1 dia' : `faltam ${dias} dias`;
+  const titulo = boasVindasTeste ? `Bem-vindo ao Livro-Caixa! Você tem ${dias === 1 ? '1 dia' : `${dias} dias`} de teste grátis.` : `Teste grátis: ${quanto}.`;
+  return `<div class="faixa-teste" role="status">
+    <div><b>${titulo}</b> Está tudo liberado, no plano Completo: assistente com IA, Google Agenda e o Controle financeiro. Não pedimos cartão; você só paga se quiser continuar depois do teste.</div>
+    <div class="faixa-teste-acoes">
+      <a class="btn-primary" href="assinatura.html?de=crm">Ver planos</a>
+      <button type="button" class="faixa-teste-x" data-action="fechar-faixa-teste" aria-label="Fechar aviso do teste grátis">✕</button>
+    </div>
+  </div>`;
+}
 
 function renderConfigAssinatura(){
   const s = assinaturaInfo;
@@ -6558,10 +6579,6 @@ function bindAppEvents(){
   app.querySelectorAll('[data-action="set-col-tipo"]').forEach(btn=>{
     btn.addEventListener('click', ()=> changeTipo(btn.dataset.colId, btn.dataset.tipo));
   });
-  document.querySelectorAll('.col-menu-prob-input').forEach(input=>{
-    input.addEventListener('blur', (e)=> salvarProbabilidadeColuna(input.dataset.colId, e.target.value));
-    input.addEventListener('keydown', (e)=>{ if(e.key==='Enter') e.target.blur(); });
-  });
   app.querySelectorAll('[data-action="delete-col"]').forEach(btn=>{
     btn.addEventListener('click', ()=>{
       const id = btn.dataset.colId;
@@ -6585,6 +6602,13 @@ function bindAppEvents(){
   });
   app.querySelectorAll('[data-action="open-edit-card"]').forEach(el=>{
     el.addEventListener('click', ()=> openEditCard(el.dataset.cardId));
+  });
+  app.querySelectorAll('[data-action="fechar-faixa-teste"]').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      try{ localStorage.setItem('faixaTesteFechadaEm', hojeLocalISO()); }catch(err){}
+      const el = btn.closest('.faixa-teste');
+      if(el) el.remove();
+    });
   });
   app.querySelectorAll('[data-action="abrir-fechamento"]').forEach(btn=>{
     btn.addEventListener('click', (e)=>{ e.stopPropagation(); abrirFechamento(btn.dataset.cardId); });

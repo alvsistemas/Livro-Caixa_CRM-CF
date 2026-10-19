@@ -1,0 +1,383 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Livro-Caixa — CRM e Controle financeiro para o seu negócio</title>
+<meta name="description" content="Pipeline em Kanban, comissões, agenda e tarefas no CRM, mais um Controle financeiro integrado que mostra o lucro de verdade. Para qualquer negócio que vende.">
+<meta property="og:title" content="Livro-Caixa — suas vendas e o seu dinheiro num só lugar">
+<meta property="og:description" content="Cada lead no lugar certo. Cada venda, acompanhada.">
+<meta property="og:image" content="https://meulivrocaixaapp.com.br/site/img/dashboard.jpg">
+<meta property="og:image:width" content="1440">
+<meta property="og:image:height" content="900">
+<!-- Endereço do sistema. Vazio = esta página é servida pelo próprio Livro-Caixa (mesmo endereço).
+     Se um dia a página for hospedada em outro lugar, coloque aqui o endereço do sistema (ex.: https://app.seudominio.com.br). -->
+<meta name="livro-caixa-app" content="">
+<link rel="canonical" href="https://meulivrocaixaapp.com.br/">
+<meta property="og:url" content="https://meulivrocaixaapp.com.br/">
+<meta property="og:type" content="website">
+<meta property="og:locale" content="pt_BR">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 34 34'%3E%3Crect width='34' height='34' rx='9' fill='%230E6B53'/%3E%3Cpath d='M9 11h7v14H9zM17 11h6v10h-6zM24 11h3v6h-3z' fill='%23F5F4EF'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=DM+Sans:wght@400;500;700&display=swap">
+<style>
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:#F5F4EF;color:#14211D;font-family:'DM Sans',system-ui,sans-serif}
+a{color:inherit;text-decoration:none}
+a.btn:hover{filter:brightness(1.08)}
+a.nav:hover{color:#0E6B53}
+a:focus-visible{outline:3px solid #E8A33D;outline-offset:3px}
+h1,h2,h3{font-family:'Bricolage Grotesque','DM Sans',sans-serif}
+.voltar-topo{position:fixed;right:20px;bottom:20px;width:52px;height:52px;border-radius:50%;background:transparent;color:#000;border:2px solid #000;display:flex;align-items:center;justify-content:center;opacity:0;visibility:hidden;transform:translateY(12px);transition:opacity .25s,transform .25s,visibility .25s;z-index:50}
+.voltar-topo.visivel{opacity:1;visibility:visible;transform:none}
+.voltar-topo:hover{background:rgba(0,0,0,.08)}
+@media (prefers-reduced-motion:reduce){.voltar-topo{transition:none}}
+img{max-width:100%}
+@media (max-width:640px){
+  .h1{font-size:40px !important}
+  .h2{font-size:32px !important}
+}
+@media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
+#duvidas summary{list-style:none;display:flex;justify-content:space-between;align-items:center;gap:16px}
+#duvidas summary::-webkit-details-marker{display:none}
+#duvidas summary::after{content:'+';font-size:26px;font-weight:500;color:#0E6B53;flex-shrink:0;line-height:1}
+#duvidas details[open] summary::after{content:'−'}
+#duvidas summary:focus-visible{outline:3px solid #E8A33D;outline-offset:3px}
+</style>
+</head>
+<body id="topo">
+<div style="width:100%;overflow:hidden">
+
+<!-- NAV -->
+<div style="max-width:1200px;margin:0 auto;padding:22px 24px;box-sizing:border-box;display:flex;flex-wrap:wrap;gap:16px;align-items:center;justify-content:space-between">
+  <div style="display:flex;align-items:center;gap:10px">
+    <div style="width:34px;height:34px;border-radius:9px;background:#0E6B53;display:flex;align-items:center;justify-content:center">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#F5F4EF" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6h5v12H4zM10 6h5v8h-5zM16 6h4v5h-4z"/></svg>
+    </div>
+    <span style="font-family:'Bricolage Grotesque',sans-serif;font-weight:800;font-size:20px;letter-spacing:-0.01em">Livro-Caixa</span>
+  </div>
+  <div style="display:flex;flex-wrap:wrap;gap:22px;align-items:center;font-size:15px;font-weight:500">
+    <a class="nav" href="#recursos">Recursos</a>
+    <a class="nav" href="#telas">Telas</a>
+    <a class="nav" href="#planos">Planos</a>
+    <a class="nav" href="#duvidas">Dúvidas</a>
+    <a class="nav" id="link-entrar" data-app="/login.html" href="/login.html" style="font-weight:700">Entrar</a>
+    <a class="btn" data-app="/login.html?cadastro=1&amp;teste=1" href="/login.html?cadastro=1&amp;teste=1" style="background:#14211D;color:#F5F4EF;padding:12px 20px;border-radius:999px;font-weight:700;min-height:20px">Quero uma demonstração</a>
+  </div>
+</div>
+
+<!-- HERO -->
+<div style="max-width:1200px;margin:0 auto;padding:48px 24px 24px;box-sizing:border-box;display:flex;flex-wrap:wrap;gap:48px;align-items:center">
+  <div style="flex:1 1 460px;min-width:0">
+    <div style="display:inline-block;background:#DCEBE3;color:#0A4F3D;font-weight:700;font-size:13px;padding:7px 14px;border-radius:999px;letter-spacing:.02em">Para qualquer negócio que vende</div>
+    <h1 class="h1" style="margin:22px 0 0;font-size:62px;line-height:1.02;letter-spacing:-0.03em;font-weight:800">Cada lead no lugar certo. Cada venda, acompanhada.</h1>
+    <p style="margin:22px 0 0;font-size:19px;line-height:1.55;color:#42524D;max-width:520px">Dois aplicativos com um login só: um CRM com pipeline em Kanban, comissões, agenda e WhatsApp a um clique, e um Controle financeiro que junta essas vendas com as suas despesas e mostra o lucro de verdade. No celular ou no computador.</p>
+    <div style="margin-top:32px;display:flex;flex-wrap:wrap;gap:14px;align-items:center">
+      <a class="btn" data-app="/login.html?cadastro=1&amp;teste=1" href="/login.html?cadastro=1&amp;teste=1" style="background:#0E6B53;color:#fff;padding:16px 28px;border-radius:999px;font-weight:700;font-size:17px">Começar 7 dias grátis</a>
+      <a class="btn" href="#telas" style="border:2px solid #14211D;padding:14px 26px;border-radius:999px;font-weight:700;font-size:17px">Ver o painel por dentro</a>
+    </div>
+    <div style="margin-top:22px;font-size:14px;color:#5B6B66"><span data-dias-teste>7</span> dias grátis com tudo liberado. Não pede cartão.</div>
+  </div>
+  <div style="flex:1 1 520px;min-width:0">
+    <div style="background:#14211D;border-radius:18px;padding:10px;box-shadow:0 30px 60px -25px rgba(20,33,29,.55)">
+      <img loading="lazy" width="1440" height="900" src="/site/img/dashboard.jpg" alt="Dashboard do CRM do Livro-Caixa com indicadores de vendas" style="display:block;width:100%;height:auto;border-radius:10px">
+    </div>
+    <div style="margin-top:10px;font-size:12px;color:#5B6B66;text-align:right">Tela real do sistema, com dados fictícios de demonstração.</div>
+  </div>
+</div>
+
+<!-- DORES -->
+<div style="background:#14211D;color:#F5F4EF;margin-top:56px">
+  <div style="max-width:1200px;margin:0 auto;padding:72px 24px;box-sizing:border-box">
+    <h2 class="h2" style="margin:0;font-size:44px;line-height:1.1;letter-spacing:-0.02em;max-width:720px">Planilha, caderno e WhatsApp misturados custam vendas.</h2>
+    <div style="margin-top:40px;display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:20px">
+      <div style="border-top:3px solid #E8A33D;padding-top:18px">
+        <h3 style="margin:0;font-size:21px">O retorno que ficou para depois</h3>
+        <p style="margin:10px 0 0;color:#B9C7C1;line-height:1.55">Sem lembrete, o cliente quente esfria. O painel avisa na hora certa, até no celular.</p>
+      </div>
+      <div style="border-top:3px solid #E8A33D;padding-top:18px">
+        <h3 style="margin:0;font-size:21px">Comissão feita de cabeça</h3>
+        <p style="margin:10px 0 0;color:#B9C7C1;line-height:1.55">Regras por produto ou serviço, parcelas e cancelamentos num só lugar, sem conta na calculadora.</p>
+      </div>
+      <div style="border-top:3px solid #E8A33D;padding-top:18px">
+        <h3 style="margin:0;font-size:21px">Sem saber onde cada lead está</h3>
+        <p style="margin:10px 0 0;color:#B9C7C1;line-height:1.55">O Kanban mostra cada etapa do funil e o valor que está em jogo em cada uma.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- RECURSOS -->
+<div id="recursos" style="max-width:1200px;margin:0 auto;padding:88px 24px 24px;box-sizing:border-box">
+  <div style="font-weight:700;color:#0E6B53;font-size:14px;letter-spacing:.08em">RECURSOS</div>
+  <h2 class="h2" style="margin:10px 0 0;font-size:44px;line-height:1.08;letter-spacing:-0.02em;max-width:760px">Da primeira conversa ao lucro no fim do mês</h2>
+  <div style="margin-top:44px;display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:20px">
+    <div style="background:#fff;border-radius:16px;padding:28px;border:1px solid #E3E1D8">
+      <div style="font-family:'Bricolage Grotesque',sans-serif;font-weight:800;font-size:15px;color:#E8A33D;background:#14211D;display:inline-block;padding:4px 10px;border-radius:8px">01</div>
+      <h3 style="margin:16px 0 0;font-size:23px">Pipeline em Kanban</h3>
+      <p style="margin:10px 0 0;color:#42524D;line-height:1.55">Arraste o lead entre as etapas, veja o total por coluna e o que está esfriando.</p>
+    </div>
+    <div style="background:#fff;border-radius:16px;padding:28px;border:1px solid #E3E1D8">
+      <div style="font-family:'Bricolage Grotesque',sans-serif;font-weight:800;font-size:15px;color:#E8A33D;background:#14211D;display:inline-block;padding:4px 10px;border-radius:8px">02</div>
+      <h3 style="margin:16px 0 0;font-size:23px">Fechamento da venda</h3>
+      <p style="margin:10px 0 0;color:#42524D;line-height:1.55">Fechou? Informe o valor final, o desconto, as parcelas e os custos. Tudo vira lançamento no financeiro.</p>
+    </div>
+    <div style="background:#fff;border-radius:16px;padding:28px;border:1px solid #E3E1D8">
+      <div style="font-family:'Bricolage Grotesque',sans-serif;font-weight:800;font-size:15px;color:#E8A33D;background:#14211D;display:inline-block;padding:4px 10px;border-radius:8px">03</div>
+      <h3 style="margin:16px 0 0;font-size:23px">Controle financeiro integrado</h3>
+      <p style="margin:10px 0 0;color:#42524D;line-height:1.55">Receitas, despesas, contas e cartões, separando o pessoal da empresa. As vendas do CRM entram sozinhas.</p>
+    </div>
+    <div style="background:#fff;border-radius:16px;padding:28px;border:1px solid #E3E1D8">
+      <div style="font-family:'Bricolage Grotesque',sans-serif;font-weight:800;font-size:15px;color:#E8A33D;background:#14211D;display:inline-block;padding:4px 10px;border-radius:8px">04</div>
+      <h3 style="margin:16px 0 0;font-size:23px">Lucro de cada venda</h3>
+      <p style="margin:10px 0 0;color:#42524D;line-height:1.55">Produto, frete, taxa da maquininha e imposto descontados: você vê quanto sobrou em cada venda.</p>
+    </div>
+    <div style="background:#fff;border-radius:16px;padding:28px;border:1px solid #E3E1D8">
+      <div style="font-family:'Bricolage Grotesque',sans-serif;font-weight:800;font-size:15px;color:#E8A33D;background:#14211D;display:inline-block;padding:4px 10px;border-radius:8px">05</div>
+      <h3 style="margin:16px 0 0;font-size:23px">Comissões automáticas</h3>
+      <p style="margin:10px 0 0;color:#42524D;line-height:1.55">Cadastre as regras uma vez. O sistema calcula o que cada venda rende e acompanha os recebimentos.</p>
+    </div>
+    <div style="background:#fff;border-radius:16px;padding:28px;border:1px solid #E3E1D8">
+      <div style="font-family:'Bricolage Grotesque',sans-serif;font-weight:800;font-size:15px;color:#E8A33D;background:#14211D;display:inline-block;padding:4px 10px;border-radius:8px">06</div>
+      <h3 style="margin:16px 0 0;font-size:23px">Agenda e lembretes</h3>
+      <p style="margin:10px 0 0;color:#42524D;line-height:1.55">Tarefas com data, integração com o Google Agenda e notificações no celular para não esquecer nenhum retorno.</p>
+    </div>
+    <div style="background:#fff;border-radius:16px;padding:28px;border:1px solid #E3E1D8">
+      <div style="font-family:'Bricolage Grotesque',sans-serif;font-weight:800;font-size:15px;color:#E8A33D;background:#14211D;display:inline-block;padding:4px 10px;border-radius:8px">07</div>
+      <h3 style="margin:16px 0 0;font-size:23px">WhatsApp a um clique</h3>
+      <p style="margin:10px 0 0;color:#42524D;line-height:1.55">Um toque no cliente abre a conversa no seu próprio WhatsApp, sem copiar e colar número.</p>
+    </div>
+    <div style="background:#fff;border-radius:16px;padding:28px;border:1px solid #E3E1D8">
+      <div style="font-family:'Bricolage Grotesque',sans-serif;font-weight:800;font-size:15px;color:#E8A33D;background:#14211D;display:inline-block;padding:4px 10px;border-radius:8px">08</div>
+      <h3 style="margin:16px 0 0;font-size:23px">Equipe e relatórios</h3>
+      <p style="margin:10px 0 0;color:#42524D;line-height:1.55">Cada pessoa com seu acesso, metas e ranking. O gestor escolhe o que cada um pode usar.</p>
+    </div>
+    <div style="background:#fff;border-radius:16px;padding:28px;border:1px solid #E3E1D8">
+      <div style="font-family:'Bricolage Grotesque',sans-serif;font-weight:800;font-size:15px;color:#E8A33D;background:#14211D;display:inline-block;padding:4px 10px;border-radius:8px">09</div>
+      <h3 style="margin:16px 0 0;font-size:23px">Assistente com IA</h3>
+      <p style="margin:10px 0 0;color:#42524D;line-height:1.55">No plano Completo: tire dúvidas, peça sugestões de mensagem e lance despesas conversando.</p>
+    </div>
+  </div>
+</div>
+
+<!-- TELAS -->
+<div id="telas" style="max-width:1200px;margin:0 auto;padding:88px 24px 24px;box-sizing:border-box">
+  <div style="font-weight:700;color:#0E6B53;font-size:14px;letter-spacing:.08em">O SISTEMA POR DENTRO</div>
+  <h2 class="h2" style="margin:10px 0 0;font-size:44px;line-height:1.08;letter-spacing:-0.02em;max-width:760px">Dois aplicativos, um login só</h2>
+  <p style="margin:14px 0 0;color:#42524D;line-height:1.6;font-size:18px;max-width:720px">O CRM cuida das vendas. O Controle financeiro cuida do dinheiro. E um conversa com o outro sozinho.</p>
+  <div style="margin-top:48px;display:flex;align-items:center;gap:14px"><span style="font-family:'Bricolage Grotesque',sans-serif;font-weight:800;font-size:22px">No CRM</span><span style="flex:1;height:1px;background:#D5D3C9"></span></div>
+  <div style="margin-top:32px;display:flex;flex-wrap:wrap;gap:40px;align-items:center">
+    <div style="flex:1 1 320px;min-width:0">
+      
+      <h3 style="margin:0;font-size:30px;letter-spacing:-0.01em">Funil completo, de ponta a ponta</h3>
+      <p style="margin:14px 0 0;color:#42524D;line-height:1.6;font-size:17px">Veja onde está cada negociação, quanto dinheiro há em cada etapa e quem está esfriando. Arraste o cliente de uma etapa para a outra.</p>
+    </div>
+    <div style="flex:2 1 520px;min-width:0;background:#14211D;border-radius:16px;padding:8px"><img loading="lazy" width="1440" height="900" src="/site/img/pipeline.jpg" alt="Pipeline em Kanban com os clientes em cada etapa da venda" style="display:block;width:100%;height:auto;border-radius:9px"></div>
+  </div>
+  <div style="margin-top:72px;display:flex;flex-wrap:wrap-reverse;gap:40px;align-items:center">
+    <div style="flex:2 1 520px;min-width:0;background:#14211D;border-radius:16px;padding:8px"><img loading="lazy" width="1440" height="900" src="/site/img/fechamento.jpg" alt="Janela de fechamento da venda com desconto, parcelas e custos" style="display:block;width:100%;height:auto;border-radius:9px"></div>
+    <div style="flex:1 1 320px;min-width:0">
+      
+      <h3 style="margin:0;font-size:30px;letter-spacing:-0.01em">Fechou? Diga quanto entrou de verdade</h3>
+      <p style="margin:14px 0 0;color:#42524D;line-height:1.6;font-size:17px">Na hora de fechar, informe o desconto, como o cliente vai pagar e os custos da venda. O sistema já mostra quanto sobra e lança as parcelas no financeiro.</p>
+    </div>
+  </div>
+  <div style="margin-top:72px;display:flex;flex-wrap:wrap;gap:40px;align-items:center">
+    <div style="flex:1 1 320px;min-width:0">
+      
+      <h3 style="margin:0;font-size:30px;letter-spacing:-0.01em">Saiba quanto vai receber</h3>
+      <p style="margin:14px 0 0;color:#42524D;line-height:1.6;font-size:17px">Comissões calculadas sozinhas pelas suas regras, por venda e por mês. Chega de descobrir no fim do mês que algo ficou de fora.</p>
+    </div>
+    <div style="flex:2 1 520px;min-width:0;background:#14211D;border-radius:16px;padding:8px"><img loading="lazy" width="1440" height="900" src="/site/img/comissoes.jpg" alt="Tela de comissões com o previsto do mês" style="display:block;width:100%;height:auto;border-radius:9px"></div>
+  </div>
+  <div style="margin-top:72px;display:flex;flex-wrap:wrap-reverse;gap:40px;align-items:center">
+    <div style="flex:2 1 520px;min-width:0;background:#14211D;border-radius:16px;padding:8px"><img loading="lazy" width="1440" height="900" src="/site/img/relatorios.jpg" alt="Relatórios com o valor vendido mês a mês" style="display:block;width:100%;height:auto;border-radius:9px"></div>
+    <div style="flex:1 1 320px;min-width:0">
+      
+      <h3 style="margin:0;font-size:30px;letter-spacing:-0.01em">Números que ajudam a decidir</h3>
+      <p style="margin:14px 0 0;color:#42524D;line-height:1.6;font-size:17px">Quanto foi vendido em cada mês, quantos leads chegaram e como está a conversão, para você e para o gestor do time.</p>
+    </div>
+  </div>
+  <div style="margin-top:88px;display:flex;align-items:center;gap:14px"><span style="font-family:'Bricolage Grotesque',sans-serif;font-weight:800;font-size:22px">No Controle financeiro</span><span style="flex:1;height:1px;background:#D5D3C9"></span></div>
+  <div style="margin-top:32px;display:flex;flex-wrap:wrap;gap:40px;align-items:center">
+    <div style="flex:1 1 320px;min-width:0">
+      <div style="display:inline-block;background:#DCEBE3;color:#0A4F3D;font-weight:700;font-size:12px;padding:6px 12px;border-radius:999px;letter-spacing:.02em;margin-bottom:14px">INTEGRADO AO CRM</div>
+      <h3 style="margin:0;font-size:30px;letter-spacing:-0.01em">O mês inteiro numa tela</h3>
+      <p style="margin:14px 0 0;color:#42524D;line-height:1.6;font-size:17px">Receitas, despesas, lucro, saldo das contas e o que vence nos próximos dias. Separe o pessoal da empresa com um clique.</p>
+    </div>
+    <div style="flex:2 1 520px;min-width:0;background:#14211D;border-radius:16px;padding:8px"><img loading="lazy" width="1440" height="900" src="/site/img/fin-painel.jpg" alt="Painel do Controle financeiro com receitas, despesas, lucro e saldo" style="display:block;width:100%;height:auto;border-radius:9px"></div>
+  </div>
+  <div style="margin-top:72px;display:flex;flex-wrap:wrap-reverse;gap:40px;align-items:center">
+    <div style="flex:2 1 520px;min-width:0;background:#14211D;border-radius:16px;padding:8px"><img loading="lazy" width="1440" height="900" src="/site/img/fin-lucro-venda.jpg" alt="Lucro por venda e lucro dos últimos 6 meses" style="display:block;width:100%;height:auto;border-radius:9px"></div>
+    <div style="flex:1 1 320px;min-width:0">
+      
+      <h3 style="margin:0;font-size:30px;letter-spacing:-0.01em">Vender bem não basta: veja o lucro</h3>
+      <p style="margin:14px 0 0;color:#42524D;line-height:1.6;font-size:17px">Quanto sobrou de cada venda depois do produto, do frete, da taxa da maquininha e do imposto. E como o lucro evoluiu nos últimos meses.</p>
+    </div>
+  </div>
+  <div style="margin-top:72px;display:flex;flex-wrap:wrap;gap:40px;align-items:center">
+    <div style="flex:1 1 320px;min-width:0">
+      
+      <h3 style="margin:0;font-size:30px;letter-spacing:-0.01em">Tudo lançado, sem planilha</h3>
+      <p style="margin:14px 0 0;color:#42524D;line-height:1.6;font-size:17px">Contas fixas que se repetem sozinhas, compras parceladas, cartões, comprovantes e importação do extrato do banco. As vendas do CRM aparecem marcadas.</p>
+    </div>
+    <div style="flex:2 1 520px;min-width:0;background:#14211D;border-radius:16px;padding:8px"><img loading="lazy" width="1440" height="900" src="/site/img/fin-lancamentos.jpg" alt="Lista de lançamentos com receitas e despesas do mês" style="display:block;width:100%;height:auto;border-radius:9px"></div>
+  </div>
+  <div style="margin-top:18px;font-size:12px;color:#5B6B66">Telas reais do sistema, com dados fictícios de demonstração.</div>
+</div>
+
+<!-- COMO COMEÇAR -->
+<div style="background:#DCEBE3;margin-top:88px">
+  <div style="max-width:1200px;margin:0 auto;padding:72px 24px;box-sizing:border-box">
+    <h2 class="h2" style="margin:0;font-size:44px;letter-spacing:-0.02em">Comece em três passos</h2>
+    <div style="margin-top:36px;display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:24px">
+      <div><div style="font-family:'Bricolage Grotesque',sans-serif;font-weight:800;font-size:56px;color:#0E6B53;line-height:1">1</div><h3 style="margin:10px 0 0;font-size:22px">Crie sua conta</h3><p style="margin:8px 0 0;color:#2F4A41;line-height:1.55">Leva um minuto, sem cartão. Você ganha <span data-dias-teste>7</span> dias com tudo liberado.</p></div>
+      <div><div style="font-family:'Bricolage Grotesque',sans-serif;font-weight:800;font-size:56px;color:#0E6B53;line-height:1">2</div><h3 style="margin:10px 0 0;font-size:22px">Traga seus leads</h3><p style="margin:8px 0 0;color:#2F4A41;line-height:1.55">Importe sua planilha em poucos cliques ou cadastre um a um.</p></div>
+      <div><div style="font-family:'Bricolage Grotesque',sans-serif;font-weight:800;font-size:56px;color:#0E6B53;line-height:1">3</div><h3 style="margin:10px 0 0;font-size:22px">Venda com organização</h3><p style="margin:8px 0 0;color:#2F4A41;line-height:1.55">Acompanhe o funil, os retornos e, no Controle financeiro, o lucro de cada mês.</p></div>
+    </div>
+  </div>
+</div>
+
+<!-- PLANOS -->
+<div id="planos" style="max-width:1200px;margin:0 auto;padding:88px 24px 24px;box-sizing:border-box">
+  <div style="font-weight:700;color:#0E6B53;font-size:14px;letter-spacing:.08em">PLANOS</div>
+  <h2 class="h2" style="margin:10px 0 0;font-size:44px;line-height:1.08;letter-spacing:-0.02em">Escolha o plano ideal para você</h2>
+  <div id="promocao" hidden style="margin-top:18px;display:inline-block;background:#E8A33D;color:#14211D;font-weight:700;padding:10px 16px;border-radius:12px"></div>
+  <div style="margin-top:40px;display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:20px;align-items:stretch">
+    <div style="background:#fff;border:1px solid #E3E1D8;border-radius:18px;padding:32px;display:flex;flex-direction:column;gap:14px">
+      <div style="font-weight:700;font-size:15px;color:#5B6B66;letter-spacing:.04em">ESSENCIAL</div>
+      <div style="font-family:'Bricolage Grotesque',sans-serif;font-weight:800;font-size:44px;line-height:1.15"><span data-preco="essencial-mensal">R$ 29,90</span><span style="font-size:16px;font-weight:500;color:#5B6B66">/mês</span></div>
+      <div style="font-size:14px;color:#5B6B66;margin-top:-6px">ou <b style="color:#14211D"><span data-preco="essencial-anual">R$ 300</span>/ano</b> (<span data-economia="essencial">economize 16%</span>)</div>
+      <ul style="margin:0;padding-left:20px;color:#42524D;line-height:1.5"><li style="margin:0 0 8px">CRM completo: leads, funil e clientes</li><li style="margin:0 0 8px">Fechamento da venda e lucro por venda</li><li style="margin:0 0 8px">Controle financeiro integrado</li><li style="margin:0 0 8px">Celular e computador</li></ul>
+      <a class="btn" data-app="/login.html?cadastro=1&amp;plano=essencial&amp;ciclo=mensal" href="/login.html?cadastro=1&amp;plano=essencial&amp;ciclo=mensal" style="margin-top:auto;text-align:center;border:2px solid #14211D;border-radius:999px;padding:14px;font-weight:700">Assinar o Essencial</a>
+      <a data-app="/login.html?cadastro=1&amp;teste=1" href="/login.html?cadastro=1&amp;teste=1" style="text-align:center;font-size:14px;color:#42524D;text-decoration:underline">ou testar 7 dias grátis</a>
+    </div>
+    <div style="background:#14211D;color:#F5F4EF;border-radius:18px;padding:32px;display:flex;flex-direction:column;gap:14px">
+      <div style="font-weight:700;font-size:15px;color:#E8A33D;letter-spacing:.04em">COMPLETO · MAIS ESCOLHIDO</div>
+      <div style="font-family:'Bricolage Grotesque',sans-serif;font-weight:800;font-size:44px;line-height:1.15"><span data-preco="completo-mensal">R$ 39,90</span><span style="font-size:16px;font-weight:500;color:#B9C7C1">/mês</span></div>
+      <div style="font-size:14px;color:#B9C7C1;margin-top:-6px">ou <b style="color:#F5F4EF"><span data-preco="completo-anual">R$ 400</span>/ano</b> (<span data-economia="completo">economize 16%</span>)</div>
+      <ul style="margin:0;padding-left:20px;color:#D6E0DB;line-height:1.5"><li style="margin:0 0 8px">Tudo do Essencial</li><li style="margin:0 0 8px">Assistente com IA</li><li style="margin:0 0 8px">Integração com o Google Agenda</li></ul>
+      <a class="btn" data-app="/login.html?cadastro=1&amp;plano=completo&amp;ciclo=mensal" href="/login.html?cadastro=1&amp;plano=completo&amp;ciclo=mensal" style="margin-top:auto;text-align:center;background:#E8A33D;color:#14211D;border-radius:999px;padding:14px;font-weight:700">Assinar o Completo</a>
+      <a data-app="/login.html?cadastro=1&amp;teste=1" href="/login.html?cadastro=1&amp;teste=1" style="text-align:center;font-size:14px;color:#D6E0DB;text-decoration:underline">ou testar 7 dias grátis</a>
+    </div>
+    <div style="background:#fff;border:1px solid #E3E1D8;border-radius:18px;padding:32px;display:flex;flex-direction:column;gap:14px">
+      <div style="font-weight:700;font-size:15px;color:#5B6B66;letter-spacing:.04em">EQUIPE</div>
+      <div style="font-family:'Bricolage Grotesque',sans-serif;font-weight:800;font-size:34px;line-height:1.15">Sob consulta<span style="font-size:16px;font-weight:500;color:#5B6B66"></span></div>
+      <ul style="margin:0;padding-left:20px;color:#42524D;line-height:1.5"><li style="margin:0 0 8px">Vários acessos, um por pessoa</li><li style="margin:0 0 8px">Gestão de equipe, metas e ranking</li><li style="margin:0 0 8px">Condições sob medida para o seu time</li></ul>
+      <a class="btn" href="https://wa.me/5515988053447?text=Quero%20falar%20sobre%20o%20plano%20Equipe" style="margin-top:auto;text-align:center;border:2px solid #14211D;border-radius:999px;padding:14px;font-weight:700">Quero este plano</a>
+    </div>
+  </div>
+  <div style="margin-top:16px;font-size:13px;color:#5B6B66">Todo cadastro começa com 7 dias grátis com tudo liberado (plano Completo), sem cartão. Quem já escolhe um plano só paga quando o teste acabar. Pague por Pix, boleto ou cartão e cancele quando quiser. Valores sujeitos a alteração.</div>
+  <div style="margin-top:40px;background:#fff;border:1px solid #E3E1D8;border-radius:18px;padding:28px 32px;display:flex;flex-wrap:wrap;gap:20px;align-items:center;justify-content:space-between">
+    <div style="flex:1 1 380px">
+      <h3 style="margin:0;font-size:24px">Ficou com alguma dúvida?</h3>
+      <p style="margin:8px 0 0;color:#42524D;line-height:1.55">Fale com a gente no WhatsApp: tiramos dúvidas, mostramos o sistema funcionando e ajudamos a escolher o plano.</p>
+    </div>
+    <a class="btn" href="https://wa.me/5515988053447?text=Ol%C3%A1!%20Quero%20saber%20mais%20sobre%20o%20Livro-Caixa" style="background:#0E6B53;color:#fff;padding:15px 26px;border-radius:999px;font-weight:700;font-size:17px;display:inline-flex;align-items:center;gap:10px"><svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2a10 10 0 0 0-8.6 15.1L2 22l5-1.3A10 10 0 1 0 12 2zm0 18.2a8.2 8.2 0 0 1-4.2-1.2l-.3-.2-3 .8.8-2.9-.2-.3A8.2 8.2 0 1 1 12 20.2zm4.5-6.1c-.2-.1-1.5-.7-1.7-.8s-.4-.1-.6.1-.7.8-.8 1-.3.2-.5.1a6.7 6.7 0 0 1-3.3-2.9c-.2-.4.2-.4.7-1.3.1-.2 0-.3 0-.4l-.8-1.8c-.2-.5-.4-.4-.6-.4h-.5a1 1 0 0 0-.7.3 3 3 0 0 0-.9 2.2 5.2 5.2 0 0 0 1.1 2.8 11.9 11.9 0 0 0 4.6 4c1.7.7 2.4.8 3.2.7a2.8 2.8 0 0 0 1.8-1.3 2.3 2.3 0 0 0 .2-1.3c-.1-.1-.3-.2-.5-.3z"/></svg>Falar no WhatsApp</a>
+  </div>
+</div>
+
+<!-- DÚVIDAS -->
+<div id="duvidas" style="max-width:880px;margin:0 auto;padding:88px 24px 24px;box-sizing:border-box">
+  <h2 class="h2" style="margin:0;font-size:44px;letter-spacing:-0.02em">Dúvidas frequentes</h2>
+  <div style="margin-top:28px;border-top:1px solid #D5D3C9">
+    <details style="border-bottom:1px solid #D5D3C9;padding:6px 0">
+      <summary style="cursor:pointer;padding:16px 0;font-family:'Bricolage Grotesque',sans-serif;font-weight:700;font-size:20px;">Como funciona o teste grátis?</summary>
+      <p style="margin:0 0 18px;color:#42524D;line-height:1.6">Você cria a conta e usa tudo do plano Completo por <span data-dias-teste>7</span> dias, inclusive o assistente com IA e o Google Agenda. Não pedimos cartão. No fim do teste, escolhe um plano para continuar; se não escolher, seus dados ficam guardados e você pode assinar depois.</p>
+    </details>
+    <details style="border-bottom:1px solid #D5D3C9;padding:6px 0">
+      <summary style="cursor:pointer;padding:16px 0;font-family:'Bricolage Grotesque',sans-serif;font-weight:700;font-size:20px;">Se eu assinar durante o teste, pago na hora?</summary>
+      <p style="margin:0 0 18px;color:#42524D;line-height:1.6">Não. A primeira cobrança vence só quando o teste acaba. Você pode pagar antes, se preferir.</p>
+    </details>
+    <details style="border-bottom:1px solid #D5D3C9;padding:6px 0">
+      <summary style="cursor:pointer;padding:16px 0;font-family:'Bricolage Grotesque',sans-serif;font-weight:700;font-size:20px;">Como posso pagar? Consigo cancelar?</summary>
+      <p style="margin:0 0 18px;color:#42524D;line-height:1.6">Por Pix, boleto ou cartão de crédito, mensal ou anual. Você cancela quando quiser pela tela de assinatura, sem multa, e continua com acesso até o fim do período que já pagou.</p>
+    </details>
+    <details style="border-bottom:1px solid #D5D3C9;padding:6px 0">
+      <summary style="cursor:pointer;padding:16px 0;font-family:'Bricolage Grotesque',sans-serif;font-weight:700;font-size:20px;">Qual a diferença entre o Essencial e o Completo?</summary>
+      <p style="margin:0 0 18px;color:#42524D;line-height:1.6">Os dois têm o CRM e o Controle financeiro completos. O Completo inclui o assistente com IA e a integração com o Google Agenda.</p>
+    </details>
+    <details style="border-bottom:1px solid #D5D3C9;padding:6px 0">
+      <summary style="cursor:pointer;padding:16px 0;font-family:'Bricolage Grotesque',sans-serif;font-weight:700;font-size:20px;">O que é o Controle financeiro?</summary>
+      <p style="margin:0 0 18px;color:#42524D;line-height:1.6">É o segundo aplicativo do Livro-Caixa, com o mesmo login do CRM. Nele você registra receitas, despesas, contas, cartões e objetivos, separando o pessoal da empresa. As vendas fechadas no CRM entram sozinhas, com o valor final e as parcelas.</p>
+    </details>
+    <details style="border-bottom:1px solid #D5D3C9;padding:6px 0">
+      <summary style="cursor:pointer;padding:16px 0;font-family:'Bricolage Grotesque',sans-serif;font-weight:700;font-size:20px;">Funciona no celular?</summary>
+      <p style="margin:0 0 18px;color:#42524D;line-height:1.6">Sim. Funciona no navegador do celular e do computador e pode ser instalado na tela inicial como um aplicativo.</p>
+    </details>
+    <details style="border-bottom:1px solid #D5D3C9;padding:6px 0">
+      <summary style="cursor:pointer;padding:16px 0;font-family:'Bricolage Grotesque',sans-serif;font-weight:700;font-size:20px;">Posso trazer minha planilha atual?</summary>
+      <p style="margin:0 0 18px;color:#42524D;line-height:1.6">Pode. Dá para importar seus clientes de uma planilha e o extrato do banco no financeiro, e exportar tudo quando quiser.</p>
+    </details>
+    <details style="border-bottom:1px solid #D5D3C9;padding:6px 0">
+      <summary style="cursor:pointer;padding:16px 0;font-family:'Bricolage Grotesque',sans-serif;font-weight:700;font-size:20px;">E a segurança dos meus dados e dos meus clientes?</summary>
+      <p style="margin:0 0 18px;color:#42524D;line-height:1.6">Cada pessoa acessa com o próprio login, os dados de uma conta ficam isolados das outras no banco de dados, e você pode ativar a verificação em duas etapas e o backup semanal por e-mail. Veja os detalhes na <a href="/privacidade.html" data-app="/privacidade.html" style="text-decoration:underline">Política de Privacidade</a>.</p>
+    </details>
+    <details style="border-bottom:1px solid #D5D3C9;padding:6px 0">
+      <summary style="cursor:pointer;padding:16px 0;font-family:'Bricolage Grotesque',sans-serif;font-weight:700;font-size:20px;">E para equipes?</summary>
+      <p style="margin:0 0 18px;color:#42524D;line-height:1.6">O plano Equipe tem um acesso para cada pessoa, metas, ranking e o gestor escolhe o que cada um pode usar. As condições são sob medida: fale com a gente no WhatsApp.</p>
+    </details>
+  </div>
+</div>
+
+<!-- CTA FINAL -->
+<div style="max-width:1200px;margin:88px auto 0;padding:0 24px;box-sizing:border-box">
+  <div style="background:#0E6B53;color:#fff;border-radius:24px;padding:64px 32px;text-align:center">
+    <h2 class="h2" style="margin:0 auto;font-size:44px;line-height:1.08;letter-spacing:-0.02em;max-width:720px">Pronto para organizar as suas vendas?</h2>
+    <p style="margin:18px auto 0;font-size:18px;color:#CFE6DC;max-width:560px;line-height:1.55">Teste com os seus próprios clientes e números. <span data-dias-teste>7</span> dias com tudo liberado, sem cartão.</p>
+    <a class="btn" data-app="/login.html?cadastro=1&amp;teste=1" href="/login.html?cadastro=1&amp;teste=1" style="display:inline-block;margin-top:30px;background:#E8A33D;color:#14211D;padding:17px 34px;border-radius:999px;font-weight:700;font-size:18px">Começar 7 dias grátis</a>
+  </div>
+</div>
+
+<!-- RODAPÉ -->
+<div style="max-width:1200px;margin:0 auto;padding:40px 24px 48px;box-sizing:border-box;display:flex;flex-wrap:wrap;gap:16px;justify-content:space-between;font-size:14px;color:#5B6B66">
+  <div>© <span id="ano">2026</span> Livro-Caixa · WhatsApp (15) 98805-3447 · <a href="mailto:alvsistemas.1710@gmail.com">alvsistemas.1710@gmail.com</a></div>
+  <div style="display:flex;gap:18px"><a data-app="/privacidade.html" href="/privacidade.html">Privacidade</a><a data-app="/termos.html" href="/termos.html">Termos de uso</a></div>
+</div>
+
+</div>
+<a href="#topo" class="voltar-topo" id="voltar-topo" aria-label="Voltar ao topo" title="Voltar ao topo">
+  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19V5M5 12l7-7 7 7"/></svg>
+</a>
+<script>
+/* Endereço do sistema (meta "livro-caixa-app"): todos os botões que levam ao sistema usam ele. */
+(function(){
+  var meta=document.querySelector('meta[name="livro-caixa-app"]');
+  var APP=(meta&&meta.content||'').replace(/\/$/,''); // vazio = mesmo endereço
+  document.querySelectorAll('[data-app]').forEach(function(a){ a.href=APP+a.getAttribute('data-app'); });
+  var ano=document.getElementById('ano'); if(ano) ano.textContent=new Date().getFullYear();
+  // quem já está logado neste navegador vê "Abrir o sistema" em vez de "Entrar"
+  try{ if(!meta.content && localStorage.getItem('token')){ var le=document.getElementById('link-entrar'); if(le){ le.textContent='Abrir o sistema'; le.href=APP+'/inicio.html'; } } }catch(e){}
+  /* Preços e promoção vêm do próprio sistema (nunca ficam diferentes do que é cobrado).
+     De quebra, essa chamada "acorda" o servidor enquanto a pessoa ainda está lendo. */
+  var brl=function(v){ return Number(v).toLocaleString('pt-BR',{style:'currency',currency:'BRL',minimumFractionDigits: v%1?2:0}); };
+  fetch(APP+'/api/publico/precos').then(function(r){ return r.ok?r.json():null; }).then(function(d){
+    if(!d||!d.planos) return;
+    d.planos.forEach(function(p){
+      var m=document.querySelector('[data-preco="'+p.id+'-mensal"]'), a=document.querySelector('[data-preco="'+p.id+'-anual"]'), e=document.querySelector('[data-economia="'+p.id+'"]');
+      if(m) m.textContent=Number(p.valor).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
+      if(a) a.textContent=brl(p.valorAnual);
+      if(e&&p.valor>0){ var pct=Math.round((1-p.valorAnual/(p.valor*12))*100); e.textContent=pct>0?'economize '+pct+'%':'cobrança anual'; }
+    });
+    if(d.diasTeste) document.querySelectorAll('[data-dias-teste]').forEach(function(el){ el.textContent=d.diasTeste; });
+    if(d.diasTeste) document.querySelectorAll('a[data-app*="teste=1"]').forEach(function(el){ el.textContent=el.textContent.replace(/\d+ dias grátis/, d.diasTeste+' dias grátis'); });
+    var pr=document.getElementById('promocao');
+    if(pr&&d.promocao&&d.promocao.percentual>0){
+      var dur=d.promocao.meses?(' nos '+(d.promocao.meses===1?'primeiro mês':d.promocao.meses+' primeiros meses')):' para sempre';
+      var ate=d.promocao.validaAte?(' · para quem assinar até '+d.promocao.validaAte.split('-').reverse().join('/')):'';
+      pr.textContent='Novos clientes: '+String(d.promocao.percentual).replace('.',',')+'% de desconto'+dur+ate;
+      pr.hidden=false;
+    }
+  }).catch(function(){ /* sem resposta: ficam os preços escritos na página */ });
+})();
+(function(){
+  var b=document.getElementById('voltar-topo');
+  function atualizar(){ b.classList.toggle('visivel', window.scrollY>500); }
+  window.addEventListener('scroll',atualizar,{passive:true}); atualizar();
+})();
+</script>
+</body>
+</html>

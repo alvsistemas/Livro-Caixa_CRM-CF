@@ -69,10 +69,25 @@ process.on('unhandledRejection', (motivo) => {
 });
 
 app.use(cors());
-app.use(express.json({ limit: '50mb' }));
+// Cabeçalhos de segurança: o navegador não "adivinha" tipo de arquivo, o site não pode ser
+// aberto dentro de outro site (exceto a página pública de agendamento, que pode ser
+// incorporada), HTTPS obrigatório depois da primeira visita e nada de câmera/microfone/local.
+app.use((req, res, next) => {
+  res.set('X-Content-Type-Options', 'nosniff');
+  res.set('Referrer-Policy', 'strict-origin-when-cross-origin');
+  res.set('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+  if (!req.path.startsWith('/agendar') && !req.path.startsWith('/api/agendamento-publico')) res.set('X-Frame-Options', 'SAMEORIGIN');
+  if (req.secure) res.set('Strict-Transport-Security', 'max-age=15552000');
+  next();
+});
+// Tamanho máximo do corpo das requisições: 6 MB (anexos e comprovantes têm até 3 MB, que
+// viram ~4 MB em base64). Só a restauração do backup completo aceita até 50 MB.
+app.use('/api/backup/importar-tudo', express.json({ limit: '50mb' }));
+app.use(express.json({ limit: '6mb' }));
 
 // API (auth e config são públicas; as outras exigem login dentro de cada rota)
 app.use('/api/config', configRoutes);
+app.use('/api/publico', require('./routes/publico')); // preços para a página de divulgação (sem login)
 app.use('/api/auth', authRoutes);
 app.use('/api/board', boardRoutes);
 app.use('/api/columns', columnRoutes);
@@ -107,8 +122,15 @@ app.get('/agendar/:userId', (req, res) => {
 });
 
 // front-end estático (a pasta public com index.html, css e js)
-// A raiz do site abre a escolha de aplicativo (CRM ou Controle financeiro)
-app.get('/', (_req, res) => res.redirect('/inicio.html'));
+// A raiz do site é a página de divulgação (public/site). O sistema continua em
+// /inicio.html (escolha do aplicativo), /login.html etc.; o app instalado abre direto em
+// /inicio.html (manifest.json), então quem usa o sistema não passa pela divulgação.
+const PAGINA_DIVULGACAO = path.join(__dirname, '..', 'public', 'site', 'index.html');
+app.get('/', (_req, res) => {
+  res.set('Cache-Control', 'public, max-age=300');
+  res.sendFile(PAGINA_DIVULGACAO);
+});
+app.get(['/site', '/site/', '/site/index.html'], (_req, res) => res.redirect(301, '/'));
 app.use(express.static(path.join(__dirname, '..', 'public')));
 
 const { verificarAutomacoesPorTempo } = require('./utils/automacaoScheduler');

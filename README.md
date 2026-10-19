@@ -294,9 +294,8 @@ O painel agora tem uma barra lateral com 5 páginas (tudo dentro do mesmo
   útil pra acompanhar a mesma pessoa em mais de um funil). As duas
   últimas usam o mesmo seletor (um por um, ou "Selecionar todos"),
   disponível a qualquer momento, em qualquer coluna.
-  As estatísticas agora incluem **Ticket médio** e **Valor ponderado**
-  (esse último usa a "chance de fechar" de cada coluna, configurável
-  no menu dela — só faz sentido pras colunas "em aberto"). Tem também
+  As estatísticas incluem **Ticket médio** (o "Valor ponderado" e a
+  "chance de fechar" das colunas foram retirados). Tem também
   um filtro **"🧊 Esfriando"** que mostra só os leads em aberto sem
   nenhuma atualização há mais de 7 dias
 - **Leads** — todos os clientes em formato de tabela, com busca,
@@ -474,6 +473,13 @@ usuário" — é uma camada nova, sem mexer em nenhum dado que já existia:
   membro — nunca os clientes individuais de ninguém
 - Uma pessoa só pode estar em **uma equipe por vez**. Sair da equipe
   (ou ser removido) não apaga nada do funil dela
+
+## Página de divulgação
+
+A raiz do site (`/`) é a página de divulgação, em `public/site/index.html` (imagens em
+`public/site/img/`). Os botões levam ao cadastro com teste grátis ou com o plano escolhido;
+preços, dias de teste e promoção vêm de `GET /api/publico/precos`. O sistema continua em
+`/login.html` e `/inicio.html`.
 
 ## Fechamento da venda (CRM → Controle financeiro)
 

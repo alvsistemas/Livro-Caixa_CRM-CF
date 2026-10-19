@@ -627,5 +627,5 @@ module.exports = {
   sincronizar, assinar, trocarPlano, cancelar, definirDescontoPessoal,
   lerConfig, definirPromocao, promocaoAtual, promocaoValida, ganhaPromocao,
   registrarEvento, processarEvento, sincronizarPendentes,
-  conferencia, emailsLiberados, diasDeTolerancia,
+  conferencia, emailsLiberados, diasDeTolerancia, diasDeTeste,
 };

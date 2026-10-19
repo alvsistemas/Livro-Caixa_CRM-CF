@@ -24,6 +24,13 @@ const limiteLogin = criarMiddlewareLimite({
   chaveDe: (req) => `login:${req.ip}`,
   mensagem: 'Muitas tentativas de login. Aguarde alguns minutos e tente de novo.',
 });
+// Criar conta: barra a criação de contas em massa (e "teste grátis infinito" com e-mails
+// inventados). 10 por hora por IP deixa folga pra um escritório com o mesmo IP.
+const limiteCadastro = criarMiddlewareLimite({
+  janelaMs: 60 * 60 * 1000, max: Number(process.env.LIMITE_CADASTROS_POR_HORA) || 10,
+  chaveDe: (req) => `cadastro:${req.ip}`,
+  mensagem: 'Muitas contas criadas a partir desta conexão. Tente de novo mais tarde.',
+});
 const limite2FA = criarMiddlewareLimite({
   janelaMs: 15 * 60 * 1000, max: 10,
   chaveDe: (req) => `2fa:${req.ip}`,
@@ -55,7 +62,7 @@ function gerarTempToken2FA(user) {
 }
 
 // POST /api/auth/register -> cria a conta e já devolve o token (login automático)
-router.post('/register', async (req, res) => {
+router.post('/register', limiteCadastro, async (req, res) => {
   try {
     const { nome, email, senha } = req.body;
     if (!email || !senha) {
@@ -118,7 +125,7 @@ router.post('/login', limiteLogin, async (req, res) => {
 });
 
 // POST /api/auth/google -> login/cadastro usando o botão "Continuar com Google"
-router.post('/google', async (req, res) => {
+router.post('/google', limiteLogin, async (req, res) => {
   try {
     if (!GOOGLE_CLIENT_ID) {
       return res.status(500).json({ error: 'Login com Google não está configurado neste servidor.' });

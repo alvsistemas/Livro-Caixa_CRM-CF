@@ -78,3 +78,5 @@
   .ass-planos{ grid-template-columns:1fr; }
   .ass-acoes .ass-btn{ flex:1 1 100%; }
 }
+.ass-testar{ font-size:14px; line-height:1.55; color:var(--ink-soft); margin:14px 0 0; }
+.ass-testar a{ color:var(--ink); font-weight:600; }

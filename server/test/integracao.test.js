@@ -30,6 +30,7 @@ describe('API com PostgreSQL (integração)', { skip: pular }, () => {
   before(async () => {
     process.env.DATABASE_URL = URL_TESTE;
     process.env.JWT_SECRET = 'segredo-de-teste';
+    process.env.LIMITE_CADASTROS_POR_HORA = '1000'; // os testes criam muitas contas do mesmo IP
     const { obterPool } = require('../db/pool');
     pool = obterPool();
     await pool.query('DROP SCHEMA public CASCADE; CREATE SCHEMA public;');
@@ -60,6 +61,29 @@ describe('API com PostgreSQL (integração)', { skip: pular }, () => {
     assert.equal(board.status, 200);
     assert.equal(board.dados.columns.length, 5);
     contas.ana.colunas = board.dados.columns;
+  });
+
+  test('preços públicos para a página de divulgação (sem login) e cabeçalhos de segurança', async () => {
+    const res = await fetch(base + '/api/publico/precos');
+    assert.equal(res.status, 200);
+    assert.equal(res.headers.get('x-content-type-options'), 'nosniff');
+    assert.equal(res.headers.get('x-frame-options'), 'SAMEORIGIN');
+    const d = await res.json();
+    assert.deepEqual(d.planos.map((p) => [p.id, p.valor, p.valorAnual]), [['essencial', 29.9, 300], ['completo', 39.9, 400]]);
+    assert.equal(d.diasTeste, 7);
+    assert.equal(d.promocao, null);
+    // a raiz é a página de divulgação; o sistema continua em /inicio.html
+    const raiz = await fetch(base + '/');
+    assert.equal(raiz.status, 200);
+    const html = await raiz.text();
+    assert.match(html, /Começar 7 dias grátis/);
+    assert.match(html, /og:image" content="https:\/\/meulivrocaixaapp\.com\.br\/site\/img\/dashboard\.jpg/);
+    assert.equal((await fetch(base + '/site/img/dashboard.jpg')).status, 200);
+    assert.equal((await fetch(base + '/inicio.html')).status, 200);
+    const site = await fetch(base + '/site/', { redirect: 'manual' });
+    assert.equal(site.status, 301);
+    const ag = await fetch(base + '/agendar/qualquer');
+    assert.equal(ag.headers.get('x-frame-options'), null); // a página de agendamento pode ser incorporada
   });
 
   test('todas as listagens respondem sem erro', async () => {

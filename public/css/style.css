@@ -204,7 +204,7 @@ main.pipeline-main{ padding-bottom:4px; }
 .modal-head button:hover{ color:#fff; background:rgba(255,255,255,.1); }
 .modal-body{ padding:20px; display:flex; flex-direction:column; gap:14px; max-height:70vh; overflow-y:auto; }
 .field label{ font-size:12px; font-weight:600; color:var(--ink-soft); }
-.field input[type=text], .field input[type=number], .field input[type=month], .field select, .field textarea{
+.field input[type=text], .field input[type=email], .field input[type=password], .field input[type=number], .field input[type=month], .field select, .field textarea{
   width:100%; margin-top:5px; padding:10px 12px; min-height:42px; border-radius:8px; border:1px solid var(--line); font-size:13px; outline:none; font-family:inherit; color:var(--ink); background:var(--paper);
 }
 /* Campos de data/hora — estilizados à parte porque, por padrão, o navegador não
@@ -923,3 +923,15 @@ tr.membro-supervisor-destaque td:last-child{ border-right:1px solid var(--gold);
 .perm-acoes{ display:flex; gap:8px; justify-content:flex-end; margin-top:14px; flex-wrap:wrap; }
 .perm-msg{ margin-top:12px; }
 @media (max-width:720px){ .perm-colunas{ grid-template-columns:1fr; } }
+
+/* aviso da página de divulgação na tela de criar conta */
+.auth-oferta{ margin:0 0 16px; padding:12px 14px; border-radius:10px; background:var(--col-bg); border:1px solid var(--line); font-size:13px; line-height:1.5; color:var(--ink); }
+.auth-oferta-sub{ display:block; margin-top:6px; color:var(--ink-soft); font-size:12px; }
+
+/* faixa do teste grátis (topo do CRM) */
+.faixa-teste{ display:flex; align-items:center; justify-content:space-between; gap:16px; margin:0 0 18px; padding:14px 16px; border-radius:12px; background:var(--paper); border:1px solid var(--line); border-left:4px solid var(--accent); color:var(--ink); font-size:13px; line-height:1.5; }
+.faixa-teste-acoes{ display:flex; align-items:center; gap:6px; flex-shrink:0; }
+.faixa-teste-acoes .btn-primary{ text-decoration:none; display:inline-flex; align-items:center; }
+.faixa-teste-x{ background:none; border:none; color:var(--ink-soft); font-size:15px; cursor:pointer; min-width:36px; min-height:36px; border-radius:8px; }
+.faixa-teste-x:hover{ background:var(--hover-tint); color:var(--ink); }
+@media (max-width:640px){ .faixa-teste{ flex-direction:column; align-items:stretch; } .faixa-teste-acoes{ justify-content:space-between; } }
