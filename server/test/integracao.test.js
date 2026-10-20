@@ -562,7 +562,7 @@ describe('API com PostgreSQL (integração)', { skip: pular }, () => {
       let ver = await api('GET', '/api/equipe', undefined, membro.token);
       assert.equal(ver.dados.minhasPermissoes.restrito, true);
       assert.equal(ver.dados.minhasPermissoes.funcoes.excluirClientes, true);
-      assert.equal(ver.dados.equipe.catalogoPermissoes.abas.length, 9);
+      assert.equal(ver.dados.equipe.catalogoPermissoes.abas.length, 10);
       // membro não muda permissões; chave desconhecida é recusada
       assert.equal((await api('PUT', '/api/equipe/permissoes', { funcoes: { excluirClientes: false } }, membro.token)).status, 403);
       assert.equal((await api('PUT', '/api/equipe/permissoes', { funcoes: { voar: false } }, gestor.token)).status, 400);
@@ -1122,6 +1122,246 @@ describe('API com PostgreSQL (integração)', { skip: pular }, () => {
       for (const k of Object.keys(process.env)) if (!(k in antes)) delete process.env[k];
       Object.assign(process.env, antes);
     }
+  });
+
+  test('Caixa e Estoque: checklist, produtos com variação, venda, compra, gasto e financeiro', async () => {
+    const reg = async (n) => { const r = await api('POST', '/api/auth/register', { nome: n, email: `${n}@teste.com`, senha: 'senha123' }); assert.equal(r.status, 201); return r.dados.token; };
+    const t = await reg('lojinha');
+    const t2 = await reg('outraloja');
+    // primeiro acesso: ainda sem negócio
+    let r = await api('GET', '/api/estoque', undefined, t);
+    assert.equal(r.status, 200);
+    assert.equal(r.dados.negocio, null);
+    r = await api('PUT', '/api/estoque/negocio', { tipo: 'loja', nome: 'Loja da Lu', controlaEstoque: true, cardapioAtivo: true }, t);
+    assert.equal(r.status, 200, JSON.stringify(r.dados));
+    assert.equal(r.dados.negocio.cardapioAtivo, false, 'loja não tem cardápio');
+    assert.equal(r.dados.negocio.checklist.configurado, true);
+    // produto simples e produto com variações
+    r = await api('POST', '/api/estoque/produtos', { nome: 'Caneca', preco: 30, custo: 12, estoqueInicial: 10, estoqueMinimo: 3 }, t);
+    assert.equal(r.status, 200, JSON.stringify(r.dados));
+    const caneca = r.dados.produto;
+    assert.equal(caneca.estoque, 10);
+    r = await api('POST', '/api/estoque/produtos', { nome: 'Camiseta', preco: 50, custo: 20, variacoes: [{ nome: 'P', estoqueInicial: 2 }, { nome: 'G', preco: 55, estoqueInicial: 5 }] }, t);
+    assert.equal(r.status, 200, JSON.stringify(r.dados));
+    const cam = r.dados.produto;
+    assert.equal(cam.estoque, 7);
+    const [p, g] = cam.variacoes;
+    assert.equal(g.precoFinal, 55);
+    // outra conta não enxerga
+    assert.equal((await api('GET', '/api/estoque/produtos', undefined, t2)).dados.produtos.length, 0);
+    assert.equal((await api('PUT', `/api/estoque/produtos/${caneca.id}`, { nome: 'x' }, t2)).status, 400);
+    // taxa do débito guardada (a mesma do fechamento do CRM)
+    await api('PUT', '/api/financeiro/fechamento/taxas', { debito: 2 }, t);
+    // venda no balcão
+    r = await api('POST', '/api/estoque/vendas', { meio: 'debito', desconto: 5, cliente: 'Rita', itens: [
+      { produtoId: caneca.id, qtd: 8 }, { produtoId: cam.id, variacaoId: g.id, qtd: 1 }, { nome: 'Embrulho', qtd: 1, unit: 3 }] }, t);
+    assert.equal(r.status, 200, JSON.stringify(r.dados));
+    const venda = r.dados.venda;
+    assert.equal(venda.subtotal, 298); // 240 + 55 + 3
+    assert.equal(venda.total, 293);
+    assert.equal(venda.cmv, 116); // 8*12 + 20
+    assert.equal(venda.taxa, 5.86);
+    assert.ok(r.dados.alertas.some((a) => /Caneca: estoque baixo/.test(a)), JSON.stringify(r.dados.alertas));
+    // sem variação escolhida: erro
+    assert.equal((await api('POST', '/api/estoque/vendas', { meio: 'pix', itens: [{ produtoId: cam.id, qtd: 1 }] }, t)).status, 400);
+    // estoque baixou e o financeiro recebeu a receita (com CMV) e a taxa
+    let prods = (await api('GET', '/api/estoque/produtos', undefined, t)).dados.produtos;
+    assert.equal(prods.find((x) => x.id === caneca.id).estoque, 2);
+    assert.equal(prods.find((x) => x.id === caneca.id).situacao, 'baixo');
+    let fin = (await api('GET', '/api/financeiro', undefined, t)).dados;
+    const rec = fin.dados.transacoes.find((x) => x.estoque && x.estoque.origem === 'venda');
+    assert.ok(rec, 'receita da venda');
+    assert.equal(rec.type || rec.tipo, 'Receita');
+    assert.equal(rec.estoque.cmv, 116);
+    assert.ok(fin.dados.transacoes.some((x) => x.estoque && x.estoque.origem === 'taxa' && (x.value || x.valor) === 5.86));
+    // uma tela velha do financeiro salvando sem a venda NÃO apaga os lançamentos do estoque
+    const semEstoque = fin.dados.transacoes.filter((x) => !x.estoque);
+    const velho = new Date(Date.now() - 60000).toISOString();
+    assert.equal((await api('PUT', '/api/financeiro/transacoes', { valor: semEstoque, carregadoEm: velho }, t)).status, 200);
+    fin = (await api('GET', '/api/financeiro', undefined, t)).dados;
+    assert.equal(fin.dados.transacoes.filter((x) => x.estoque).length, 2);
+    // compra: entra no estoque, custo médio com frete, despesa no financeiro
+    r = await api('POST', '/api/estoque/compras', { fornecedor: 'Atacado Sul', meio: 'pix', frete: 10, itens: [{ produtoId: caneca.id, qtd: 10, custoUnit: 14 }] }, t);
+    assert.equal(r.status, 200, JSON.stringify(r.dados));
+    assert.equal(r.dados.compra.total, 150);
+    prods = (await api('GET', '/api/estoque/produtos', undefined, t)).dados.produtos;
+    const c2 = prods.find((x) => x.id === caneca.id);
+    assert.equal(c2.estoque, 12);
+    assert.equal(c2.custo, 14.5); // (2*12 + 10*15) / 12
+    fin = (await api('GET', '/api/financeiro', undefined, t)).dados;
+    assert.ok(fin.dados.transacoes.some((x) => x.estoque && x.estoque.origem === 'compra' && (x.category || x.categoria) === 'Custo de mercadoria'));
+    // nota de gasto
+    r = await api('POST', '/api/estoque/gastos', { descricao: 'Conta de luz', valor: 120.5, categoria: 'Moradia' }, t);
+    assert.equal(r.status, 200, JSON.stringify(r.dados));
+    assert.equal((await api('GET', '/api/estoque/gastos', undefined, t)).dados.gastos.length, 1);
+    // resumo
+    const res = (await api('GET', '/api/estoque/resumo', undefined, t)).dados;
+    assert.equal(res.hoje.total, 293);
+    assert.equal(res.mes.lucroBruto, 171.14);
+    assert.equal(res.mes.gastos, 270.5);
+    // cancelar a venda devolve o estoque e tira do financeiro
+    r = await api('POST', `/api/estoque/vendas/${venda.id}/cancelar`, {}, t);
+    assert.equal(r.dados.venda.cancelada, true);
+    prods = (await api('GET', '/api/estoque/produtos', undefined, t)).dados.produtos;
+    assert.equal(prods.find((x) => x.id === caneca.id).estoque, 20);
+    assert.equal(prods.find((x) => x.id === cam.id).variacoes.find((v) => v.nome === 'G').estoque, 5);
+    fin = (await api('GET', '/api/financeiro', undefined, t)).dados;
+    assert.ok(!fin.dados.transacoes.some((x) => x.estoque && ['venda', 'taxa'].includes(x.estoque.origem)));
+    // ajuste: contei e tem 18
+    r = await api('POST', '/api/estoque/ajuste', { produtoId: caneca.id, modo: 'saldo', saldo: 18 }, t);
+    assert.equal(r.dados.saldo, 18);
+    const mov = (await api('GET', `/api/estoque/produtos/${caneca.id}/movimentos`, undefined, t)).dados.movimentos;
+    assert.deepEqual(mov.map((m) => m.tipo), ['ajuste', 'cancelamento', 'compra', 'venda', 'inicial']);
+    // membro de equipe sem a aba: 403 (permissão nova "estoque" existe)
+    const { ABAS } = require('../utils/permissoes');
+    assert.ok(ABAS.some((a) => a.chave === 'estoque'));
+  });
+
+  test('Cardápio do restaurante: página pública, pedido pelo WhatsApp e pedido vira venda', async () => {
+    const r0 = await api('POST', '/api/auth/register', { nome: 'Resto', email: 'resto@teste.com', senha: 'senha123' });
+    const t = r0.dados.token;
+    let r = await api('PUT', '/api/estoque/negocio', { tipo: 'restaurante', nome: 'Cantina da Nona', cardapioAtivo: true }, t);
+    assert.equal(r.status, 400, 'sem WhatsApp não liga o cardápio');
+    r = await api('PUT', '/api/estoque/negocio', { tipo: 'restaurante', nome: 'Cantina da Nona', cardapioAtivo: true, whatsapp: '(11) 98888-7777', taxaEntrega: 6, controlaEstoque: false }, t);
+    assert.equal(r.status, 200, JSON.stringify(r.dados));
+    assert.equal(r.dados.negocio.slug, 'cantina-da-nona');
+    r = await api('POST', '/api/estoque/produtos', { nome: 'Pizza', categoria: 'Pizzas', preco: 40, custo: 15, controlaEstoque: false,
+      variacoes: [{ nome: 'Média' }, { nome: 'Grande', preco: 55, custo: 20 }],
+      opcoes: [{ nome: 'Borda', tipo: 'um', escolhas: [{ nome: 'Sem borda', preco: 0 }, { nome: 'Catupiry', preco: 8 }] }, { nome: 'Extras', tipo: 'varios', escolhas: [{ nome: 'Bacon', preco: 5 }] }] }, t);
+    assert.equal(r.status, 200, JSON.stringify(r.dados));
+    const pizza = r.dados.produto;
+    await api('POST', '/api/estoque/produtos', { nome: 'Rascunho', preco: 1, noCardapio: false, controlaEstoque: false }, t);
+    const refri = (await api('POST', '/api/estoque/produtos', { nome: 'Refri lata', categoria: 'Bebidas', preco: 6, custo: 3, estoqueInicial: 1 }, t)).dados.produto;
+    // página pública
+    const pag = await fetch(base + '/c/cantina-da-nona');
+    assert.equal(pag.status, 200);
+    r = await api('GET', '/api/publico/cardapio/cantina-da-nona');
+    assert.equal(r.status, 200);
+    assert.deepEqual(r.dados.produtos.map((x) => x.nome).sort(), ['Pizza', 'Refri lata']);
+    assert.equal(r.dados.produtos.find((x) => x.nome === 'Pizza').variacoes.length, 2);
+    assert.equal((await api('GET', '/api/publico/cardapio/nao-existe')).status, 404);
+    // pedido: o preço vem do servidor (o "unit" mandado pela página é ignorado)
+    const grande = pizza.variacoes.find((v) => v.nome === 'Grande');
+    r = await api('POST', '/api/publico/cardapio/cantina-da-nona/pedido', { nome: 'João', telefone: '11 97777-6666', tipo: 'entrega', endereco: 'Rua A, 10', pagamento: 'dinheiro', troco: '100',
+      itens: [{ produtoId: pizza.id, variacaoId: grande.id, qtd: 1, unit: 1, opcoes: { 0: [1], 1: [0] } }, { produtoId: refri.id, qtd: 1 }] });
+    assert.equal(r.status, 200, JSON.stringify(r.dados));
+    assert.equal(r.dados.total, 80); // 55 + 8 + 5 + 6 + entrega 6
+    assert.match(r.dados.whatsapp, /^https:\/\/wa\.me\/5511988887777\?text=/);
+    assert.match(r.dados.mensagem, /Catupiry, Bacon/);
+    // borda é obrigatória; refri sem estoque suficiente
+    assert.equal((await api('POST', '/api/publico/cardapio/cantina-da-nona/pedido', { nome: 'X', tipo: 'retirada', itens: [{ produtoId: pizza.id, variacaoId: grande.id, qtd: 1 }] })).status, 400);
+    assert.equal((await api('POST', '/api/publico/cardapio/cantina-da-nona/pedido', { nome: 'X', tipo: 'retirada', itens: [{ produtoId: refri.id, qtd: 2 }] })).status, 400);
+    // painel: o pedido aparece e vira venda
+    const peds = (await api('GET', '/api/estoque/pedidos', undefined, t)).dados.pedidos;
+    assert.equal(peds.length, 1);
+    assert.equal(peds[0].status, 'novo');
+    r = await api('POST', `/api/estoque/pedidos/${peds[0].id}/vender`, {}, t);
+    assert.equal(r.status, 200, JSON.stringify(r.dados));
+    assert.equal(r.dados.venda.total, 80);
+    assert.equal(r.dados.venda.meio, 'dinheiro');
+    assert.equal(r.dados.venda.acrescimo, 6);
+    assert.equal((await api('POST', `/api/estoque/pedidos/${peds[0].id}/vender`, {}, t)).status, 400, 'não vende duas vezes');
+    const prods = (await api('GET', '/api/estoque/produtos', undefined, t)).dados.produtos;
+    assert.equal(prods.find((x) => x.id === refri.id).estoque, 0);
+    r = await api('GET', '/api/publico/cardapio/cantina-da-nona');
+    assert.equal(r.dados.produtos.find((x) => x.nome === 'Refri lata').esgotado, true);
+    // cardápio desligado some do ar
+    await api('PUT', '/api/estoque/negocio', { cardapioAtivo: false }, t);
+    assert.equal((await api('GET', '/api/publico/cardapio/cantina-da-nona')).status, 404);
+  });
+
+  test('PDV: clientes, histórico, cashback e cartão fidelidade', async () => {
+    const r0 = await api('POST', '/api/auth/register', { nome: 'Fid', email: 'fidelidade@teste.com', senha: 'senha123' });
+    const t = r0.dados.token;
+    await api('PUT', '/api/estoque/negocio', { tipo: 'restaurante', nome: 'Bistrô Fiel', whatsapp: '11977776666', cardapioAtivo: true, aceitaEntrega: false }, t);
+    const prato = (await api('POST', '/api/estoque/produtos', { nome: 'Prato do dia', preco: 50, custo: 20, controlaEstoque: false }, t)).dados.produto;
+    // programa inválido e válido
+    assert.equal((await api('PUT', '/api/estoque/negocio', { fidelidade: { modelo: 'cashback', cashbackPct: 90 } }, t)).status, 400);
+    let r = await api('PUT', '/api/estoque/negocio', { fidelidade: { modelo: 'cashback', cashbackPct: 10, validadeDias: 30, minimoUso: 0 } }, t);
+    assert.equal(r.status, 200, JSON.stringify(r.dados));
+    assert.equal(r.dados.negocio.fidelidade.modelo, 'cashback');
+    // cliente
+    r = await api('POST', '/api/estoque/clientes', { nome: 'Carla', telefone: '(11) 95555-4444', participa: true }, t);
+    assert.equal(r.status, 200, JSON.stringify(r.dados));
+    const carla = r.dados.cliente;
+    assert.equal(carla.telefone, '11955554444');
+    assert.equal((await api('POST', '/api/estoque/clientes', { nome: 'Outra', telefone: '11955554444' }, t)).status, 400, 'telefone repetido');
+    // compra 1: ganha 10% = R$ 10
+    r = await api('POST', '/api/estoque/vendas', { meio: 'pix', clienteId: carla.id, itens: [{ produtoId: prato.id, qtd: 2 }] }, t);
+    assert.equal(r.status, 200, JSON.stringify(r.dados));
+    assert.equal(r.dados.venda.cashbackGanho, 10);
+    // compra 2: usa o cashback (R$ 10) e ganha 10% do que pagou (R$ 4)
+    r = await api('POST', '/api/estoque/vendas', { meio: 'pix', clienteId: carla.id, usarCashback: true, itens: [{ produtoId: prato.id, qtd: 1 }] }, t);
+    assert.equal(r.status, 200, JSON.stringify(r.dados));
+    const v2 = r.dados.venda;
+    assert.equal(v2.cashbackUsado, 10);
+    assert.equal(v2.total, 40);
+    assert.equal(v2.cashbackGanho, 4);
+    let ficha = (await api('GET', `/api/estoque/clientes/${carla.id}`, undefined, t)).dados;
+    assert.equal(ficha.beneficio.saldo, 4);
+    assert.equal(ficha.cliente.compras, 2);
+    assert.equal(ficha.cliente.totalGasto, 140);
+    assert.equal(ficha.preferidos[0].nome, 'Prato do dia');
+    // o financeiro recebeu R$ 40 (o cashback é desconto)
+    const fin = (await api('GET', '/api/financeiro', undefined, t)).dados.dados.transacoes;
+    assert.ok(fin.some((x) => x.estoque && x.estoque.vendaId === v2.id && (x.value || x.valor) === 40));
+    // cancelar a venda 2: o cashback usado volta e o ganho some
+    await api('POST', `/api/estoque/vendas/${v2.id}/cancelar`, {}, t);
+    ficha = (await api('GET', `/api/estoque/clientes/${carla.id}`, undefined, t)).dados;
+    assert.equal(ficha.beneficio.saldo, 10);
+    // cliente que não participa não ganha
+    const semPrograma = (await api('POST', '/api/estoque/clientes', { nome: 'Davi', telefone: '11944443333', participa: false }, t)).dados.cliente;
+    r = await api('POST', '/api/estoque/vendas', { meio: 'dinheiro', clienteId: semPrograma.id, itens: [{ produtoId: prato.id, qtd: 1 }] }, t);
+    assert.equal(r.dados.venda.cashbackGanho, 0);
+    // cliente novo direto no caixa
+    r = await api('POST', '/api/estoque/vendas', { meio: 'dinheiro', clienteNovo: { nome: 'Eva', telefone: '11933332222', participa: true }, itens: [{ produtoId: prato.id, qtd: 1 }] }, t);
+    assert.equal(r.status, 200, JSON.stringify(r.dados));
+    assert.equal(r.dados.venda.cliente, 'Eva');
+    assert.equal(r.dados.venda.cashbackGanho, 5);
+    // cashback vencido não conta
+    await pool.query("UPDATE estoque_cashback SET expira_em = '2020-01-01' WHERE cliente_id = $1", [carla.id]);
+    ficha = (await api('GET', `/api/estoque/clientes/${carla.id}`, undefined, t)).dados;
+    assert.equal(ficha.beneficio.saldo, 0);
+    assert.ok(ficha.cashback.some((c) => c.vencido));
+    let lista = (await api('GET', '/api/estoque/clientes?busca=955', undefined, t)).dados;
+    assert.deepEqual(lista.clientes.map((c) => c.nome), ['Carla']);
+    assert.equal(lista.emAberto.valor, 5);
+    // página pública: consulta pelo telefone mostra só valores
+    r = await api('POST', '/api/publico/cardapio/bistro-fiel/fidelidade', { telefone: '11933332222' });
+    assert.equal(r.status, 200, JSON.stringify(r.dados));
+    assert.deepEqual([r.dados.modelo, r.dados.participa, r.dados.saldo], ['cashback', true, 5]);
+    assert.equal(r.dados.nome, undefined);
+    // pedido do cardápio com cliente novo que aceitou participar e quer usar o benefício
+    r = await api('POST', '/api/publico/cardapio/bistro-fiel/pedido', { nome: 'Fábio', telefone: '11922221111', tipo: 'retirada', participar: true, usarBeneficio: true, itens: [{ produtoId: prato.id, qtd: 1 }] });
+    assert.equal(r.status, 200, JSON.stringify(r.dados));
+    assert.match(r.dados.mensagem, /Quero usar meu cashback/);
+    const ped = (await api('GET', '/api/estoque/pedidos', undefined, t)).dados.pedidos[0];
+    assert.ok(ped.clienteId);
+    assert.equal(ped.querBeneficio, true);
+    r = await api('POST', `/api/estoque/pedidos/${ped.id}/vender`, {}, t);
+    assert.equal(r.dados.venda.clienteId, ped.clienteId);
+    assert.equal(r.dados.venda.cashbackGanho, 5);
+    // cartão fidelidade: a cada 2 compras, R$ 15 de desconto
+    r = await api('PUT', '/api/estoque/negocio', { fidelidade: { modelo: 'selos', selosMeta: 2, premioValor: 15, premioTexto: 'R$ 15 de desconto', selosMinimo: 30 } }, t);
+    assert.equal(r.status, 200, JSON.stringify(r.dados));
+    for (let i = 0; i < 2; i++) await api('POST', '/api/estoque/vendas', { meio: 'pix', clienteId: carla.id, itens: [{ produtoId: prato.id, qtd: 1 }] }, t);
+    ficha = (await api('GET', `/api/estoque/clientes/${carla.id}`, undefined, t)).dados;
+    assert.deepEqual([ficha.beneficio.selos, ficha.beneficio.podePremio], [2, true]);
+    // compra abaixo do mínimo não ganha selo
+    const barato = (await api('POST', '/api/estoque/vendas', { meio: 'pix', clienteId: carla.id, itens: [{ nome: 'Café', qtd: 1, unit: 6 }] }, t)).dados.venda;
+    assert.equal(barato.selosGanhos, 0);
+    r = await api('POST', '/api/estoque/vendas', { meio: 'pix', clienteId: carla.id, usarPremio: true, itens: [{ produtoId: prato.id, qtd: 1 }] }, t);
+    assert.equal(r.status, 200, JSON.stringify(r.dados));
+    assert.deepEqual([r.dados.venda.premioValor, r.dados.venda.total, r.dados.venda.selosUsados, r.dados.venda.selosGanhos], [15, 35, 2, 1]);
+    ficha = (await api('GET', `/api/estoque/clientes/${carla.id}`, undefined, t)).dados;
+    assert.equal(ficha.beneficio.selos, 1);
+    assert.equal((await api('POST', '/api/estoque/vendas', { meio: 'pix', clienteId: carla.id, usarPremio: true, itens: [{ produtoId: prato.id, qtd: 1 }] }, t)).status, 400, 'sem selos suficientes');
+    // ajuste manual de selos e exclusão do cliente (vendas ficam)
+    r = await api('POST', `/api/estoque/clientes/${carla.id}/ajuste`, { selos: 5 }, t);
+    assert.equal(r.dados.beneficio.selos, 5);
+    assert.equal((await api('DELETE', `/api/estoque/clientes/${carla.id}`, undefined, t)).status, 200);
+    const vendas = (await api('GET', '/api/estoque/vendas', undefined, t)).dados.vendas;
+    assert.ok(vendas.some((v) => v.cliente === 'Carla' && v.clienteId === null));
   });
 
   test('sair de todos os aparelhos invalida o token antigo', async () => {

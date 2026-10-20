@@ -111,6 +111,7 @@ app.use('/api/webhooks-saida', webhooksSaidaRoutes);
 app.use('/api/agendamento-publico', agendamentoPublicoRoutes);
 app.use('/api/gerot', gerotRoutes);
 app.use('/api/financeiro', financeiroRoutes);
+app.use('/api/estoque', require('./routes/estoque')); // Caixa e Estoque (terceiro aplicativo)
 app.use('/api/historico-contato', historicoContatoRoutes);
 app.use('/api/push', pushRoutes);
 app.use('/api/assinatura', assinaturaRoutes);
@@ -131,6 +132,11 @@ app.get('/', (_req, res) => {
   res.sendFile(PAGINA_DIVULGACAO);
 });
 app.get(['/site', '/site/', '/site/index.html'], (_req, res) => res.redirect(301, '/'));
+// cardápio digital público do restaurante — /c/<endereço> (sem login)
+app.get('/c/:slug', (_req, res) => {
+  res.set('Cache-Control', 'public, max-age=300');
+  res.sendFile(path.join(__dirname, '..', 'public', 'cardapio.html'));
+});
 app.use(express.static(path.join(__dirname, '..', 'public')));
 
 const { verificarAutomacoesPorTempo } = require('./utils/automacaoScheduler');

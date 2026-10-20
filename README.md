@@ -3,7 +3,7 @@
 > **Publicar do zero (GitHub → Neon → Render):** veja o arquivo
 > [`GUIA-DE-PUBLICACAO.md`](GUIA-DE-PUBLICACAO.md).
 
-## Dois aplicativos, um login
+## Três aplicativos, um login
 
 Depois do login, a tela `inicio.html` pergunta qual aplicativo abrir:
 
@@ -19,7 +19,13 @@ Depois do login, a tela `inicio.html` pergunta qual aplicativo abrir:
   (núcleo e telas antigas) e um arquivo por tela nova (`contas.js`, `cartoes.js`,
   `orcamento.js`, `dividas.js`, `comprovantes.js`, `importar.js`, `relatorios.js`, `perfil.js`).
 
-Os dois usam a mesma conta (mesmo token). O botão **Trocar de aplicativo** fica no
+- **PDV** (`estoque/`, opcional, para quem tem empresa) — produtos com variações
+  e estoque, venda no balcão, clientes com histórico e programa de fidelidade (cartão fidelidade
+  ou cashback), compras de mercadoria e notas de gasto, tudo lançado sozinho no
+  Controle financeiro. Restaurante ganha o **cardápio digital** (`/c/<endereço>`) com pedido
+  pelo WhatsApp (sem pagamento no site). Veja a seção "PDV" no fim.
+
+Os três usam a mesma conta (mesmo token). O botão **Trocar de aplicativo** fica no
 fim da barra lateral dos dois. A raiz do site (`/`) redireciona para `inicio.html`.
 
 **Integração CRM → financeiro** (nada é copiado; é lido do CRM a cada abertura e entra
@@ -658,3 +664,47 @@ chega um aviso para baixar pelo botão Backup. **Os anexos dos clientes ficam
 fora desse arquivo** (use o Backup manual se quiser incluí-los).
 Rotas: `GET/PUT /api/backup/automatico` e `POST /api/backup/automatico/enviar-agora`.
 
+
+## PDV (terceiro aplicativo)
+
+Opcional, ligado só ao Controle financeiro (não ao CRM). Na primeira versão se chamava Caixa e Estoque. Primeiro acesso: um checklist
+pergunta o tipo de negócio (restaurante, loja, serviços, outro), se a pessoa controla estoque
+e o nome. Restaurante ganha as abas **Pedidos** e **Cardápio digital**.
+
+| Ação | No estoque | No Controle financeiro |
+| --- | --- | --- |
+| Venda no balcão (ou pedido do cardápio confirmado) | baixa | Receita "Vendas" (Empresa), com o custo da mercadoria (CMV) junto; taxa do cartão como Despesa "Taxas de pagamento" |
+| Compra de mercadoria | entrada + custo médio (frete rateado) | Despesa "Custo de mercadoria" (paga ou agendada no vencimento) |
+| Nota de gasto | — | Despesa na categoria escolhida |
+| Cancelar venda / compra | desfaz | apaga os lançamentos |
+
+O CMV não é lançado como despesa (a mercadoria já foi despesa quando foi comprada); ele aparece
+no lucro de cada venda e em Lucro → "Vendas do balcão". Os lançamentos levam
+`extras.estoque = { origem, ... }` e o salvamento do financeiro não os apaga por engano.
+
+Cardápio digital: `GET /c/:slug` (página `public/cardapio.html`), dados em
+`GET /api/publico/cardapio/:slug`, pedido em `POST /api/publico/cardapio/:slug/pedido`
+(preço e estoque conferidos no servidor; devolve o link `wa.me` com a mensagem pronta; 12
+pedidos a cada 10 minutos por IP). Sai do ar se o dono desligar ou se a assinatura dele não
+estiver ativa. Rotas do app: `/api/estoque/*` (`server/routes/estoque.js`, regras em
+`server/utils/estoque.js`), migração `010_caixa_estoque.sql`. Permissão da equipe: aba
+"PDV".
+
+### Clientes e programa de fidelidade
+
+Aba **Clientes** (todos os tipos de negócio): o cliente é reconhecido pelo telefone, no balcão
+e no cardápio. Ficha com compras, total gasto, o que mais pede e o extrato do cashback; filtro
+de "sumidos há mais de 30 dias" com botão de WhatsApp. Em Configurações → Programa de
+fidelidade o dono escolhe **um** modelo:
+
+- **Cartão fidelidade:** a cada N compras (acima de um valor mínimo, se quiser), um prêmio em
+  R$ de desconto.
+- **Cashback:** X% do que o cliente pagou volta como crédito, com validade e valor mínimo para
+  usar. O crédito é usado do que vence primeiro.
+
+Só ganha quem aceitou participar. O benefício é aplicado por quem vende (o cardápio só mostra o
+saldo, porque não há login). Cashback usado e prêmio entram como desconto da venda, então a
+receita no financeiro já sai menor; o cashback dado não é despesa (o total "em aberto" aparece
+em Clientes). Cancelar a venda devolve tudo. Regras em `server/utils/fidelidade.js`, rotas
+`/api/estoque/clientes*`, consulta pública `POST /api/publico/cardapio/:slug/fidelidade` (só
+valores; 20 consultas a cada 10 minutos por IP), migração `011_pdv_clientes.sql`.

@@ -493,6 +493,12 @@ function origemDoLancamento(tx) {
     if (m.clienteExcluido) return `<span class="origem-crm" title="O cliente${m.clienteNome ? ` ${escapeHtml(m.clienteNome)}` : ""} foi excluído no CRM; o lançamento fica no histórico">CRM · cliente excluído</span>`;
     return `<a href="../index.html" class="origem-crm" title="Criado pelo fechamento da venda no CRM">CRM · ${m.tipo === "devolucao" ? "devolução" : "venda"}</a>`;
   }
+  if (tx.estoque) {
+    const m = tx.estoque;
+    const nomes = { venda: `venda #${m.numero}`, taxa: `taxa da venda #${m.numero}`, compra: "compra", gasto: "nota de gasto" };
+    const aba = m.origem === "compra" ? "compras" : m.origem === "gasto" ? "gastos" : "vendas";
+    return `<a href="../estoque/#${aba}" class="origem-crm" title="Criado pelo PDV">PDV · ${nomes[m.origem] || m.origem}</a>`;
+  }
   if (tx.account === Calculos.CARTAO) { const c = Calculos.cartaoDoLancamento(tx, state.cards); return c ? `💳 ${escapeHtml(c.name)}` : (state.cards.length > 1 ? `<span class="aviso-mini">escolha o cartão</span>` : ""); }
   const conta = tx.contaId && state.contas.find((k) => k.id === tx.contaId);
   return conta ? `🏦 ${escapeHtml(conta.name)}` : "";
@@ -874,11 +880,12 @@ function renderLucro() {
     </div>
 
     ${modoIntegracao() === "vendas" && state.scopeFilter !== "Pessoal" ? lucroPorVendaHtml(state.month) : ""}
+    ${state.scopeFilter !== "Pessoal" ? vendasBalcaoHtml(state.month) : ""}
 
     <div class="card">
       <h2 class="section-title" style="border-color:var(--char)">Como o CRM entra no seu financeiro</h2>
       ${opcoesIntegracaoHtml()}
-      ${modoIntegracao() === "vendas" ? taxasVendaHtml() : ""}
+      ${modoIntegracao() === "vendas" || temCaixaEstoque() ? taxasVendaHtml() : ""}
     </div>
   `;
 }
@@ -936,12 +943,40 @@ function lucroPorVendaHtml(month) {
   </div>`;
 }
 
+/* Vendas do balcão (PDV): cada venda entra como receita com o custo da mercadoria
+   (CMV) junto; a taxa do cartão entra como despesa à parte. O CMV não é lançado como despesa
+   (a compra da mercadoria já foi), só entra aqui no "quanto sobrou". */
+function temCaixaEstoque() { return state.txs.some((t) => t.estoque); }
+function vendasBalcaoHtml(month) {
+  const vendas = state.txs.filter((t) => t.estoque && t.estoque.origem === "venda" && monthKey(t.date) === month);
+  if (!vendas.length) return "";
+  const taxas = new Map(state.txs.filter((t) => t.estoque && t.estoque.origem === "taxa").map((t) => [t.estoque.vendaId, Number(t.value) || 0]));
+  const tot = vendas.reduce((a, t) => {
+    const receita = Number(t.value) || 0; const cmv = Number(t.estoque.cmv) || 0; const taxa = taxas.get(t.estoque.vendaId) || 0;
+    return { receita: a.receita + receita, cmv: a.cmv + cmv, taxa: a.taxa + taxa };
+  }, { receita: 0, cmv: 0, taxa: 0 });
+  const lucro = tot.receita - tot.cmv - tot.taxa;
+  const cor = lucro < 0 ? COLORS.red : COLORS.pessoal;
+  return `<div class="card" style="margin-bottom:20px">
+    <h2 class="section-title" style="border-color:${COLORS.empresa}">Vendas do balcão</h2>
+    <div class="table-wrap" style="border:none;box-shadow:none"><table class="tabela-lucro">
+      <thead><tr><th>Vendas</th><th>Faturamento</th><th>Custo da mercadoria</th><th>Taxas</th><th>Sobrou</th><th>Margem</th></tr></thead>
+      <tbody><tr>
+        <td><span style="font-weight:600">${vendas.length === 1 ? "1 venda" : `${vendas.length} vendas`}</span><div class="stat-sub">ticket médio ${fmtBRL(tot.receita / vendas.length)}</div></td>
+        <td class="mono">${fmtBRL(tot.receita)}</td><td class="mono">${fmtBRL(tot.cmv)}</td><td class="mono">${fmtBRL(tot.taxa)}</td>
+        <td class="mono" style="font-weight:700;color:${cor}">${fmtBRL(lucro)}</td>
+        <td class="mono" style="color:var(--ink-muted)">${tot.receita > 0 ? fmtPct(lucro / tot.receita) : "—"}</td>
+      </tr></tbody></table></div>
+    <p class="stat-sub" style="margin-top:8px">O custo da mercadoria vem do custo médio de cada produto. A compra já entrou como despesa quando foi paga, por isso ele não é descontado de novo no saldo. <a href="../estoque/#vendas">Ver as vendas no PDV</a></p>
+  </div>`;
+}
+
 const TAXAS_VENDA = [["credito", "Cartão de crédito à vista"], ["creditoParcelado", "Cartão de crédito parcelado"], ["debito", "Cartão de débito"], ["pix", "Pix"], ["boleto", "Boleto"], ["imposto", "Imposto sobre a venda"]];
 function taxasVendaHtml() {
   const t = state.config.taxasVenda || {};
   return `<div class="taxas-venda">
-    <h3 class="taxas-titulo">Taxas usadas no fechamento da venda</h3>
-    <p class="stat-sub">Em % do valor final. O CRM calcula sozinho a cada venda; deixe em branco o que você não paga. MEI paga o DAS fixo por mês: não precisa de imposto aqui.</p>
+    <h3 class="taxas-titulo">Taxas usadas nas vendas</h3>
+    <p class="stat-sub">Em % do valor final. O fechamento de venda do CRM e as vendas do balcão (PDV) calculam sozinhos; deixe em branco o que você não paga. MEI paga o DAS fixo por mês: não precisa de imposto aqui.</p>
     <div class="taxas-grade">${TAXAS_VENDA.map(([k, nome]) => `<label class="taxa-campo"><span>${nome}</span>
       <span class="taxa-input"><input type="text" inputmode="decimal" data-taxa="${k}" value="${t[k] != null ? String(t[k]).replace(".", ",") : ""}" placeholder="—" aria-label="${nome} em %" /><span>%</span></span></label>`).join("")}</div>
   </div>`;
@@ -1212,7 +1247,9 @@ async function excluirLancamento(tx, mes) {
       apagarLancamento(tx);
     }
   } else {
-    if (!confirm(`Excluir "${tx.desc}"?`)) return;
+    const aviso = tx.estoque && ["venda", "compra"].includes(tx.estoque.origem)
+      ? `\n\nEste lançamento veio do PDV. Excluir aqui não mexe no estoque: para desfazer a ${tx.estoque.origem} por inteiro, cancele lá.` : "";
+    if (!confirm(`Excluir "${tx.desc}"?${aviso}`)) return;
     apagarLancamento(tx);
   }
   saveTxs(); render();
@@ -1703,6 +1740,12 @@ function startApp() {
   document.getElementById("onboarding-root").innerHTML = "";
   document.getElementById("app-root").style.display = "flex";
   applyTheme();
+  // link direto para uma aba (ex.: ../financeiro/#lucro, vindo do PDV)
+  const abaDoLink = (location.hash || "").slice(1);
+  if (/^[a-z]+$/.test(abaDoLink) && document.querySelector(`.nav-item[data-tab="${abaDoLink}"]`)) {
+    state.tab = abaDoLink;
+    document.querySelectorAll(".nav-item[data-tab]").forEach((b) => b.classList.toggle("active", b.dataset.tab === abaDoLink));
+  }
   render();
   atualizarStatusSalvamento();
   ligarAssistenteIA();

@@ -72,7 +72,7 @@ contar() {
 # 1) Sintaxe JS (node --check) — front-end
 # ---------------------------------------------------------------
 passo "1/5 — Sintaxe do JavaScript do front-end"
-for arquivo in public/js/*.js public/financeiro/*.js; do
+for arquivo in public/js/*.js public/financeiro/*.js public/estoque/*.js; do
   contar
   if node --check "$arquivo" 2>/tmp/erro-sintaxe.txt; then
     ok "$arquivo"
@@ -100,7 +100,7 @@ done < <(find server -name "*.js" -not -path "*/node_modules/*" -print0)
 # 2) Chaves { } batendo no CSS
 # ---------------------------------------------------------------
 passo "3/5 — Chaves { } dos arquivos CSS"
-for arquivo in public/css/*.css public/financeiro/*.css; do
+for arquivo in public/css/*.css public/financeiro/*.css public/estoque/*.css; do
   contar
   abre=$(grep -o "{" "$arquivo" | wc -l)
   fecha=$(grep -o "}" "$arquivo" | wc -l)
@@ -115,7 +115,7 @@ done
 # 3) <div> abrindo/fechando em número igual (index.html e login.html)
 # ---------------------------------------------------------------
 passo "4/5 — <div> do HTML"
-for arquivo in public/index.html public/login.html public/inicio.html public/assinatura.html public/dono.html public/financeiro/index.html; do
+for arquivo in public/index.html public/login.html public/inicio.html public/assinatura.html public/dono.html public/financeiro/index.html public/estoque/index.html public/cardapio.html; do
   contar
   abre=$(grep -o "<div" "$arquivo" | wc -l)
   fecha=$(grep -o "</div>" "$arquivo" | wc -l)

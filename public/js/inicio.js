@@ -48,6 +48,18 @@
     })
     .catch(()=>{});
 
+  // Membro de equipe: some o aplicativo que o gestor não liberou (o servidor também bloqueia)
+  fetch('/api/equipe', { headers:{ Authorization:'Bearer ' + token } })
+    .then((res)=> res.ok ? res.json() : null)
+    .then((r)=>{
+      const p = r && r.minhasPermissoes;
+      if(!p || !p.restrito) return;
+      document.querySelectorAll('.inicio-app[data-aba]').forEach((el)=>{
+        if(p.abas && p.abas[el.dataset.aba] === false) el.remove();
+      });
+    })
+    .catch(()=>{});
+
   // Painel do dono: o link só aparece para os donos do sistema
   fetch('/api/dono/sou', { headers:{ Authorization:'Bearer ' + token } })
     .then((res)=> res.ok ? res.json() : null)

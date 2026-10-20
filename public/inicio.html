@@ -10,17 +10,17 @@
 <link rel="apple-touch-icon" href="icons/icon-192.png" />
 <meta name="apple-mobile-web-app-capable" content="yes" />
 <meta name="apple-mobile-web-app-title" content="Livro-Caixa" />
-<link rel="stylesheet" href="css/style.css?v=20261126" />
-<link rel="stylesheet" href="css/inicio.css?v=20261126" />
-<link rel="stylesheet" href="css/transicao-apps.css?v=20261126" />
-<script src="js/transicao-apps.js?v=20261126"></script>
+<link rel="stylesheet" href="css/style.css?v=20261128" />
+<link rel="stylesheet" href="css/inicio.css?v=20261128" />
+<link rel="stylesheet" href="css/transicao-apps.css?v=20261128" />
+<script src="js/transicao-apps.js?v=20261128"></script>
 </head>
 <body class="inicio-body">
   <main class="inicio-wrap">
     <header class="inicio-head">
       <p class="inicio-marca">Livro-Caixa</p>
       <h1 class="inicio-titulo">Olá<span id="inicio-nome"></span>! O que vamos abrir hoje?</h1>
-      <p class="inicio-sub">Os dois aplicativos usam a mesma conta e conversam entre si: as vendas fechadas no CRM aparecem no Controle financeiro.</p>
+      <p class="inicio-sub">Os aplicativos usam a mesma conta e conversam entre si: as vendas fechadas no CRM e as vendas do balcão aparecem no Controle financeiro.</p>
     </header>
 
     <div class="inicio-apps">
@@ -33,13 +33,22 @@
         <span class="inicio-app-acao">Abrir o CRM →</span>
       </a>
 
-      <a class="inicio-app inicio-app-fin" href="financeiro/">
+      <a class="inicio-app inicio-app-fin" href="financeiro/" data-aba="financeiro">
         <span class="inicio-app-icone" aria-hidden="true">
           <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19V5"/><path d="M4 19h16"/><path d="M8 15l3-4 3 2 5-6"/></svg>
         </span>
         <span class="inicio-app-nome">Controle financeiro</span>
         <span class="inicio-app-desc">Receitas, despesas, cartões, objetivos e o lucro de verdade do seu negócio.</span>
         <span class="inicio-app-acao">Abrir o Controle financeiro →</span>
+      </a>
+
+      <a class="inicio-app inicio-app-est" href="estoque/" data-aba="estoque">
+        <span class="inicio-app-icone" aria-hidden="true">
+          <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8l-9-5-9 5 9 5 9-5z"/><path d="M3 8v8l9 5 9-5V8"/><path d="M12 13v8"/></svg>
+        </span>
+        <span class="inicio-app-nome">PDV</span>
+        <span class="inicio-app-desc">Venda no balcão, estoque, clientes com fidelidade e gastos da empresa. Para restaurante, o cardápio digital.</span>
+        <span class="inicio-app-acao">Abrir o PDV →</span>
       </a>
     </div>
 
@@ -49,6 +58,6 @@
       <button type="button" class="inicio-sair" id="inicio-sair">Sair da conta</button>
     </footer>
   </main>
-  <script src="js/inicio.js?v=20261126"></script>
+  <script src="js/inicio.js?v=20261128"></script>
 </body>
 </html>

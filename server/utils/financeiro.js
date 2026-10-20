@@ -169,7 +169,8 @@ async function carregarFinanceiro(userId) {
 
 // Substitui uma seção inteira (já validada por validarSecao), numa transação só
 // opcoes.carregadoEm: quando a tela do financeiro carregou os dados (hora do servidor).
-// Lançamentos criados pelo fechamento de venda do CRM (extras.crmFechamento) são protegidos:
+// Lançamentos criados pelo servidor — fechamento de venda do CRM (extras.crmFechamento) e
+// PDV (extras.estoque) — são protegidos:
 // - os criados depois que a tela abriu não são apagados (a tela ainda não os conhecia);
 // - um que já não existe no banco não volta (o fechamento foi refeito no CRM).
 async function salvarSecaoFinanceiro(userId, secao, valor, opcoes = {}) {
@@ -196,9 +197,9 @@ async function salvarSecaoFinanceiro(userId, secao, valor, opcoes = {}) {
   });
   await transacao(async () => {
     if (secao === 'transacoes') {
-      const doCrm = await query(`SELECT id FROM financeiro_lancamentos WHERE user_id = $1::uuid AND extras ? 'crmFechamento'`, [userId]);
+      const doCrm = await query(`SELECT id FROM financeiro_lancamentos WHERE user_id = $1::uuid AND (extras ? 'crmFechamento' OR extras ? 'estoque')`, [userId]);
       const existentes = new Set(doCrm.rows.map((r) => r.id));
-      for (const [id, { item }] of porId) if (item.crmFechamento && !existentes.has(id)) porId.delete(id);
+      for (const [id, { item }] of porId) if ((item.crmFechamento || item.estoque) && !existentes.has(id)) porId.delete(id);
     }
     const ids = [...porId.keys()];
     if (secao === 'transacoes') {
@@ -206,7 +207,7 @@ async function salvarSecaoFinanceiro(userId, secao, valor, opcoes = {}) {
       // sem carregadoEm (tela antiga): nunca apaga lançamento do CRM que a tela não mandou
       await query(
         `DELETE FROM financeiro_lancamentos WHERE user_id = $1::uuid AND NOT (id = ANY($2::text[]))
-           AND NOT (extras ? 'crmFechamento' AND ($3::timestamptz IS NULL OR created_at > $3::timestamptz))`,
+           AND NOT ((extras ? 'crmFechamento' OR extras ? 'estoque') AND ($3::timestamptz IS NULL OR created_at > $3::timestamptz))`,
         [userId, ids, carregadoEm]
       );
     } else {

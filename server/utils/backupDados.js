@@ -15,6 +15,20 @@ const PossivelLead = require('../models/PossivelLead');
 const Anexo = require('../models/Anexo');
 const RegraComissao = require('../models/RegraComissao');
 const { carregarFinanceiro } = require('./financeiro');
+const Estoque = require('./estoque');
+const Fidelidade = require('./fidelidade');
+const { hojeBR } = require('./fechamento');
+
+// PDV: cópia para consulta (produtos sem as fotos, vendas, compras, pedidos e clientes).
+// Os lançamentos de dinheiro já vão em controleFinanceiro.
+async function caixaEstoque(userId) {
+  const [negocio, produtos, vendas, compras, pedidos, clientes] = await Promise.all([
+    Estoque.lerNegocio(userId), Estoque.listarProdutos(userId), Estoque.listarVendas(userId), Estoque.listarCompras(userId), Estoque.listarPedidos(userId),
+    Fidelidade.listarClientes(userId, {}, hojeBR()),
+  ]);
+  if (!negocio && !produtos.length) return null;
+  return { negocio, produtos: produtos.map(({ foto, ...p }) => p), vendas, compras, pedidos, clientes };
+}
 
 // Monta o objeto de backup de um usuário (usado tanto pelo botão "Backup" quanto pelo backup
 // automático semanal por e-mail). Tokens e segredos nunca entram. Com incluirAnexos=false o
@@ -24,7 +38,7 @@ async function montarBackup(userId, { incluirAnexos = true } = {}) {
   const [
     usuario, cards, columns, funis, tasks, contratos, messages,
     automacoes, fluxos, fluxoExecucoes, camposPersonalizados,
-    mensagensAgendadas, metasVendas, possiveisLeads, regras, anexos, financeiro,
+    mensagensAgendadas, metasVendas, possiveisLeads, regras, anexos, financeiro, estoque,
   ] = await Promise.all([
     User.findById(userId).select('-senhaHash -whatsappBusiness.accessToken -whatsappBusiness.webhookSecret -whatsappBusiness.webhookToken -whatsappBusiness.accountSid -googleCalendar.accessToken -googleCalendar.refreshToken -twoFactorSecret -resetSenhaHash -resetSenhaExpira -icsToken'),
     Card.find({ userId }),
@@ -43,6 +57,7 @@ async function montarBackup(userId, { incluirAnexos = true } = {}) {
     RegraComissao.find({ userId }),
     incluirAnexos ? Anexo.find({ userId }) : Promise.resolve([]),
     carregarFinanceiro(userId),
+    caixaEstoque(userId),
   ]);
 
   const backup = {
@@ -65,6 +80,7 @@ async function montarBackup(userId, { incluirAnexos = true } = {}) {
     possiveisLeads: possiveisLeads.map((d) => d.toJSON()),
     controleFinanceiro: financeiro, // lançamentos, cartões, investimentos, objetivos, perfil e config
   };
+  if (estoque) backup.caixaEstoque = estoque; // só para consulta: a restauração não recria o estoque
   if (incluirAnexos) backup.anexos = anexos.map((d) => d.toJSON());
   return backup;
 }

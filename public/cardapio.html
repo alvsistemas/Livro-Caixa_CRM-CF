@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<title>Cardápio</title>
+<meta name="theme-color" content="#2F5D46" />
+<link rel="icon" href="/icons/icon-192.png" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" />
+<style>
+  :root { --cor: #2F5D46; --cor-txt: #fff; --bg: #FAF8F4; --page: #fff; --ink: #1A1A1A; --muted: #6B6B6B; --rule: #E9E5DD; --erro: #B33F3F; }
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  body { margin: 0; font-family: 'IBM Plex Sans', system-ui, sans-serif; background: var(--bg); color: var(--ink); -webkit-font-smoothing: antialiased; font-size: 15px; padding-bottom: 96px; }
+  button, input, textarea, select { font-family: inherit; font-size: inherit; color: inherit; }
+  .topo { background: var(--cor); color: var(--cor-txt); padding: 28px 18px 22px; }
+  .topo-in { max-width: 760px; margin: 0 auto; }
+  .topo h1 { font-family: 'Fraunces', Georgia, serif; font-size: 30px; line-height: 1.1; margin: 0 0 6px; font-weight: 700; letter-spacing: -.01em; }
+  .topo p { margin: 0; opacity: .9; font-size: 14px; line-height: 1.5; }
+  .info { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
+  .info span { background: rgba(255,255,255,.16); border-radius: 999px; padding: 4px 10px; font-size: 12.5px; font-weight: 600; }
+  .cats { position: sticky; top: 0; z-index: 5; background: var(--bg); border-bottom: 1px solid var(--rule); }
+  .cats-in { max-width: 760px; margin: 0 auto; display: flex; gap: 6px; overflow-x: auto; padding: 10px 16px; scrollbar-width: none; }
+  .cats-in::-webkit-scrollbar { display: none; }
+  .cat { flex-shrink: 0; border: 1px solid var(--rule); background: var(--page); border-radius: 999px; padding: 7px 14px; font-weight: 600; font-size: 13.5px; cursor: pointer; color: var(--muted); }
+  .cat.ativa { background: var(--ink); color: #fff; border-color: var(--ink); }
+  main { max-width: 760px; margin: 0 auto; padding: 8px 16px 24px; }
+  h2.secao { font-family: 'Fraunces', Georgia, serif; font-size: 21px; margin: 26px 0 10px; scroll-margin-top: 64px; }
+  .prod { display: flex; gap: 14px; width: 100%; text-align: left; background: var(--page); border: 1px solid var(--rule); border-radius: 14px; padding: 12px; margin-bottom: 10px; cursor: pointer; }
+  .prod:active { transform: scale(.99); }
+  .prod.esgotado { opacity: .55; cursor: default; }
+  .prod-txt { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+  .prod-nome { font-weight: 700; font-size: 15px; }
+  .prod-desc { font-size: 13px; color: var(--muted); line-height: 1.45; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .prod-preco { font-weight: 700; margin-top: auto; }
+  .prod-foto { width: 96px; height: 96px; border-radius: 10px; background: #EEE center/cover no-repeat; flex-shrink: 0; }
+  .selo { display: inline-block; font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 999px; background: #F3E6C9; color: #7A5A12; margin-right: 4px; }
+  .selo.cinza { background: #EEE; color: #666; }
+  .barra { position: fixed; left: 12px; right: 12px; bottom: calc(12px + env(safe-area-inset-bottom)); max-width: 736px; margin: 0 auto; z-index: 20; }
+  .barra button { width: 100%; display: flex; justify-content: space-between; align-items: center; gap: 12px; border: none; border-radius: 14px; padding: 15px 18px; background: var(--cor); color: var(--cor-txt); font-weight: 700; font-size: 15px; cursor: pointer; box-shadow: 0 10px 30px rgba(0,0,0,.2); }
+  .barra .qtd { background: rgba(255,255,255,.22); border-radius: 999px; padding: 2px 9px; font-size: 13px; }
+  /* folha que sobe de baixo */
+  .fundo { position: fixed; inset: 0; background: rgba(0,0,0,.45); z-index: 50; display: flex; align-items: flex-end; justify-content: center; }
+  .folha { background: var(--page); width: 100%; max-width: 560px; max-height: 92vh; overflow-y: auto; border-radius: 18px 18px 0 0; padding: 0 0 calc(18px + env(safe-area-inset-bottom)); }
+  @media (min-width: 640px) { .fundo { align-items: center; } .folha { border-radius: 18px; } }
+  .folha-foto { height: 210px; background: #EEE center/cover no-repeat; }
+  .folha-in { padding: 18px; }
+  .folha h3 { font-family: 'Fraunces', Georgia, serif; font-size: 22px; margin: 0 0 6px; }
+  .folha-topo { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 16px 18px 0; }
+  .fechar { border: none; background: #F1F1F1; width: 34px; height: 34px; border-radius: 999px; font-size: 20px; cursor: pointer; flex-shrink: 0; }
+  .grupo { margin-top: 18px; }
+  .grupo-tit { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; font-weight: 700; margin-bottom: 8px; }
+  .grupo-tit small { font-weight: 600; color: var(--muted); font-size: 12px; }
+  .esc { display: flex; align-items: center; gap: 10px; padding: 11px 2px; border-bottom: 1px solid var(--rule); cursor: pointer; }
+  .esc input { width: 19px; height: 19px; accent-color: var(--cor); margin: 0; }
+  .esc span { flex: 1; }
+  .esc b { font-weight: 600; font-size: 14px; }
+  .esc.off { opacity: .5; cursor: default; }
+  .campo { display: flex; flex-direction: column; gap: 5px; margin-top: 12px; }
+  .campo span { font-size: 13px; font-weight: 600; color: var(--muted); }
+  .campo input, .campo textarea { border: 1px solid var(--rule); border-radius: 10px; padding: 11px 12px; background: #fff; outline: none; width: 100%; }
+  .campo textarea { min-height: 64px; resize: vertical; }
+  .campo input:focus, .campo textarea:focus { border-color: var(--ink); }
+  .rodape-folha { display: flex; gap: 10px; align-items: center; margin-top: 18px; }
+  .contador { display: inline-flex; align-items: center; border: 1px solid var(--rule); border-radius: 12px; overflow: hidden; flex-shrink: 0; }
+  .contador button { width: 42px; height: 46px; border: none; background: #fff; font-size: 20px; cursor: pointer; }
+  .contador b { min-width: 30px; text-align: center; }
+  .btn { flex: 1; border: none; border-radius: 12px; padding: 14px 16px; min-height: 48px; background: var(--cor); color: var(--cor-txt); font-weight: 700; cursor: pointer; display: flex; justify-content: space-between; align-items: center; gap: 10px; font-size: 15px; text-decoration: none; }
+  .btn.cheio { justify-content: center; }
+  .btn:disabled { opacity: .5; cursor: not-allowed; }
+  .btn.claro { background: #F1F1F1; color: var(--ink); }
+  .item-cart { display: flex; gap: 10px; padding: 12px 0; border-bottom: 1px solid var(--rule); }
+  .item-cart .t { flex: 1; min-width: 0; }
+  .item-cart small { display: block; color: var(--muted); font-size: 12.5px; }
+  .mini { display: inline-flex; align-items: center; border: 1px solid var(--rule); border-radius: 9px; overflow: hidden; }
+  .mini button { width: 32px; height: 32px; border: none; background: #fff; cursor: pointer; font-size: 16px; }
+  .mini b { min-width: 24px; text-align: center; font-size: 14px; }
+  .linha { display: flex; justify-content: space-between; padding: 5px 0; font-size: 14px; }
+  .linha.total { font-weight: 700; font-size: 17px; border-top: 1px solid var(--rule); margin-top: 6px; padding-top: 10px; }
+  .opcoes2 { display: flex; gap: 8px; flex-wrap: wrap; }
+  .op2 { flex: 1; min-width: 120px; border: 1px solid var(--rule); border-radius: 12px; padding: 12px; background: #fff; cursor: pointer; font-weight: 600; text-align: left; }
+  .op2 small { display: block; color: var(--muted); font-weight: 500; font-size: 12px; margin-top: 2px; }
+  .op2.ativa { border-color: var(--cor); box-shadow: 0 0 0 1px var(--cor); }
+  .erro { color: var(--erro); font-weight: 600; font-size: 13.5px; margin: 12px 0 0; }
+  .aviso { background: #F5F1E8; border-radius: 12px; padding: 12px 14px; font-size: 13.5px; line-height: 1.5; margin-top: 14px; }
+  .centro { text-align: center; padding: 70px 20px; color: var(--muted); line-height: 1.6; }
+  .centro h2 { font-family: 'Fraunces', Georgia, serif; color: var(--ink); font-size: 24px; margin: 0 0 8px; }
+  .ok-icone { width: 64px; height: 64px; border-radius: 999px; background: var(--cor); color: var(--cor-txt); display: flex; align-items: center; justify-content: center; font-size: 30px; margin: 0 auto 16px; }
+  .rodape { text-align: center; font-size: 12px; color: var(--muted); padding: 10px 16px 30px; }
+  .rodape a { color: inherit; }
+</style>
+</head>
+<body>
+<div id="app"><div class="centro">Carregando o cardápio…</div></div>
+<div id="folha"></div>
+<script>
+(function () {
+  "use strict";
+  const slug = decodeURIComponent((location.pathname.split("/c/")[1] || "").split("/")[0] || "");
+  const CHAVE = "carrinho-cardapio-" + slug;
+  const $ = (s) => document.querySelector(s);
+  const esc = (s) => String(s == null ? "" : s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  const fmt = (n) => (Number(n) || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+  let C = null;            // o cardápio
+  let carrinho = [];       // [{ produtoId, variacaoId, qtd, opcoes: {grupo: [idx]}, obs, nome, unit, detalhes }]
+  let catAtiva = "";
+  const dados = { nome: "", telefone: "", tipo: "", endereco: "", pagamento: "pix", troco: "", obs: "" };
+  // programa de fidelidade: o que o telefone digitado tem (consultado no servidor) e as escolhas do cliente
+  const fid = { tel: "", info: null, participar: false, usar: false };
+  try { carrinho = JSON.parse(localStorage.getItem(CHAVE) || "[]") || []; Object.assign(dados, JSON.parse(localStorage.getItem("dados-cardapio") || "{}")); } catch (e) { carrinho = []; }
+  const guardar = () => { try { localStorage.setItem(CHAVE, JSON.stringify(carrinho)); localStorage.setItem("dados-cardapio", JSON.stringify({ nome: dados.nome, telefone: dados.telefone, endereco: dados.endereco })); } catch (e) { /* sem armazenamento */ } };
+
+  function corDoTexto(hex) {
+    const n = parseInt(hex.slice(1), 16); const r = n >> 16, g = (n >> 8) & 255, b = n & 255;
+    return (0.299 * r + 0.587 * g + 0.114 * b) > 160 ? "#1A1A1A" : "#fff";
+  }
+
+  async function carregar() {
+    try {
+      const res = await fetch("/api/publico/cardapio/" + encodeURIComponent(slug));
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(d.error || "Cardápio não encontrado.");
+      C = d;
+    } catch (e) {
+      $("#app").innerHTML = `<div class="centro"><h2>Ops!</h2>${esc(e.message)}</div>`;
+      return;
+    }
+    document.title = C.nome + " · Cardápio";
+    document.documentElement.style.setProperty("--cor", C.cor);
+    document.documentElement.style.setProperty("--cor-txt", corDoTexto(C.cor));
+    document.querySelector('meta[name="theme-color"]').content = C.cor;
+    if (!dados.tipo) dados.tipo = C.aceitaEntrega ? "entrega" : "retirada";
+    // tira do carrinho guardado o que não existe mais
+    carrinho = carrinho.filter((i) => C.produtos.some((p) => p.id === i.produtoId));
+    desenhar();
+  }
+
+  function precoBase(p, variacaoId) {
+    const v = p.variacoes.find((x) => x.id === variacaoId);
+    return v ? v.preco : p.preco;
+  }
+  function unitDe(p, variacaoId, sel) {
+    let u = precoBase(p, variacaoId);
+    (p.opcoes || []).forEach((g, gi) => (sel[gi] || []).forEach((x) => { u += (g.escolhas[x] && g.escolhas[x].preco) || 0; }));
+    return Math.round(u * 100) / 100;
+  }
+  const aPartir = (p) => { const ps = p.variacoes.filter((v) => !v.esgotado).map((v) => v.preco); return ps.length ? Math.min(...ps) : (p.variacoes.length ? Math.min(...p.variacoes.map((v) => v.preco)) : p.preco); };
+  const totalCarrinho = () => carrinho.reduce((a, i) => a + i.qtd * i.unit, 0);
+  const qtdCarrinho = () => carrinho.reduce((a, i) => a + i.qtd, 0);
+
+  function desenhar() {
+    const f = C.fidelidade || { modelo: "nenhum" };
+    const selo = f.modelo === "cashback" ? `🎁 ${String(f.pct).replace(".", ",")}% de cashback` : f.modelo === "selos" ? `🎁 A cada ${f.meta} pedidos: ${f.premioTexto || fmt(f.premioValor) + " de desconto"}` : "";
+    const info = [selo, C.horario, C.aceitaEntrega ? (C.taxaEntrega ? `Entrega ${fmt(C.taxaEntrega)}` : "Entrega grátis") : "", C.aceitaRetirada ? "Retirada no local" : "", C.pedidoMinimo ? `Pedido mínimo ${fmt(C.pedidoMinimo)}` : ""].filter(Boolean);
+    const porCat = C.categorias.map((cat) => ({ cat, itens: C.produtos.filter((p) => p.categoria === cat) })).filter((x) => x.itens.length);
+    $("#app").innerHTML = `
+      <header class="topo"><div class="topo-in"><h1>${esc(C.nome)}</h1>${C.frase ? `<p>${esc(C.frase)}</p>` : ""}${info.length ? `<div class="info">${info.map((i) => `<span>${esc(i)}</span>`).join("")}</div>` : ""}</div></header>
+      ${porCat.length > 1 ? `<nav class="cats"><div class="cats-in">${porCat.map((x, i) => `<button class="cat ${i === 0 ? "ativa" : ""}" data-cat="${i}">${esc(x.cat)}</button>`).join("")}</div></nav>` : ""}
+      <main>${porCat.length ? porCat.map((x, i) => `<h2 class="secao" id="cat-${i}">${esc(x.cat)}</h2>${x.itens.map((p) => `
+        <button class="prod ${p.esgotado ? "esgotado" : ""}" data-prod="${p.id}" ${p.esgotado ? "disabled" : ""}>
+          <span class="prod-txt"><span class="prod-nome">${esc(p.nome)}</span>${p.descricao ? `<span class="prod-desc">${esc(p.descricao)}</span>` : ""}
+            <span>${p.esgotado ? `<span class="selo cinza">esgotado</span>` : p.destaque ? `<span class="selo">mais pedido</span>` : ""}</span>
+            <span class="prod-preco">${p.variacoes.length ? "a partir de " : ""}${fmt(aPartir(p))}</span></span>
+          ${p.foto ? `<span class="prod-foto" style="background-image:url('${esc(p.foto)}')"></span>` : ""}
+        </button>`).join("")}`).join("") : `<div class="centro">O cardápio ainda está vazio.</div>`}</main>
+      <p class="rodape">Pedido enviado pelo WhatsApp. O pagamento é feito na entrega ou na retirada.<br/>Cardápio digital feito com o <a href="/" target="_blank" rel="noopener">Livro-Caixa</a></p>
+      <div class="barra" ${carrinho.length ? "" : "hidden"}><button data-abrir-carrinho><span><span class="qtd">${qtdCarrinho()}</span> Ver pedido</span><span>${fmt(totalCarrinho())}</span></button></div>`;
+  }
+
+  /* ---------- produto ---------- */
+  let P = null; // { p, variacaoId, sel, qtd, obs, erro }
+  function abrirProduto(id) {
+    const p = C.produtos.find((x) => x.id === id);
+    if (!p || p.esgotado) return;
+    const livres = p.variacoes.filter((v) => !v.esgotado);
+    const sel = {};
+    (p.opcoes || []).forEach((g, gi) => { sel[gi] = g.tipo === "um" ? [0] : []; });
+    P = { p, variacaoId: livres.length === 1 ? livres[0].id : (livres[0] ? livres[0].id : null), sel, qtd: 1, obs: "", erro: "" };
+    desenharProduto();
+  }
+  function desenharProduto() {
+    const { p } = P;
+    const unit = unitDe(p, P.variacaoId, P.sel);
+    $("#folha").innerHTML = `<div class="fundo" data-fechar><div class="folha" role="dialog" aria-modal="true">
+      ${p.foto ? `<div class="folha-foto" style="background-image:url('${esc(p.foto)}')"></div>` : ""}
+      <div class="folha-in">
+        <div style="display:flex;justify-content:space-between;gap:10px"><h3>${esc(p.nome)}</h3><button class="fechar" data-fechar-btn aria-label="Fechar">×</button></div>
+        ${p.descricao ? `<p style="margin:0;color:var(--muted);line-height:1.5;font-size:14px">${esc(p.descricao)}</p>` : ""}
+        ${p.variacoes.length ? `<div class="grupo"><div class="grupo-tit">Escolha uma opção <small>obrigatório</small></div>${p.variacoes.map((v) => `
+          <label class="esc ${v.esgotado ? "off" : ""}"><input type="radio" name="var" data-var="${v.id}" ${P.variacaoId === v.id ? "checked" : ""} ${v.esgotado ? "disabled" : ""} /><span><b>${esc(v.nome)}</b>${v.esgotado ? " · esgotado" : ""}</span><b>${fmt(v.preco)}</b></label>`).join("")}</div>` : ""}
+        ${(p.opcoes || []).map((g, gi) => `<div class="grupo"><div class="grupo-tit">${esc(g.nome)} <small>${g.tipo === "um" ? "escolha 1" : "opcional"}</small></div>${g.escolhas.map((e, ei) => `
+          <label class="esc"><input type="${g.tipo === "um" ? "radio" : "checkbox"}" name="g${gi}" data-g="${gi}" data-e="${ei}" ${(P.sel[gi] || []).includes(ei) ? "checked" : ""} /><span><b>${esc(e.nome)}</b></span>${e.preco ? `<b>+ ${fmt(e.preco)}</b>` : ""}</label>`).join("")}</div>`).join("")}
+        <label class="campo"><span>Alguma observação?</span><textarea data-obs maxlength="120" placeholder="Ex.: sem cebola">${esc(P.obs)}</textarea></label>
+        ${P.erro ? `<p class="erro">${esc(P.erro)}</p>` : ""}
+        <div class="rodape-folha">
+          <span class="contador"><button data-q="-1" aria-label="Menos">−</button><b>${P.qtd}</b><button data-q="1" aria-label="Mais">+</button></span>
+          <button class="btn" data-adicionar><span>Adicionar</span><span>${fmt(unit * P.qtd)}</span></button>
+        </div>
+      </div></div></div>`;
+  }
+  function adicionar() {
+    const { p } = P;
+    if (p.variacoes.length && !P.variacaoId) { P.erro = "Escolha uma opção."; desenharProduto(); return; }
+    const v = p.variacoes.find((x) => x.id === P.variacaoId);
+    const detalhes = [];
+    (p.opcoes || []).forEach((g, gi) => (P.sel[gi] || []).forEach((x) => g.escolhas[x] && detalhes.push(g.escolhas[x].nome)));
+    if (P.obs.trim()) detalhes.push("obs: " + P.obs.trim());
+    carrinho.push({ produtoId: p.id, variacaoId: P.variacaoId, qtd: P.qtd, opcoes: P.sel, obs: P.obs.trim(), nome: v ? (/[()]/.test(v.nome) ? `${p.nome} · ${v.nome}` : `${p.nome} (${v.nome})`) : p.nome, unit: unitDe(p, P.variacaoId, P.sel), detalhes });
+    guardar(); P = null; $("#folha").innerHTML = ""; desenhar();
+  }
+
+  /* ---------- carrinho e envio ---------- */
+  let K = { erro: "", enviando: false };
+  function abrirCarrinho() {
+    setTimeout(consultarFidelidade, 0);
+    const sub = totalCarrinho();
+    const taxa = dados.tipo === "entrega" ? C.taxaEntrega : 0;
+    const faltaMin = C.pedidoMinimo && sub < C.pedidoMinimo;
+    $("#folha").innerHTML = `<div class="fundo" data-fechar><div class="folha" role="dialog" aria-modal="true">
+      <div class="folha-topo"><h3 style="font-family:Fraunces,Georgia,serif;font-size:22px;margin:0">Seu pedido</h3><button class="fechar" data-fechar-btn aria-label="Fechar">×</button></div>
+      <div class="folha-in">
+        ${carrinho.map((i, idx) => `<div class="item-cart"><div class="t"><b>${esc(i.nome)}</b>${i.detalhes.length ? `<small>${esc(i.detalhes.join(", "))}</small>` : ""}<small>${fmt(i.unit)} cada</small></div>
+          <div style="text-align:right"><span class="mini"><button data-iq="${idx}" data-d="-1" aria-label="Menos">−</button><b>${i.qtd}</b><button data-iq="${idx}" data-d="1" aria-label="Mais">+</button></span><div style="font-weight:700;margin-top:6px">${fmt(i.qtd * i.unit)}</div></div></div>`).join("")}
+        <div style="margin-top:12px">
+          <div class="linha"><span>Subtotal</span><span>${fmt(sub)}</span></div>
+          ${taxa ? `<div class="linha"><span>Entrega</span><span>${fmt(taxa)}</span></div>` : ""}
+          <div class="linha total"><span>Total</span><span>${fmt(sub + taxa)}</span></div>
+        </div>
+        ${faltaMin ? `<p class="aviso">O pedido mínimo é ${fmt(C.pedidoMinimo)}. Faltam ${fmt(C.pedidoMinimo - sub)}.</p>` : ""}
+        <div class="grupo"><div class="grupo-tit">Como você quer receber?</div><div class="opcoes2">
+          ${C.aceitaEntrega ? `<button class="op2 ${dados.tipo === "entrega" ? "ativa" : ""}" data-tipo="entrega">🛵 Entrega<small>${C.taxaEntrega ? fmt(C.taxaEntrega) : "grátis"}</small></button>` : ""}
+          ${C.aceitaRetirada ? `<button class="op2 ${dados.tipo === "retirada" ? "ativa" : ""}" data-tipo="retirada">🏃 Retirar no local<small>sem taxa</small></button>` : ""}
+        </div></div>
+        <label class="campo"><span>Seu nome</span><input data-d="nome" value="${esc(dados.nome)}" maxlength="60" autocomplete="name" /></label>
+        <label class="campo"><span>Seu WhatsApp</span><input data-d="telefone" value="${esc(dados.telefone)}" inputmode="tel" autocomplete="tel" placeholder="(11) 98888-7777" /></label>
+        <div id="fid-box">${fidelidadeHtml()}</div>
+        ${dados.tipo === "entrega" ? `<label class="campo"><span>Endereço de entrega</span><textarea data-d="endereco" maxlength="200" placeholder="Rua, número, bairro, complemento e ponto de referência">${esc(dados.endereco)}</textarea></label>` : ""}
+        <div class="grupo"><div class="grupo-tit">Pagamento <small>na ${dados.tipo === "entrega" ? "entrega" : "retirada"}</small></div><div class="opcoes2">
+          ${[["pix", "Pix"], ["dinheiro", "Dinheiro"], ["cartao", "Cartão"]].map(([k, t]) => `<button class="op2 ${dados.pagamento === k ? "ativa" : ""}" data-pag="${k}">${t}</button>`).join("")}
+        </div></div>
+        ${dados.pagamento === "dinheiro" ? `<label class="campo"><span>Troco para quanto?</span><input data-d="troco" value="${esc(dados.troco)}" maxlength="30" placeholder="Ex.: R$ 100 (ou deixe vazio)" /></label>` : ""}
+        <label class="campo"><span>Observação do pedido</span><input data-d="obs" value="${esc(dados.obs)}" maxlength="300" placeholder="Opcional" /></label>
+        ${K.erro ? `<p class="erro">${esc(K.erro)}</p>` : ""}
+        <div class="rodape-folha"><button class="btn" data-enviar ${faltaMin || K.enviando || !carrinho.length ? "disabled" : ""}><span>${K.enviando ? "Enviando…" : "Enviar pelo WhatsApp"}</span><span>${fmt(sub + taxa)}</span></button></div>
+        <p style="font-size:12.5px;color:var(--muted);text-align:center;margin:12px 0 0">O WhatsApp abre com o pedido pronto. É só tocar em enviar.</p>
+      </div></div></div>`;
+  }
+  function fidelidadeHtml() {
+    const f = C.fidelidade || { modelo: "nenhum" };
+    if (f.modelo === "nenhum") return "";
+    const i = fid.info;
+    const regra = f.modelo === "cashback" ? `${String(f.pct).replace(".", ",")}% de cada pedido volta como crédito${f.validadeDias ? ` (vale ${f.validadeDias} dias)` : ""}` : `a cada ${f.meta} pedidos você ganha ${f.premioTexto || fmt(f.premioValor) + " de desconto"}`;
+    if (i && i.participa) {
+      if (f.modelo === "cashback") {
+        return i.saldo > 0
+          ? `<div class="aviso"><label class="esc" style="border:none;padding:0"><input type="checkbox" data-fid="usar" ${fid.usar ? "checked" : ""} /><span><b>Usar meu cashback de ${fmt(i.saldo)}</b><br/><small style="color:var(--muted)">O restaurante desconta quando confirmar o pedido.</small></span></label></div>`
+          : `<p class="aviso">🎁 Você ganha ${fmt(totalCarrinho() * f.pct / 100)} de cashback com este pedido.</p>`;
+      }
+      return i.podePremio
+        ? `<div class="aviso"><label class="esc" style="border:none;padding:0"><input type="checkbox" data-fid="usar" ${fid.usar ? "checked" : ""} /><span><b>Usar meu prêmio: ${esc(f.premioTexto || fmt(f.premioValor) + " de desconto")}</b><br/><small style="color:var(--muted)">O restaurante aplica quando confirmar o pedido.</small></span></label></div>`
+        : `<p class="aviso">🎁 Você tem ${i.selos} de ${f.meta} pedidos no cartão fidelidade.</p>`;
+    }
+    if (dados.telefone.replace(/\D/g, "").length < 10) return `<p class="aviso">🎁 Programa de fidelidade: ${esc(regra)}.</p>`;
+    return `<div class="aviso"><label class="esc" style="border:none;padding:0"><input type="checkbox" data-fid="participar" ${fid.participar ? "checked" : ""} /><span><b>Quero participar do programa de fidelidade</b><br/><small style="color:var(--muted)">${esc(regra[0].toUpperCase() + regra.slice(1))}. Seu nome e telefone ficam só com o ${esc(C.nome)}.</small></span></label></div>`;
+  }
+  let fidTimer = null;
+  function consultarFidelidade() {
+    const f = C.fidelidade || { modelo: "nenhum" };
+    const tel = dados.telefone.replace(/\D/g, "");
+    if (f.modelo === "nenhum") return;
+    if (tel.length < 10) { if (fid.info) { fid.info = null; fid.tel = ""; atualizarFid(); } return; }
+    if (tel === fid.tel) return;
+    clearTimeout(fidTimer);
+    fidTimer = setTimeout(async () => {
+      try {
+        const res = await fetch("/api/publico/cardapio/" + encodeURIComponent(slug) + "/fidelidade", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ telefone: tel }) });
+        if (!res.ok) return;
+        fid.info = await res.json(); fid.tel = tel; fid.usar = false;
+        atualizarFid();
+      } catch (e) { /* sem internet: segue sem o programa */ }
+    }, 400);
+  }
+  function atualizarFid() { const b = document.getElementById("fid-box"); if (b) b.innerHTML = fidelidadeHtml(); }
+  async function enviar() {
+    K.erro = "";
+    if (!dados.nome.trim()) K.erro = "Informe seu nome.";
+    else if (dados.telefone.replace(/\D/g, "").length < 10) K.erro = "Informe seu WhatsApp com DDD.";
+    else if (dados.tipo === "entrega" && dados.endereco.trim().length < 5) K.erro = "Informe o endereço de entrega.";
+    if (K.erro) { abrirCarrinho(); return; }
+    K.enviando = true; abrirCarrinho();
+    try {
+      const res = await fetch("/api/publico/cardapio/" + encodeURIComponent(slug) + "/pedido", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...dados, participar: fid.participar, usarBeneficio: fid.usar, itens: carrinho.map((i) => ({ produtoId: i.produtoId, variacaoId: i.variacaoId, qtd: i.qtd, opcoes: i.opcoes, obs: i.obs })) }),
+      });
+      const r = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(r.error || "Não foi possível enviar o pedido.");
+      carrinho = []; dados.obs = ""; dados.troco = ""; fid.usar = false; guardar();
+      K = { erro: "", enviando: false };
+      $("#folha").innerHTML = "";
+      $("#app").innerHTML = `<div class="centro"><div class="ok-icone">✓</div><h2>Pedido #${String(r.numero).padStart(3, "0")} pronto!</h2>
+        <p>Toque no botão para mandar o pedido pelo WhatsApp do ${esc(C.nome)}.<br/>Total: <b>${fmt(r.total)}</b></p>
+        <p style="max-width:340px;margin:20px auto 0"><a class="btn cheio" href="${esc(r.whatsapp)}" target="_blank" rel="noopener">Abrir o WhatsApp</a></p>
+        <p style="margin-top:22px"><a href="" style="color:var(--muted)">Voltar ao cardápio</a></p></div>`;
+      window.scrollTo(0, 0);
+      setTimeout(() => { window.location.href = r.whatsapp; }, 600);
+    } catch (e) { K.enviando = false; K.erro = e.message; abrirCarrinho(); }
+  }
+
+  /* ---------- eventos ---------- */
+  document.addEventListener("click", (ev) => {
+    const t = ev.target;
+    if (t.matches("[data-fechar]") || t.closest("[data-fechar-btn]")) { P = null; $("#folha").innerHTML = ""; return; }
+    const cat = t.closest("[data-cat]");
+    if (cat) { const alvo = document.getElementById("cat-" + cat.dataset.cat); if (alvo) alvo.scrollIntoView({ behavior: "smooth" }); return; }
+    const prod = t.closest("[data-prod]"); if (prod) { abrirProduto(prod.dataset.prod); return; }
+    if (t.closest("[data-abrir-carrinho]")) { abrirCarrinho(); return; }
+    const q = t.closest("[data-q]"); if (q && P) { P.qtd = Math.min(50, Math.max(1, P.qtd + Number(q.dataset.q))); desenharProduto(); return; }
+    if (t.closest("[data-adicionar]") && P) { adicionar(); return; }
+    const iq = t.closest("[data-iq]");
+    if (iq) { const i = carrinho[Number(iq.dataset.iq)]; i.qtd += Number(iq.dataset.d); if (i.qtd <= 0) carrinho.splice(Number(iq.dataset.iq), 1); else if (i.qtd > 50) i.qtd = 50; guardar(); desenhar(); if (carrinho.length) abrirCarrinho(); else $("#folha").innerHTML = ""; return; }
+    const tipo = t.closest("[data-tipo]"); if (tipo) { dados.tipo = tipo.dataset.tipo; abrirCarrinho(); return; }
+    const pag = t.closest("[data-pag]"); if (pag) { dados.pagamento = pag.dataset.pag; abrirCarrinho(); return; }
+    if (t.closest("[data-enviar]")) { enviar(); return; }
+  });
+  document.addEventListener("change", (ev) => {
+    const t = ev.target;
+    if (t.matches("[data-fid]")) { fid[t.dataset.fid] = t.checked; return; }
+    if (!P) return;
+    if (t.matches("[data-var]")) { P.variacaoId = t.dataset.var; P.erro = ""; desenharProduto(); return; }
+    if (t.matches("[data-g]")) {
+      const gi = Number(t.dataset.g), ei = Number(t.dataset.e), g = P.p.opcoes[gi];
+      if (g.tipo === "um") P.sel[gi] = [ei];
+      else { const s = new Set(P.sel[gi] || []); if (t.checked) s.add(ei); else s.delete(ei); P.sel[gi] = [...s]; }
+      desenharProduto();
+    }
+  });
+  document.addEventListener("input", (ev) => {
+    const t = ev.target;
+    if (t.matches("[data-obs]") && P) { P.obs = t.value; return; }
+    if (t.matches("[data-d]")) { dados[t.dataset.d] = t.value; guardar(); if (t.dataset.d === "telefone") { consultarFidelidade(); if (!fid.info) atualizarFid(); } }
+  });
+  document.addEventListener("keydown", (ev) => { if (ev.key === "Escape" && $("#folha").innerHTML) { P = null; $("#folha").innerHTML = ""; } });
+  // destaca a categoria que está na tela
+  window.addEventListener("scroll", () => {
+    const secs = [...document.querySelectorAll("h2.secao")];
+    let atual = 0;
+    secs.forEach((s, i) => { if (s.getBoundingClientRect().top < 120) atual = i; });
+    if (String(atual) === catAtiva) return;
+    catAtiva = String(atual);
+    document.querySelectorAll(".cat").forEach((b) => b.classList.toggle("ativa", b.dataset.cat === catAtiva));
+    const b = document.querySelector(`.cat[data-cat="${catAtiva}"]`); if (b) b.scrollIntoView({ block: "nearest", inline: "center" });
+  }, { passive: true });
+  carregar();
+})();
+</script>
+</body>
+</html>

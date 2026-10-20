@@ -18,6 +18,7 @@ const ABAS = [
   { chave: 'import-export', nome: 'Importar/Exportar' },
   { chave: 'tarefas', nome: 'Agenda/Tarefas' },
   { chave: 'financeiro', nome: 'Controle financeiro', dica: 'O aplicativo financeiro da própria pessoa' },
+  { chave: 'estoque', nome: 'PDV', dica: 'Venda no balcão, produtos e estoque, clientes, compras e notas de gasto' },
 ];
 const FUNCOES = [
   { chave: 'excluirClientes', nome: 'Excluir clientes' },
@@ -84,6 +85,7 @@ function regraDoCaminho(metodo, caminho) {
     return escrita ? { grupo: 'funcoes', chave: 'fechamentoVenda' } : null;
   }
   if (caminho.startsWith('/api/financeiro')) return { grupo: 'abas', chave: 'financeiro' };
+  if (caminho.startsWith('/api/estoque')) return { grupo: 'abas', chave: 'estoque' };
   if (caminho.startsWith('/api/backup/exportar') || caminho.startsWith('/api/backup/automatico')) return { grupo: 'funcoes', chave: 'exportarDados' };
   if (metodo === 'DELETE' && /^\/api\/cards\/[^/]+$/.test(caminho)) return { grupo: 'funcoes', chave: 'excluirClientes' };
   if (escrita && (caminho.startsWith('/api/funis') || /^\/api\/columns(\/|$)/.test(caminho))) return { grupo: 'funcoes', chave: 'editarFunis' };
