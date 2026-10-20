@@ -55,3 +55,6 @@
 .instalar-ok{ width:100%; border:none; border-radius:10px; padding:12px; font-weight:700; background:var(--ink); color:var(--paper, #fff); cursor:pointer; }
 @media (min-width:641px){ .instalar-fundo{ align-items:center; } .instalar-janela{ border-radius:18px; } }
 @media (max-width:640px){ .instalar-app{ flex-wrap:wrap; } .instalar-botoes{ width:100%; } .instalar-btn{ flex:1; } }
+
+.instalar-app.instalar-feito{ border-color:#2F6F4E; background:rgba(47,111,78,.08); }
+.instalar-app[hidden], .instalar-fundo[hidden], .inicio-assinatura[hidden]{ display:none !important; }
