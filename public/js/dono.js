@@ -249,6 +249,25 @@
     catch(err){ erro.textContent = err.message; erro.hidden = false; }
   });
 
+  /* ---------- restaurante de exemplo ---------- */
+  $('dono-demo-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const erro = $('dono-demo-erro'); const ok = $('dono-demo-ok'); const btn = $('dono-demo-btn');
+    erro.hidden = true; ok.hidden = true; btn.disabled = true; btn.textContent = 'Criando… (leva alguns segundos)';
+    try{
+      const r = await api('POST', '/demo-restaurante', { whatsapp: $('dono-demo-whats').value });
+      const link = `${location.origin}/c/${r.slug}`;
+      ok.innerHTML = `<div class="ass-cartao" style="margin-top:12px;background:var(--line, #f4f4f4)">
+        <p class="ass-texto" style="margin-top:0"><b>Pronto!</b> Guarde este acesso (a senha não aparece de novo):</p>
+        <p class="ass-texto">E-mail: <b>${esc(r.email)}</b><br/>Senha: <b>${esc(r.senha)}</b></p>
+        <p class="ass-texto">Para entrar, saia da sua conta (ou use uma janela anônima) e faça login com esses dados. Depois abra o <b>PDV</b>.</p>
+        <p class="ass-texto">Cardápio digital: ${r.cardapioAtivo ? `<a href="${esc(link)}" target="_blank" rel="noopener">${esc(link)}</a>` : 'desligado (informe um WhatsApp para ligar; dá para fazer depois, na aba Cardápio digital da conta de exemplo)'}</p>
+      </div>`;
+      ok.hidden = false;
+    }catch(err){ erro.textContent = err.message; erro.hidden = false; }
+    btn.disabled = false; btn.textContent = 'Criar restaurante de exemplo';
+  });
+
   /* ---------- equipes: permissões ---------- */
   let equipes = null;
   let catalogo = null;

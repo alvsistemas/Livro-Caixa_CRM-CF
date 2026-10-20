@@ -255,7 +255,7 @@
       `<button class="btn claro" data-a="nova-compra">Registrar compra</button><button class="btn acento" data-a="ir" data-tab="vender">Nova venda</button>`);
     html += primeirosPassos();
     if (!r) return html + carregandoHtml;
-    if (restaurante() && r.pedidosNovos) html += `<div class="faixa"><span><b>${r.pedidosNovos === 1 ? "1 pedido novo" : `${r.pedidosNovos} pedidos novos`}</b> chegou pelo cardápio digital.</span><button class="btn mini acento" data-a="ir" data-tab="pedidos">Ver pedidos</button></div>`;
+    if (restaurante() && r.pedidosNovos) html += `<div class="faixa"><span><b>${r.pedidosNovos === 1 ? "1 pedido novo" : `${r.pedidosNovos} pedidos novos`}</b> ${r.pedidosNovos === 1 ? "chegou" : "chegaram"} pelo cardápio digital.</span><button class="btn mini acento" data-a="ir" data-tab="pedidos">Ver pedidos</button></div>`;
     html += `<div class="grade grade-4">
       <div class="card"><p class="kpi-rotulo">Vendas hoje</p><p class="kpi-valor">${fmt(r.hoje.total)}</p><p class="kpi-nota">${r.hoje.vendas === 1 ? "1 venda" : `${r.hoje.vendas} vendas`}</p></div>
       <div class="card"><p class="kpi-rotulo">Vendido em ${mes}</p><p class="kpi-valor">${fmt(r.mes.total)}</p><p class="kpi-nota">${r.mes.vendas === 1 ? "1 venda" : `${r.mes.vendas} vendas`}${r.mes.vendas ? ` · ticket médio ${fmt(r.mes.total / r.mes.vendas)}` : ""}</p></div>

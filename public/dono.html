@@ -8,9 +8,9 @@
 <meta name="theme-color" content="#141414" />
 <link rel="icon" href="icons/icon-192.png" />
 <script>try{document.documentElement.setAttribute('data-theme',localStorage.getItem('darkMode')==='1'?'dark':'light');}catch(e){}</script>
-<link rel="stylesheet" href="css/style.css?v=20261132" />
-<link rel="stylesheet" href="css/assinatura.css?v=20261132" />
-<link rel="stylesheet" href="css/dono.css?v=20261132" />
+<link rel="stylesheet" href="css/style.css?v=20261134" />
+<link rel="stylesheet" href="css/assinatura.css?v=20261134" />
+<link rel="stylesheet" href="css/dono.css?v=20261134" />
 </head>
 <body class="ass-body">
   <main class="ass-wrap dono-wrap">
@@ -67,6 +67,19 @@
     <section aria-labelledby="t-saude">
       <h2 class="ass-h2" id="t-saude">Saúde do sistema</h2>
       <div class="dono-saude" id="dono-saude"><p class="ass-carregando">Conferindo…</p></div>
+    </section>
+
+    <section aria-labelledby="t-demo">
+      <h2 class="ass-h2" id="t-demo">Restaurante de exemplo</h2>
+      <div class="ass-cartao">
+        <p class="ass-texto" style="margin-top:0">Cria uma conta nova, liberada sem cobrança, com o PDV todo preenchido: cardápio digital no ar, pizzas e massas com tamanhos e adicionais, estoque de bebidas, compras, notas de gasto, clientes com cartão fidelidade, vendas dos últimos 45 dias e pedidos esperando confirmação. Serve para conhecer e para mostrar a um restaurante. Os dados e telefones dos clientes são fictícios.</p>
+        <form class="dono-add" id="dono-demo-form">
+          <input type="tel" id="dono-demo-whats" placeholder="WhatsApp que recebe os pedidos do cardápio (ex.: o seu)" aria-label="WhatsApp do cardápio de exemplo" />
+          <button type="submit" class="ass-btn ass-btn-forte" id="dono-demo-btn">Criar restaurante de exemplo</button>
+        </form>
+        <p class="ass-erro" id="dono-demo-erro" role="alert" hidden></p>
+        <div id="dono-demo-ok" hidden></div>
+      </div>
     </section>
 
     <section aria-labelledby="t-donos">
@@ -151,6 +164,6 @@
       </div>
     </div>
   </div>
-  <script src="js/dono.js?v=20261132"></script>
+  <script src="js/dono.js?v=20261134"></script>
 </body>
 </html>

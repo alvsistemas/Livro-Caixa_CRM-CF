@@ -37,3 +37,21 @@
   .inicio-apps{ grid-template-columns:1fr; }
   .inicio-app{ min-height:0; }
 }
+
+/* Convite para instalar o aplicativo (js/instalar.js) */
+.instalar-app{ margin-top:18px; display:flex; align-items:center; gap:14px; padding:14px 16px; border:1px solid var(--line); border-radius:14px; background:var(--paper); }
+.instalar-icone img{ display:block; border-radius:10px; }
+.instalar-texto{ flex:1; min-width:0; font-size:14px; line-height:1.45; }
+.instalar-texto b{ display:block; }
+.instalar-texto small{ color:var(--ink-soft); font-size:12.5px; }
+.instalar-botoes{ display:flex; gap:6px; flex-shrink:0; }
+.instalar-btn{ border:none; border-radius:9px; padding:9px 16px; font-weight:700; font-size:13px; background:var(--ink); color:var(--paper, #fff); cursor:pointer; }
+.instalar-depois{ border:none; background:none; color:var(--ink-soft); font-size:13px; cursor:pointer; padding:9px 8px; }
+.instalar-fundo{ position:fixed; inset:0; background:rgba(0,0,0,.45); display:flex; align-items:flex-end; justify-content:center; z-index:200; }
+.instalar-janela{ background:var(--paper, #fff); color:var(--ink); width:100%; max-width:440px; border-radius:18px 18px 0 0; padding:22px 20px 28px; font-size:14.5px; line-height:1.55; }
+.instalar-janela h2{ font-family:'Fraunces',serif; font-size:21px; margin:0 0 10px; }
+.instalar-janela ol{ padding-left:20px; margin:0 0 10px; }
+.instalar-janela p{ color:var(--ink-soft); margin:0 0 14px; }
+.instalar-ok{ width:100%; border:none; border-radius:10px; padding:12px; font-weight:700; background:var(--ink); color:var(--paper, #fff); cursor:pointer; }
+@media (min-width:641px){ .instalar-fundo{ align-items:center; } .instalar-janela{ border-radius:18px; } }
+@media (max-width:640px){ .instalar-app{ flex-wrap:wrap; } .instalar-botoes{ width:100%; } .instalar-btn{ flex:1; } }

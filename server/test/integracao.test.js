@@ -1372,6 +1372,35 @@ describe('API com PostgreSQL (integração)', { skip: pular }, () => {
     assert.ok(vendas.some((v) => v.cliente === 'Carla' && v.clienteId === null));
   });
 
+  test('restaurante de exemplo (Painel do dono): conta pronta com PDV completo', async () => {
+    const { criarRestauranteDemo } = require('../utils/demoRestaurante');
+    const r = await criarRestauranteDemo({ whatsapp: '(15) 99999-0000' });
+    assert.match(r.email, /^exemplo-restaurante-/);
+    assert.equal(r.cardapioAtivo, true);
+    const login = await api('POST', '/api/auth/login', { email: r.email, senha: r.senha });
+    assert.equal(login.status, 200, JSON.stringify(login.dados));
+    const t = login.dados.token;
+    const est = (await api('GET', '/api/estoque', undefined, t)).dados;
+    assert.equal(est.negocio.tipo, 'restaurante');
+    assert.equal(est.negocio.fidelidade.modelo, 'selos');
+    assert.ok(est.produtos.length >= 12);
+    const cli = (await api('GET', '/api/estoque/clientes', undefined, t)).dados.clientes;
+    assert.equal(cli.length, 7);
+    assert.ok(cli.find((c) => c.nome.startsWith('Ana')).selos >= 8);
+    const sumidos = (await api('GET', '/api/estoque/clientes?filtro=sumidos', undefined, t)).dados.clientes.map((c) => c.nome);
+    assert.ok(sumidos.includes('Carla Mendes') && sumidos.includes('Fábio Rocha'), sumidos.join(', '));
+    const peds = (await api('GET', '/api/estoque/pedidos', undefined, t)).dados.pedidos;
+    assert.equal(peds.filter((p) => p.status === 'novo').length, 2);
+    assert.ok(peds.some((p) => p.querBeneficio));
+    assert.ok((await api('GET', '/api/estoque/vendas', undefined, t)).dados.vendas.length >= 20);
+    const pub = await api('GET', `/api/publico/cardapio/${r.slug}`);
+    assert.equal(pub.status, 200);
+    assert.ok(!pub.dados.produtos.some((p) => p.nome.startsWith('Vinho')), 'produto fora do cardápio não aparece');
+    // conta liberada sem cobrança
+    const ass = (await api('GET', '/api/assinatura', undefined, t)).dados;
+    assert.equal(ass.liberado, true);
+  });
+
   test('sair de todos os aparelhos invalida o token antigo', async () => {
     const t = contas.caio.token;
     assert.equal((await api('POST', '/api/auth/logout-all', {}, t)).status, 204);

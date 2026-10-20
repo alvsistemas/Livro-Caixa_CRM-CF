@@ -14,7 +14,8 @@
    PUT    /equipes/:id/permissoes   { abas, funcoes } (fica na auditoria do gestor)
    GET    /clientes/:id/regras      regras de comissão de um cliente
    POST   /clientes/:id/regras      { nome, blocos, base, mesIndependente } cria uma regra
-   PUT    /clientes/:id/regras/:regraId   edita (fica na auditoria do cliente: "alterado pelo suporte") */
+   PUT    /clientes/:id/regras/:regraId   edita (fica na auditoria do cliente: "alterado pelo suporte")
+   POST   /demo-restaurante   { whatsapp } cria uma conta de restaurante de exemplo (PDV completo) */
 const express = require('express');
 const auth = require('../middleware/auth');
 const User = require('../models/User');
@@ -240,6 +241,17 @@ router.put('/promocao', async (req, res) => {
 router.get('/donos', async (req, res) => {
   try { res.json({ donos: await D.listarDonos(), eu: D.normalizar(req.emailDoDono) }); }
   catch (err) { res.status(500).json({ error: 'Não foi possível listar os donos.' }); }
+});
+
+// Restaurante de exemplo: conta nova, em cortesia, com o PDV todo preenchido (para conhecer e demonstrar)
+router.post('/demo-restaurante', async (req, res) => {
+  try {
+    const { criarRestauranteDemo } = require('../utils/demoRestaurante');
+    res.json(await criarRestauranteDemo({ whatsapp: (req.body || {}).whatsapp }));
+  } catch (err) {
+    console.error('Restaurante de exemplo:', err.message);
+    res.status(500).json({ error: 'Não foi possível criar o restaurante de exemplo. Tente de novo.' });
+  }
 });
 
 router.post('/donos', async (req, res) => {
