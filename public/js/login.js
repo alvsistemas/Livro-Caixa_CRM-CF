@@ -45,7 +45,7 @@ function destinoDepoisDoLogin(){
   try{ sessionStorage.removeItem('intencaoCadastro'); }catch(e){}
   if(i && PLANOS_DIVULGACAO[i.plano]) return `assinatura.html?plano=${i.plano}&ciclo=${i.ciclo === 'anual' ? 'anual' : 'mensal'}&de=crm`;
   if(i && i.teste) return 'index.html?boasvindas=1';
-  return 'inicio.html';
+  return '/';
 }
 function irDepoisDoLogin(){ window.location.href = destinoDepoisDoLogin(); }
 

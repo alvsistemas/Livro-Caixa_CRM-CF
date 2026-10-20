@@ -13,8 +13,8 @@
 <!-- Endereço do sistema. Vazio = esta página é servida pelo próprio Livro-Caixa (mesmo endereço).
      Se um dia a página for hospedada em outro lugar, coloque aqui o endereço do sistema (ex.: https://app.seudominio.com.br). -->
 <meta name="livro-caixa-app" content="">
-<link rel="canonical" href="https://meulivrocaixaapp.com.br/site/">
-<meta property="og:url" content="https://meulivrocaixaapp.com.br/site/">
+<link rel="canonical" href="https://meulivrocaixaapp.com.br/conheca">
+<meta property="og:url" content="https://meulivrocaixaapp.com.br/conheca">
 <meta property="og:type" content="website">
 <meta property="og:locale" content="pt_BR">
 <meta name="twitter:card" content="summary_large_image">
@@ -350,7 +350,7 @@ img{max-width:100%}
   document.querySelectorAll('[data-app]').forEach(function(a){ a.href=APP+a.getAttribute('data-app'); });
   var ano=document.getElementById('ano'); if(ano) ano.textContent=new Date().getFullYear();
   // quem já está logado neste navegador vê "Abrir o sistema" em vez de "Entrar"
-  try{ if(!meta.content && localStorage.getItem('token')){ var le=document.getElementById('link-entrar'); if(le){ le.textContent='Abrir o sistema'; le.href=APP+'/inicio.html'; } } }catch(e){}
+  try{ if(!meta.content && localStorage.getItem('token')){ var le=document.getElementById('link-entrar'); if(le){ le.textContent='Abrir o sistema'; le.href=APP+'/'; } } }catch(e){}
   /* Preços e promoção vêm do próprio sistema (nunca ficam diferentes do que é cobrado).
      De quebra, essa chamada "acorda" o servidor enquanto a pessoa ainda está lendo. */
   var brl=function(v){ return Number(v).toLocaleString('pt-BR',{style:'currency',currency:'BRL',minimumFractionDigits: v%1?2:0}); };

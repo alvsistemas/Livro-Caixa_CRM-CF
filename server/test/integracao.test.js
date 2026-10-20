@@ -72,20 +72,24 @@ describe('API com PostgreSQL (integração)', { skip: pular }, () => {
     assert.deepEqual(d.planos.map((p) => [p.id, p.valor, p.valorAnual]), [['essencial', 29.9, 300], ['completo', 39.9, 400]]);
     assert.equal(d.diasTeste, 7);
     assert.equal(d.promocao, null);
-    // a raiz abre o sistema (inicio.html); a página de divulgação fica em /site/
+    // a raiz É a tela inicial do sistema; a divulgação fica em /conheca
     const raiz = await fetch(base + '/', { redirect: 'manual' });
-    assert.equal(raiz.status, 302);
-    assert.equal(raiz.headers.get('location'), '/inicio.html');
-    const siteRes = await fetch(base + '/site/');
+    assert.equal(raiz.status, 200);
+    assert.match(await raiz.text(), /O que vamos abrir hoje/);
+    const antigo = await fetch(base + '/inicio.html', { redirect: 'manual' });
+    assert.equal(antigo.status, 301);
+    assert.equal(antigo.headers.get('location'), '/');
+    const siteRes = await fetch(base + '/conheca');
     assert.equal(siteRes.status, 200);
     const html = await siteRes.text();
     assert.match(html, /Começar 7 dias grátis/);
     assert.match(html, /og:image" content="https:\/\/meulivrocaixaapp\.com\.br\/site\/img\/dashboard\.jpg/);
     assert.equal((await fetch(base + '/site/img/dashboard.jpg')).status, 200);
-    assert.equal((await fetch(base + '/inicio.html')).status, 200);
-    const semBarra = await fetch(base + '/site', { redirect: 'manual' });
-    assert.equal(semBarra.status, 301);
-    assert.equal(semBarra.headers.get('location'), '/site/');
+    for (const velho of ['/site', '/site/']) {
+      const r = await fetch(base + velho, { redirect: 'manual' });
+      assert.equal(r.status, 301);
+      assert.equal(r.headers.get('location'), '/conheca');
+    }
     const ag = await fetch(base + '/agendar/qualquer');
     assert.equal(ag.headers.get('x-frame-options'), null); // a página de agendamento pode ser incorporada
   });

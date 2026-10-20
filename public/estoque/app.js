@@ -138,7 +138,7 @@
       <p class="bv-marca">PDV · primeiro acesso</p>${passos}${corpo}
       ${BV.erro ? `<p class="erro-form">${esc(BV.erro)}</p>` : ""}
       <div class="bv-rodape">
-        ${BV.passo > 1 ? `<button class="btn claro" data-a="bv-voltar">Voltar</button>` : `<a class="btn claro" href="../inicio.html">Agora não</a>`}
+        ${BV.passo > 1 ? `<button class="btn claro" data-a="bv-voltar">Voltar</button>` : `<a class="btn claro" href="/">Agora não</a>`}
         <button class="btn acento" data-a="bv-avancar" ${pode && !BV.salvando ? "" : "disabled"}>${BV.passo === 3 ? (BV.salvando ? "Salvando…" : "Começar a usar") : "Continuar"}</button>
       </div></div></div>`;
   }
@@ -1476,7 +1476,7 @@
       S.negocio = d.negocio; S.produtos = d.produtos; S.meios = d.meios; S.unidades = d.unidades;
     } catch (e) {
       const semPermissao = /^O gestor da sua equipe/.test(e.message || "");
-      $("#boas-vindas").innerHTML = `<div class="carregando"><p>${esc(e.message)}</p>${semPermissao ? `<p>Peça para o gestor liberar em Equipe → Permissões, no CRM.</p>` : `<button class="btn" id="de-novo">Tentar de novo</button>`}<p><a href="../inicio.html">Voltar</a></p></div>`;
+      $("#boas-vindas").innerHTML = `<div class="carregando"><p>${esc(e.message)}</p>${semPermissao ? `<p>Peça para o gestor liberar em Equipe → Permissões, no CRM.</p>` : `<button class="btn" id="de-novo">Tentar de novo</button>`}<p><a href="/">Voltar</a></p></div>`;
       const b = $("#de-novo"); if (b) b.addEventListener("click", iniciar);
       return;
     }

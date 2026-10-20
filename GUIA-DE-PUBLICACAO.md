@@ -213,7 +213,7 @@ endereço antigo precisa instalar de novo pelo novo.
 
 ## 6. Depois que estiver no ar
 
-- **Página de divulgação:** fica dentro do sistema, em `public/site/`, no endereço `meulivrocaixaapp.com.br/site` (o endereço principal abre o próprio Livro-Caixa). Preços, dias de teste e a promoção do Painel do dono são lidos do próprio sistema (`/api/publico/precos`). Para trocar os prints, substitua as imagens em `public/site/img/` mantendo os nomes.
+- **Página de divulgação:** fica dentro do sistema, em `public/site/`, no endereço `meulivrocaixaapp.com.br/conheca` (o endereço principal abre a tela inicial do Livro-Caixa). Preços, dias de teste e a promoção do Painel do dono são lidos do próprio sistema (`/api/publico/precos`). Para trocar os prints, substitua as imagens em `public/site/img/` mantendo os nomes.
 - **Privacidade e Termos:** o e-mail de contato (alvsistemas.1710@gmail.com) já está em `public/privacidade.html` e `public/termos.html`. Se mudar, troque nos dois.
 - **Trazer os dados do CRM antigo (opcional):** no CRM antigo, vá em *Configurações → Manutenção → Backup → Exportar*. No Livro-Caixa, use *Importar* na mesma tela. Os clientes, comissões e regras antigas entram na conta nova.
 

@@ -12,7 +12,7 @@
   // de onde a pessoa veio (pra voltar pro lugar certo)
   const params = new URLSearchParams(location.search);
   const origem = params.get('de');
-  const voltarPara = origem === 'crm' ? 'index.html' : origem === 'financeiro' ? 'financeiro/' : 'inicio.html';
+  const voltarPara = origem === 'crm' ? 'index.html' : origem === 'financeiro' ? 'financeiro/' : '/';
   $('ass-voltar').href = voltarPara;
 
   let situacao = null;

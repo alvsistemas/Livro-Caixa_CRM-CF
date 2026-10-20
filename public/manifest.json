@@ -2,7 +2,7 @@
   "name": "Livro-Caixa",
   "short_name": "Livro-Caixa",
   "description": "Livro-Caixa: CRM de vendas e Controle financeiro integrados, para qualquer negócio.",
-  "start_url": "/inicio.html",
+  "start_url": "/",
   "scope": "/",
   "display": "standalone",
   "background_color": "#141414",

@@ -1820,7 +1820,7 @@ function ligarAssistenteIA() {
 }
 function telaDeErro(msg) {
   const semPermissao = /^O gestor da sua equipe/.test(msg || ""); // tentar de novo não adianta: só o gestor libera
-  document.getElementById("onboarding-root").innerHTML = `<div class="carregando"><p>${escapeHtml(msg)}</p>${semPermissao ? `<p>Se precisar, peça para o gestor liberar em Equipe → Permissões, no CRM.</p>` : `<button class="btn char" id="tentar-de-novo">Tentar de novo</button>`}<p><a href="../inicio.html">Voltar</a></p></div>`;
+  document.getElementById("onboarding-root").innerHTML = `<div class="carregando"><p>${escapeHtml(msg)}</p>${semPermissao ? `<p>Se precisar, peça para o gestor liberar em Equipe → Permissões, no CRM.</p>` : `<button class="btn char" id="tentar-de-novo">Tentar de novo</button>`}<p><a href="/">Voltar</a></p></div>`;
   const b = document.getElementById("tentar-de-novo");
   if (b) b.addEventListener("click", iniciar);
 }

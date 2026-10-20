@@ -17,10 +17,11 @@
   const DURACAO_FECHAR = 420;
   const reduzMovimento = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   const raiz = document.documentElement;
-  const naTelaDeEscolha = /\/inicio\.html$/.test(location.pathname);
+  // a tela de escolha abre na raiz do site (/); /inicio.html é o endereço antigo
+  const naTelaDeEscolha = location.pathname === '/' || /\/inicio\.html$/.test(location.pathname);
   const appDaPagina = /\/financeiro\//.test(location.pathname) ? 'fin'
     : /\/estoque\//.test(location.pathname) ? 'pdv'
-      : (/\/(index\.html)?$/.test(location.pathname) ? 'crm' : null);
+      : (/\/index\.html$/.test(location.pathname) ? 'crm' : null);
   // cartão de cada aplicativo na tela de escolha
   const CARTAO = { crm: '.inicio-app-crm', fin: '.inicio-app-fin', pdv: '.inicio-app-est' };
   const appDoCartao = (c) => (c.classList.contains('inicio-app-fin') ? 'fin' : c.classList.contains('inicio-app-est') ? 'pdv' : 'crm');
@@ -150,7 +151,7 @@
     if (appDaPagina) {
       // delegado: a barra lateral do CRM é redesenhada o tempo todo
       document.addEventListener('click', (e) => {
-        const link = e.target.closest && e.target.closest('a[href$="inicio.html"]');
+        const link = e.target.closest && e.target.closest('a[href="/"], a[href$="inicio.html"]');
         if (!link || e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return;
         e.preventDefault();
         const destino = link.getAttribute('href');

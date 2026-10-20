@@ -123,16 +123,22 @@ app.get('/agendar/:userId', (req, res) => {
 });
 
 // front-end estático (a pasta public com index.html, css e js)
-// A raiz abre o sistema, como sempre: /inicio.html (escolha do aplicativo), que manda para o
-// login quem não está logado. A página de divulgação é uma área à parte, em /site/
-// (public/site), e os botões dela levam para o login/cadastro.
+// A raiz do domínio É a tela inicial do sistema (escolha do aplicativo; quem não está logado
+// vai para o login). O endereço antigo /inicio.html redireciona para a raiz.
+// A página de divulgação é uma área à parte, em /conheca (arquivos em public/site); os botões
+// dela levam ao login/cadastro. /site antigo redireciona para /conheca.
+const TELA_INICIAL = path.join(__dirname, '..', 'public', 'inicio.html');
 const PAGINA_DIVULGACAO = path.join(__dirname, '..', 'public', 'site', 'index.html');
-app.get('/', (_req, res) => res.redirect(302, '/inicio.html'));
-app.get(['/site', '/site/', '/site/index.html'], (req, res) => {
-  if (req.path !== '/site/') return res.redirect(301, '/site/');
+app.get('/', (_req, res) => {
+  res.set('Cache-Control', 'no-cache');
+  res.sendFile(TELA_INICIAL);
+});
+app.get('/inicio.html', (_req, res) => res.redirect(301, '/'));
+app.get('/conheca', (_req, res) => {
   res.set('Cache-Control', 'public, max-age=300');
   res.sendFile(PAGINA_DIVULGACAO);
 });
+app.get(['/site', '/site/', '/site/index.html', '/conheca/'], (_req, res) => res.redirect(301, '/conheca'));
 // cardápio digital público do restaurante — /c/<endereço> (sem login)
 app.get('/c/:slug', (_req, res) => {
   res.set('Cache-Control', 'public, max-age=300');

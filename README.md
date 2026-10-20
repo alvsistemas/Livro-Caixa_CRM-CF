@@ -26,7 +26,7 @@ Depois do login, a tela `inicio.html` pergunta qual aplicativo abrir:
   pelo WhatsApp (sem pagamento no site). Veja a seção "PDV" no fim.
 
 Os três usam a mesma conta (mesmo token). O botão **Trocar de aplicativo** fica no
-fim da barra lateral dos dois. A raiz do site (`/`) redireciona para `inicio.html`.
+fim da barra lateral dos dois. A raiz do site (`/`) é a tela inicial de escolha (`public/inicio.html`); o endereço antigo `/inicio.html` redireciona para `/`.
 
 **Integração CRM → financeiro** (nada é copiado; é lido do CRM a cada abertura e entra
 nos cálculos como lançamento só de leitura, com o selo "CRM"). Na aba Lucro a pessoa
@@ -482,9 +482,9 @@ usuário" — é uma camada nova, sem mexer em nenhum dado que já existia:
 
 ## Página de divulgação
 
-A página de divulgação é uma área à parte, em `/site/` (`public/site/index.html`, imagens em
-`public/site/img/`). A raiz do site (`/`) abre o sistema (`/inicio.html`, que manda para o login
-quem não está logado). Os botões da divulgação levam ao cadastro com teste grátis ou com o plano
+A página de divulgação é uma área à parte, em `/conheca` (arquivo `public/site/index.html`,
+imagens em `public/site/img/`; `/site` antigo redireciona para lá). A raiz do site (`/`) é a tela
+inicial do sistema, que manda para o login quem não está logado. Os botões da divulgação levam ao cadastro com teste grátis ou com o plano
 escolhido; preços, dias de teste e promoção vêm de `GET /api/publico/precos`.
 
 ## Fechamento da venda (CRM → Controle financeiro)

@@ -358,7 +358,7 @@
       const [r, s, d, eq] = await Promise.all([api('GET', '/resumo'), api('GET', '/saude'), api('GET', '/donos'), api('GET', '/equipes')]);
       resumo = r; desenharResumo(); desenharSaude(s); desenharDonos(d); desenharPromocao(r.promocao); desenharEquipes(eq);
     }catch(err){
-      if(err.status === 403){ document.querySelector('main').innerHTML = `<a class="ass-voltar" href="inicio.html">← Voltar</a><h1 class="ass-titulo">Painel do dono</h1><p class="ass-sub">${esc(err.message)}</p>`; return; }
+      if(err.status === 403){ document.querySelector('main').innerHTML = `<a class="ass-voltar" href="/">← Voltar</a><h1 class="ass-titulo">Painel do dono</h1><p class="ass-sub">${esc(err.message)}</p>`; return; }
       $('dono-sub').textContent = err.message;
     }finally{
       botao.disabled = false; botao.textContent = 'Atualizar';
