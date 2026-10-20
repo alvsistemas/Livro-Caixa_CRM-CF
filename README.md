@@ -482,10 +482,10 @@ usuário" — é uma camada nova, sem mexer em nenhum dado que já existia:
 
 ## Página de divulgação
 
-A raiz do site (`/`) é a página de divulgação, em `public/site/index.html` (imagens em
-`public/site/img/`). Os botões levam ao cadastro com teste grátis ou com o plano escolhido;
-preços, dias de teste e promoção vêm de `GET /api/publico/precos`. O sistema continua em
-`/login.html` e `/inicio.html`.
+A página de divulgação é uma área à parte, em `/site/` (`public/site/index.html`, imagens em
+`public/site/img/`). A raiz do site (`/`) abre o sistema (`/inicio.html`, que manda para o login
+quem não está logado). Os botões da divulgação levam ao cadastro com teste grátis ou com o plano
+escolhido; preços, dias de teste e promoção vêm de `GET /api/publico/precos`.
 
 ## Fechamento da venda (CRM → Controle financeiro)
 

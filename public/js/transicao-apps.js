@@ -1,5 +1,5 @@
 /* =======================================================================
-   Animação de abrir e fechar aplicativo (tela de escolha ⇄ CRM / Controle financeiro).
+   Animação de abrir e fechar aplicativo (tela de escolha ⇄ CRM / Controle financeiro / PDV).
 
    Abrir:  na tela de escolha, a caixa do aplicativo cresce até ocupar a tela,
            e o aplicativo aparece por baixo dela.
@@ -18,7 +18,12 @@
   const reduzMovimento = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   const raiz = document.documentElement;
   const naTelaDeEscolha = /\/inicio\.html$/.test(location.pathname);
-  const appDaPagina = /\/financeiro\//.test(location.pathname) ? 'fin' : (/\/(index\.html)?$/.test(location.pathname) ? 'crm' : null);
+  const appDaPagina = /\/financeiro\//.test(location.pathname) ? 'fin'
+    : /\/estoque\//.test(location.pathname) ? 'pdv'
+      : (/\/(index\.html)?$/.test(location.pathname) ? 'crm' : null);
+  // cartão de cada aplicativo na tela de escolha
+  const CARTAO = { crm: '.inicio-app-crm', fin: '.inicio-app-fin', pdv: '.inicio-app-est' };
+  const appDoCartao = (c) => (c.classList.contains('inicio-app-fin') ? 'fin' : c.classList.contains('inicio-app-est') ? 'pdv' : 'crm');
 
   const escuro = () => { try { return localStorage.getItem('darkMode') === '1'; } catch (e) { return false; } };
   const APPS = {
@@ -35,6 +40,13 @@
       fundo: () => (escuro() ? '#0F1311' : '#F1F4EC'),
       texto: () => (escuro() ? '#E6ECE7' : '#1C2B22'),
       icone: '<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19V5"/><path d="M4 19h16"/><path d="M8 15l3-4 3 2 5-6"/></svg>',
+    },
+    pdv: {
+      nome: 'PDV',
+      cor: '#9A5B1E',
+      fundo: () => (escuro() ? '#14100C' : '#F7F1EA'),
+      texto: () => (escuro() ? '#F0E6DA' : '#2B1A0B'),
+      icone: '<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8l-9-5-9 5 9 5 9-5z"/><path d="M3 8v8l9 5 9-5V8"/><path d="M12 13v8"/></svg>',
     },
   };
 
@@ -90,7 +102,7 @@
       });
     } else if (chegada && chegada.tipo === 'fechar' && naTelaDeEscolha) {
       // voltou para a escolha: a caixa encolhe até o cartão do aplicativo
-      const cartao = document.querySelector(chegada.app === 'fin' ? '.inicio-app-fin' : '.inicio-app-crm');
+      const cartao = document.querySelector(CARTAO[chegada.app]);
       const caixa = criarCaixa(chegada.app);
       Object.assign(caixa.style, telaCheia());
       raiz.classList.remove('transicao-cobrindo');
@@ -116,7 +128,7 @@
         cartao.addEventListener('click', (e) => {
           if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return; // abrir em outra aba: normal
           e.preventDefault();
-          const app = cartao.classList.contains('inicio-app-fin') ? 'fin' : 'crm';
+          const app = appDoCartao(cartao);
           const destino = cartao.getAttribute('href');
           const r = cartao.getBoundingClientRect();
           const caixa = criarCaixa(app);

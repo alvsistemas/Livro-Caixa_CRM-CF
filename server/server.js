@@ -123,15 +123,16 @@ app.get('/agendar/:userId', (req, res) => {
 });
 
 // front-end estático (a pasta public com index.html, css e js)
-// A raiz do site é a página de divulgação (public/site). O sistema continua em
-// /inicio.html (escolha do aplicativo), /login.html etc.; o app instalado abre direto em
-// /inicio.html (manifest.json), então quem usa o sistema não passa pela divulgação.
+// A raiz abre o sistema, como sempre: /inicio.html (escolha do aplicativo), que manda para o
+// login quem não está logado. A página de divulgação é uma área à parte, em /site/
+// (public/site), e os botões dela levam para o login/cadastro.
 const PAGINA_DIVULGACAO = path.join(__dirname, '..', 'public', 'site', 'index.html');
-app.get('/', (_req, res) => {
+app.get('/', (_req, res) => res.redirect(302, '/inicio.html'));
+app.get(['/site', '/site/', '/site/index.html'], (req, res) => {
+  if (req.path !== '/site/') return res.redirect(301, '/site/');
   res.set('Cache-Control', 'public, max-age=300');
   res.sendFile(PAGINA_DIVULGACAO);
 });
-app.get(['/site', '/site/', '/site/index.html'], (_req, res) => res.redirect(301, '/'));
 // cardápio digital público do restaurante — /c/<endereço> (sem login)
 app.get('/c/:slug', (_req, res) => {
   res.set('Cache-Control', 'public, max-age=300');

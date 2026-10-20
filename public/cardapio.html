@@ -164,7 +164,7 @@
             <span class="prod-preco">${p.variacoes.length ? "a partir de " : ""}${fmt(aPartir(p))}</span></span>
           ${p.foto ? `<span class="prod-foto" style="background-image:url('${esc(p.foto)}')"></span>` : ""}
         </button>`).join("")}`).join("") : `<div class="centro">O cardápio ainda está vazio.</div>`}</main>
-      <p class="rodape">Pedido enviado pelo WhatsApp. O pagamento é feito na entrega ou na retirada.<br/>Cardápio digital feito com o <a href="/" target="_blank" rel="noopener">Livro-Caixa</a></p>
+      <p class="rodape">Pedido enviado pelo WhatsApp. O pagamento é feito na entrega ou na retirada.<br/>Cardápio digital feito com o <a href="/site/" target="_blank" rel="noopener">Livro-Caixa</a></p>
       <div class="barra" ${carrinho.length ? "" : "hidden"}><button data-abrir-carrinho><span><span class="qtd">${qtdCarrinho()}</span> Ver pedido</span><span>${fmt(totalCarrinho())}</span></button></div>`;
   }
 
