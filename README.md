@@ -690,6 +690,55 @@ estiver ativa. Rotas do app: `/api/estoque/*` (`server/routes/estoque.js`, regra
 `server/utils/estoque.js`), migração `010_caixa_estoque.sql`. Permissão da equipe: aba
 "PDV".
 
+### Caixa do dia, fiado e operadores (versão 20261137)
+
+- **Caixa** (primeira aba): abrir com o troco da gaveta, sangria e reforço (só mudam o dinheiro de
+  lugar), despesa paga com o dinheiro do caixa, receber fiado e fechar conferindo cada forma de
+  pagamento. Diferença no dinheiro vira "Quebra de caixa" (despesa) ou "Sobra de caixa" (receita)
+  no Controle financeiro. Histórico em Relatórios → Fechamentos de caixa.
+- **Cobrar:** teclado numérico, notas rápidas, troco calculado e pagamento dividido (uma receita
+  por forma). Depois da venda: recibo impresso (80 mm) ou pelo WhatsApp.
+- **Fiado:** só com cliente; fica como receita pendente e aparece em Clientes ("Deve"). Ao
+  receber, vira receita paga na data do recebimento.
+- **Operadores com PIN:** caixa ou gerente; com "Exigir PIN" ligado, o servidor só aceita ações
+  de quem entrou (gerente cancela, mexe em produtos e configurações; caixa tem limite de desconto).
+- **Celular:** barra de navegação embaixo, menu "Mais", carrinho em folha e botões grandes.
+
+Servidor: `server/utils/caixa.js`, rotas `/api/estoque/caixa*`, `/api/estoque/operadores*`,
+`/api/estoque/clientes/:id/fiado*`, migração `012_pdv_caixa.sql`.
+
+### Excel em todo o site e relatórios do PDV (versão 20261139)
+
+- **Planilhas:** CRM (importar leads de .xlsx/.csv, exportar em .xlsx ou CSV), Controle financeiro
+  (importar extrato OFX/CSV/Excel e a própria planilha de lançamentos; exportar em Excel/PDF) e
+  PDV (planilha do mês; importar e exportar produtos e clientes, com prévia antes de gravar).
+- **Curva ABC e margem:** quais produtos trazem 80% do lucro, margem real de cada um, os que
+  vendem abaixo do custo, sem custo cadastrado ou parados.
+- **Dias e horários:** mapa de calor de faturamento por dia da semana e hora.
+- **Compra pelo XML da NF-e:** a nota do fornecedor vira compra (estoque, custo médio e despesa),
+  com sugestão automática dos produtos e conversão de caixa para unidade.
+
+Servidor: `server/utils/analises.js`, `server/utils/nfe.js`, `server/utils/planilhasPdv.js`,
+migração `014_pdv_nfe.sql`.
+
+### Mesas, cozinha e planilha do Excel (versão 20261138)
+
+- **Mesas** (restaurante): mapa do salão com mesas livres, ocupadas, pedindo a conta e com prato
+  pronto. O garçom abre a mesa, lança os itens com tamanho, adicionais e observação e manda para a
+  cozinha. Também há comandas sem mesa (balcão, bar).
+- **Cozinha:** tela com os pedidos em Novos, Preparando e Prontos, tempo de espera, observações
+  em destaque, impressão do pedido e aviso sonoro. Pedidos do cardápio digital também podem ir
+  para lá. Produto marcado "não vai para a cozinha" (bebida pronta) não aparece.
+- **Fechar a conta:** mesma cobrança do caixa, com taxa de serviço (padrão 10%, configurável),
+  desconto e divisão por pessoas. Vira uma venda normal (estoque e financeiro).
+- **Garçom:** novo tipo de operador; lança pedidos, mas não cobra nem mexe no caixa.
+- **Excel:** em Relatórios, o botão baixa a planilha do mês (.xlsx) com vendas, itens, pagamentos,
+  caixas, despesas, compras, estoque e clientes.
+
+Servidor: `server/utils/comandas.js`, `server/utils/exportarXlsx.js`, rotas `/api/estoque/mesas`,
+`/api/estoque/comandas*`, `/api/estoque/cozinha*`, `/api/estoque/exportar.xlsx`, migração
+`013_pdv_mesas_cozinha.sql`. Dependência nova: `exceljs`.
+
 ### Clientes e programa de fidelidade
 
 Aba **Clientes** (todos os tipos de negócio): o cliente é reconhecido pelo telefone, no balcão

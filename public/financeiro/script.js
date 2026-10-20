@@ -495,8 +495,8 @@ function origemDoLancamento(tx) {
   }
   if (tx.estoque) {
     const m = tx.estoque;
-    const nomes = { venda: `venda #${m.numero}`, taxa: `taxa da venda #${m.numero}`, compra: "compra", gasto: "nota de gasto" };
-    const aba = m.origem === "compra" ? "compras" : m.origem === "gasto" ? "gastos" : "vendas";
+    const nomes = { venda: `venda #${m.numero}${m.fiado ? " (fiado)" : ""}`, taxa: `taxa da venda #${m.numero}`, compra: "compra", gasto: "nota de gasto", fiado: `fiado recebido · venda #${m.numero}`, caixa: `fechamento do caixa #${m.numero}` };
+    const aba = m.origem === "compra" ? "compras" : m.origem === "gasto" ? "caixa" : m.origem === "caixa" ? "caixa" : m.origem === "fiado" ? "clientes" : "relatorios";
     return `<a href="../estoque/#${aba}" class="origem-crm" title="Criado pelo PDV">PDV · ${nomes[m.origem] || m.origem}</a>`;
   }
   if (tx.account === Calculos.CARTAO) { const c = Calculos.cartaoDoLancamento(tx, state.cards); return c ? `💳 ${escapeHtml(c.name)}` : (state.cards.length > 1 ? `<span class="aviso-mini">escolha o cartão</span>` : ""); }
@@ -689,7 +689,7 @@ function renderLancamentos() {
       <div class="row-gap">
         ${state.filtros.todosMeses ? "" : monthNav()}
         ${scopePills()}
-        <button class="btn ghost" id="importar-extrato-btn" title="Importar o extrato do banco (CSV ou OFX)">⇪ Importar extrato</button>
+        <button class="btn ghost" id="importar-extrato-btn" title="Extrato do banco (OFX ou CSV) ou planilha Excel (.xlsx)">⇪ Importar</button>
         <button class="btn ghost" id="exportar-btn" title="Baixar em Excel ou PDF">⇩ Exportar</button>
         <button class="btn pessoal" id="new-tx-btn">+ Novo</button>
       </div>
@@ -948,13 +948,15 @@ function lucroPorVendaHtml(month) {
    (a compra da mercadoria já foi), só entra aqui no "quanto sobrou". */
 function temCaixaEstoque() { return state.txs.some((t) => t.estoque); }
 function vendasBalcaoHtml(month) {
-  const vendas = state.txs.filter((t) => t.estoque && t.estoque.origem === "venda" && monthKey(t.date) === month);
-  if (!vendas.length) return "";
-  const taxas = new Map(state.txs.filter((t) => t.estoque && t.estoque.origem === "taxa").map((t) => [t.estoque.vendaId, Number(t.value) || 0]));
-  const tot = vendas.reduce((a, t) => {
-    const receita = Number(t.value) || 0; const cmv = Number(t.estoque.cmv) || 0; const taxa = taxas.get(t.estoque.vendaId) || 0;
-    return { receita: a.receita + receita, cmv: a.cmv + cmv, taxa: a.taxa + taxa };
-  }, { receita: 0, cmv: 0, taxa: 0 });
+  // uma venda pode ter várias receitas (pagamento dividido): o custo vem só na primeira
+  const partes = state.txs.filter((t) => t.estoque && t.estoque.origem === "venda" && monthKey(t.date) === month);
+  if (!partes.length) return "";
+  const vendas = partes.filter((t) => !t.estoque.parte);
+  const ids = new Set(partes.map((t) => t.estoque.vendaId));
+  const taxaTot = state.txs.filter((t) => t.estoque && t.estoque.origem === "taxa" && ids.has(t.estoque.vendaId)).reduce((a, t) => a + (Number(t.value) || 0), 0);
+  // fiado já recebido saiu da pendência e virou receita própria: soma de volta na venda
+  const fiadoRecebido = state.txs.filter((t) => t.estoque && t.estoque.origem === "fiado" && ids.has(t.estoque.vendaId)).reduce((a, t) => a + (Number(t.value) || 0), 0);
+  const tot = { receita: partes.reduce((a, t) => a + (Number(t.value) || 0), 0) + fiadoRecebido, cmv: vendas.reduce((a, t) => a + (Number(t.estoque.cmv) || 0), 0), taxa: taxaTot };
   const lucro = tot.receita - tot.cmv - tot.taxa;
   const cor = lucro < 0 ? COLORS.red : COLORS.pessoal;
   return `<div class="card" style="margin-bottom:20px">
@@ -967,7 +969,7 @@ function vendasBalcaoHtml(month) {
         <td class="mono" style="font-weight:700;color:${cor}">${fmtBRL(lucro)}</td>
         <td class="mono" style="color:var(--ink-muted)">${tot.receita > 0 ? fmtPct(lucro / tot.receita) : "—"}</td>
       </tr></tbody></table></div>
-    <p class="stat-sub" style="margin-top:8px">O custo da mercadoria vem do custo médio de cada produto. A compra já entrou como despesa quando foi paga, por isso ele não é descontado de novo no saldo. <a href="../estoque/#vendas">Ver as vendas no PDV</a></p>
+    <p class="stat-sub" style="margin-top:8px">O custo da mercadoria vem do custo médio de cada produto. A compra já entrou como despesa quando foi paga, por isso ele não é descontado de novo no saldo. Vendas fiado contam pelo valor vendido (o que falta receber está em "A pagar e receber"). <a href="../estoque/#relatorios">Ver as vendas no PDV</a></p>
   </div>`;
 }
 

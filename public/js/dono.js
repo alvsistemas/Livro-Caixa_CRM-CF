@@ -261,6 +261,7 @@
         <p class="ass-texto" style="margin-top:0"><b>Pronto!</b> Guarde este acesso (a senha não aparece de novo):</p>
         <p class="ass-texto">E-mail: <b>${esc(r.email)}</b><br/>Senha: <b>${esc(r.senha)}</b></p>
         <p class="ass-texto">Para entrar, saia da sua conta (ou use uma janela anônima) e faça login com esses dados. Depois abra o <b>PDV</b>.</p>
+        <p class="ass-texto">Operadores (para testar o PIN em Configurações → Caixa e operadores): <b>Marco</b> (gerente) PIN <b>1234</b> · <b>Tito</b> (garçom) PIN <b>2222</b>.</p>
         <p class="ass-texto">Cardápio digital: ${r.cardapioAtivo ? `<a href="${esc(link)}" target="_blank" rel="noopener">${esc(link)}</a>` : 'desligado (informe um WhatsApp para ligar; dá para fazer depois, na aba Cardápio digital da conta de exemplo)'}</p>
       </div>`;
       ok.hidden = false;

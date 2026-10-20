@@ -47,6 +47,20 @@ function lerOFX(texto) {
   }).filter((l) => l.data && !isNaN(l.valor));
 }
 
+/* ---------- Excel (.xlsx/.xls): vira a mesma tabela do CSV ---------- */
+async function lerPlanilhaExcel(file) {
+  await carregarScript("https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js");
+  const wb = XLSX.read(await file.arrayBuffer(), { type: "array", cellDates: true });
+  // a aba "Lançamentos" (planilha exportada daqui) ou a primeira
+  const nome = wb.SheetNames.find((n) => /lan[cç]amento|extrato|movimenta/i.test(n)) || wb.SheetNames[0];
+  const matriz = XLSX.utils.sheet_to_json(wb.Sheets[nome], { header: 1, defval: "", raw: true });
+  const iso = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  const tabela = matriz.map((l) => l.map((c) => (c instanceof Date ? iso(new Date(c.getTime() + 12 * 3600 * 1000)) : typeof c === "number" ? String(c) : String(c ?? "").trim())));
+  let idx = tabela.findIndex((l) => l.some((c) => /data|date/i.test(c)) && l.some((c) => /valor|amount|quantia|montante|cr[ée]dito|d[ée]bito/i.test(c)));
+  if (idx < 0) idx = 0;
+  return { cabecalho: tabela[idx] || [], linhas: tabela.slice(idx + 1).filter((l) => l.some((c) => c)) };
+}
+
 /* ---------- CSV ---------- */
 function lerCSV(texto) {
   const linhas = texto.split(/\r?\n/).filter((l) => l.trim());
@@ -78,6 +92,8 @@ function adivinharColunas(cabecalho) {
     valor: acha(/^valor|amount|quantia|montante|valor \(r\$\)/),
     credito: acha(/credito|entrada/),
     debito: acha(/debito|saida/),
+    // planilha do próprio Livro-Caixa (ou parecida): tipo, categoria, escopo, forma e status vêm prontos
+    tipo: acha(/^tipo$/), categoria: acha(/^categoria/), escopo: acha(/^escopo/), forma: acha(/^forma/), status: acha(/^status|^situa/),
   };
 }
 
@@ -119,7 +135,14 @@ function abrirImportarExtrato() {
           const cr = c.credito >= 0 ? numeroBR(l[c.credito]) : NaN, db = c.debito >= 0 ? numeroBR(l[c.debito]) : NaN;
           valor = (!isNaN(cr) && cr ? Math.abs(cr) : 0) - (!isNaN(db) && db ? Math.abs(db) : 0);
         }
-        return { data: dataBR(l[c.data]), descricao: (l[c.descricao] || "").trim() || "Lançamento", valor, idBanco: "" };
+        // coluna "Tipo" (Receita/Despesa) manda no sinal: na planilha exportada a despesa já vem negativa
+        if (c.tipo >= 0 && !isNaN(valor)) { const t = semAcento(l[c.tipo] || ""); if (/despesa|saida|debito/.test(t)) valor = -Math.abs(valor); else if (/receita|entrada|credito/.test(t)) valor = Math.abs(valor); }
+        const extra = {};
+        if (c.categoria >= 0 && l[c.categoria]) extra.categoria = String(l[c.categoria]).trim();
+        if (c.escopo >= 0 && /empresa/i.test(l[c.escopo])) extra.scope = "Empresa"; else if (c.escopo >= 0 && /pessoal/i.test(l[c.escopo])) extra.scope = "Pessoal";
+        if (c.forma >= 0) { const f = CONTAS.find((k) => semAcento(k) === semAcento(l[c.forma] || "")); if (f) extra.forma = f; }
+        if (c.status >= 0) { const st = semAcento(l[c.status] || ""); extra.status = /pend|a pagar|a receber|aberto/.test(st) ? "Pendente" : /agend/.test(st) ? "Agendado" : "Pago"; }
+        return { data: dataBR(l[c.data]), descricao: (l[c.descricao] || "").trim() || "Lançamento", valor, idBanco: "", ...extra };
       }).filter((l) => l.data && !isNaN(l.valor) && l.valor !== 0);
     } else {
       brutas = estado.ofx;
@@ -129,20 +152,29 @@ function abrirImportarExtrato() {
       const tipo = valor >= 0 ? "Receita" : "Despesa";
       const chave = l.idBanco || `${l.data}|${Math.abs(valor).toFixed(2)}|${semAcento(l.descricao)}`;
       const repetido = state.txs.some((tx) => tx.importId === chave || (tx.date === l.data && Math.abs((Number(tx.value) || 0) - Math.abs(valor)) < 0.005 && semAcento(tx.desc) === semAcento(l.descricao)));
-      return { ...l, valor: Math.abs(valor), tipo, categoria: adivinharCategoria(l.descricao, tipo), chave, repetido, incluir: !repetido };
+      const categoria = l.categoria && categoriasDe(tipo).includes(l.categoria) ? l.categoria : adivinharCategoria(l.descricao, tipo);
+      return { ...l, valor: Math.abs(valor), tipo, categoria, chave, repetido, incluir: !repetido };
     });
   };
   const draw = () => {
     if (estado.etapa === "arquivo") {
       openModal("Importar extrato do banco", `
-        <p class="modal-texto">No app ou site do banco, exporte o extrato em <b>OFX</b> (melhor opção, quase todo banco tem) ou em <b>CSV</b>/planilha. Depois escolha o arquivo aqui.</p>
-        <label class="btn char save-btn" style="display:block;text-align:center">Escolher arquivo<input type="file" id="f-extrato" accept=".ofx,.csv,.txt,text/csv,application/x-ofx" hidden /></label>
+        <p class="modal-texto">No app ou site do banco, exporte o extrato em <b>OFX</b> (melhor opção, quase todo banco tem), <b>CSV</b> ou <b>Excel (.xlsx)</b>. Depois escolha o arquivo aqui.</p>
+        <p class="modal-texto">Também dá para trazer uma <b>planilha de lançamentos</b>: a que você baixa em Exportar volta igualzinha (tipo, categoria, escopo, forma e status).</p>
+        <label class="btn char save-btn" style="display:block;text-align:center">Escolher arquivo<input type="file" id="f-extrato" accept=".ofx,.csv,.txt,.xlsx,.xls,text/csv,application/x-ofx" hidden /></label>
+        <button class="btn ghost" id="f-modelo" style="display:block;width:100%;margin-top:8px">Baixar planilha modelo (.xlsx)</button>
         ${estado.erro ? `<p class="aviso-suave" style="margin-top:12px">⚠ ${escapeHtml(estado.erro)}</p>` : ""}
         <p class="field-ajuda" style="margin-top:12px">Nada é lançado antes de você conferir. Lançamentos que já existem aparecem desmarcados.</p>`);
       document.getElementById("f-extrato").addEventListener("change", async (e) => {
         const file = e.target.files[0];
         if (!file) return;
         try {
+          if (/\.xlsx?$/i.test(file.name)) {
+            estado.csv = await lerPlanilhaExcel(file); estado.colunas = adivinharColunas(estado.csv.cabecalho); estado.ofx = null;
+            if (!estado.csv.linhas.length) throw new Error("A planilha está vazia.");
+            if (estado.colunas.data < 0 || estado.colunas.descricao < 0 || (estado.colunas.valor < 0 && estado.colunas.credito < 0 && estado.colunas.debito < 0)) { estado.etapa = "colunas"; draw(); return; }
+            estado.erro = ""; montarLinhas(); estado.etapa = "conferir"; draw(); return;
+          }
           const texto = await lerTextoDoExtrato(file);
           if (/<OFX>|<STMTTRN>/i.test(texto)) {
             estado.ofx = lerOFX(texto); estado.csv = null;
@@ -155,6 +187,7 @@ function abrirImportarExtrato() {
           estado.erro = ""; montarLinhas(); estado.etapa = "conferir"; draw();
         } catch (err) { estado.erro = err.message; draw(); }
       });
+      document.getElementById("f-modelo").addEventListener("click", baixarModeloLancamentos);
     } else if (estado.etapa === "colunas") {
       const opcoes = (sel) => `<option value="-1">—</option>` + estado.csv.cabecalho.map((c, i) => `<option value="${i}" ${i === sel ? "selected" : ""}>${escapeHtml(c || `Coluna ${i + 1}`)}</option>`).join("");
       openModal("Quais colunas são quais?", `
@@ -174,6 +207,7 @@ function abrirImportarExtrato() {
       const sel = estado.linhas.filter((l) => l.incluir);
       const noCartao = estado.forma === Calculos.CARTAO;
       openModal("Conferir antes de importar", `
+        ${estado.csv && estado.colunas && (estado.colunas.escopo >= 0 || estado.colunas.forma >= 0 || estado.colunas.status >= 0) ? `<p class="field-ajuda" style="margin-top:0">A planilha já traz ${[estado.colunas.forma >= 0 ? "a forma" : "", estado.colunas.escopo >= 0 ? "o escopo" : "", estado.colunas.status >= 0 ? "o status" : ""].filter(Boolean).join(", ")} de cada linha: as escolhas abaixo valem só para as linhas em branco.</p>` : ""}
         <div class="importar-opcoes">
           <label class="integ-check"><input type="checkbox" id="f-invertido" ${estado.positivosSaoDespesa ? "checked" : ""} /> É fatura de cartão (valores positivos são compras)</label>
           <div class="field"><label>Forma de pagamento</label>${chipGroup("imp-forma", CONTAS, estado.forma, "var(--char)")}</div>
@@ -200,8 +234,9 @@ function abrirImportarExtrato() {
       document.querySelectorAll(".imp-cat").forEach((s) => s.addEventListener("change", (e) => { estado.linhas[+e.target.closest("tr").dataset.i].categoria = e.target.value; }));
       document.getElementById("f-importar").addEventListener("click", () => {
         const novos = estado.linhas.filter((l) => l.incluir).map((l) => {
-          const tx = { id: uid(), date: l.data, desc: l.descricao.slice(0, 140), type: l.tipo, category: l.categoria, scope: estado.scope, account: estado.forma, status: "Pago", value: l.valor, recurrence: "unico", importId: l.chave };
-          if (estado.forma === Calculos.CARTAO) { if (estado.cardId) tx.cardId = estado.cardId; } else if (estado.contaId) tx.contaId = estado.contaId;
+          const forma = l.forma || estado.forma;
+          const tx = { id: uid(), date: l.data, desc: l.descricao.slice(0, 140), type: l.tipo, category: l.categoria, scope: l.scope || estado.scope, account: forma, status: l.status || "Pago", value: l.valor, recurrence: "unico", importId: l.chave };
+          if (forma === Calculos.CARTAO) { if (estado.cardId) tx.cardId = estado.cardId; } else if (estado.contaId) tx.contaId = estado.contaId;
           return tx;
         });
         state.txs = [...novos, ...state.txs];
@@ -214,6 +249,23 @@ function abrirImportarExtrato() {
     }
   };
   draw();
+}
+
+// modelo com as colunas que voltam inteiras (as mesmas da exportação)
+async function baixarModeloLancamentos() {
+  try {
+    await carregarScript("https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js");
+    const hoje = todayISO();
+    const ws = XLSX.utils.aoa_to_sheet([
+      ["Data", "Descrição", "Tipo", "Categoria", "Escopo", "Forma", "Status", "Valor"],
+      [brDate(hoje), "Salário", "Receita", "Salário", "Pessoal", "Conta Corrente", "Pago", 5000],
+      [brDate(hoje), "Aluguel", "Despesa", "Moradia", "Pessoal", "Pix", "Pendente", -1800],
+      [brDate(hoje), "Venda para cliente", "Receita", "Vendas", "Empresa", "Pix", "Pago", 750],
+    ]);
+    ws["!cols"] = [{ wch: 11 }, { wch: 30 }, { wch: 9 }, { wch: 18 }, { wch: 9 }, { wch: 18 }, { wch: 10 }, { wch: 12 }];
+    const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, "Lançamentos");
+    XLSX.writeFile(wb, "modelo-lancamentos-livro-caixa.xlsx");
+  } catch (e) { toast("⚠ " + e.message, "erro"); }
 }
 
 /* ---------- dados do Livro-Caixa antigo ---------- */
@@ -282,7 +334,7 @@ TELAS.importar = {
       <h2 class="section-title" style="border-color:var(--char)">Importar dados</h2>
       <p class="stat-sub" style="margin-top:0">Traga o histórico que você já tem, sem digitar tudo de novo.</p>
       <div class="row-gap">
-        <button class="btn ghost" id="imp-extrato-perfil">⇪ Extrato do banco (OFX ou CSV)</button>
+        <button class="btn ghost" id="imp-extrato-perfil">⇪ Extrato do banco ou planilha (OFX, CSV ou Excel)</button>
         <button class="btn ghost" id="imp-antigo-perfil">⇪ Livro-Caixa antigo</button>
       </div>
     </div>`;

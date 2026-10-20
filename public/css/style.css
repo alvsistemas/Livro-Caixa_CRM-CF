@@ -935,3 +935,10 @@ tr.membro-supervisor-destaque td:last-child{ border-right:1px solid var(--gold);
 .faixa-teste-x{ background:none; border:none; color:var(--ink-soft); font-size:15px; cursor:pointer; min-width:36px; min-height:36px; border-radius:8px; }
 .faixa-teste-x:hover{ background:var(--hover-tint); color:var(--ink); }
 @media (max-width:640px){ .faixa-teste{ flex-direction:column; align-items:stretch; } .faixa-teste-acoes{ justify-content:space-between; } }
+
+/* escolher arquivo com cara de botão (o input fica escondido dentro do label) */
+.arquivo-linha{ display:flex; align-items:center; gap:12px; flex-wrap:wrap; }
+.btn-arquivo{ display:inline-flex; align-items:center; gap:8px; }
+.btn-arquivo:focus-within{ outline:2px solid var(--accent); outline-offset:2px; }
+.arquivo-nome{ font-size:12px; color:var(--ink-soft); }
+.btn-link{ background:none; border:none; padding:0; color:var(--ink); font-size:12px; font-weight:600; cursor:pointer; text-decoration:underline; text-underline-offset:3px; }

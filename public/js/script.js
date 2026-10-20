@@ -2263,6 +2263,38 @@ function relatoriosDadosMensais(mesesAtras, cardsBase){
   });
   return buckets;
 }
+// Leads em planilha: Excel (.xlsx, padrão) ou CSV. Valor como número, para somar no Excel.
+function linhasDosLeads(cards){
+  return cards.map(c=>{
+    const col = board.columns.find(k=>k.id===c.columnId);
+    return {
+      'Nome': c.cliente||'', 'Telefone': c.telefone||'', 'E-mail': c.email||'', 'Valor': Number(c.valor)||0,
+      'Valor vendido': col && col.tipo==='ganho' ? valorVendido(c) : '', 'Coluna': col ? col.nome : '',
+      'Temperatura': c.temperatura ? ((TEMPS[c.temperatura]||{}).label || c.temperatura) : '', 'Serviço': c.tipoServico||'',
+      'Início de contato': c.mesInicioContato||'', 'Mês de venda': c.mes||'', 'Observações': c.obs||'',
+    };
+  });
+}
+async function baixarModeloLeads(){
+  try{ await carregarBiblioteca('xlsx'); }catch(e){ errorMsg = e.message; renderApp(); return; }
+  const ws = XLSX.utils.aoa_to_sheet([['Nome','Telefone','Serviço desejado','E-mail'],['Maria Silva','(11) 98888-7777','Consórcio de imóvel','maria@email.com'],['João Souza','(15) 99999-1234','Carta de crédito','']]);
+  ws['!cols'] = [{wch:26},{wch:18},{wch:26},{wch:26}];
+  const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'Leads');
+  XLSX.writeFile(wb, 'modelo-importar-leads.xlsx');
+}
+async function baixarPlanilhaLeads(cards, nomeBase, formato){
+  if(formato === 'csv'){ baixarCsv(cards, `${nomeBase}.csv`); return; }
+  try{ await carregarBiblioteca('xlsx'); }catch(e){ errorMsg = e.message; renderApp(); return; }
+  const dados = linhasDosLeads(cards);
+  const ws = XLSX.utils.json_to_sheet(dados.length ? dados : [{ 'Nome':'' }]);
+  ws['!cols'] = [{wch:28},{wch:16},{wch:26},{wch:12},{wch:13},{wch:16},{wch:12},{wch:20},{wch:15},{wch:13},{wch:40}];
+  const rng = XLSX.utils.decode_range(ws['!ref']);
+  for(let r=1; r<=rng.e.r; r++) for(const c of [3,4]){ const cel = ws[XLSX.utils.encode_cell({r, c})]; if(cel && typeof cel.v === 'number') cel.z = '"R$" #,##0.00'; }
+  ws['!autofilter'] = { ref: ws['!ref'] };
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Leads');
+  XLSX.writeFile(wb, `${nomeBase}.xlsx`);
+}
 function baixarCsv(cards, nomeArquivo){
   const linhas = [['Nome','Telefone','Valor','Coluna','Temperatura','Início de contato','Mês de venda'].join(',')];
   cards.forEach(c=>{
@@ -2287,8 +2319,8 @@ function baixarCsv(cards, nomeArquivo){
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
 }
-function exportarCsv(){
-  baixarCsv(cardsParaRelatorio(), `leads_${currentMonthKey()}.csv`);
+function exportarCsv(formato){
+  baixarPlanilhaLeads(cardsParaRelatorio(), `leads_${currentMonthKey()}`, formato === 'csv' ? 'csv' : 'xlsx');
 }
 async function exportarRelatorioPdf(){
   try{ await carregarBiblioteca('jspdf'); }catch(e){ errorMsg = e.message; renderApp(); return; }
@@ -2333,8 +2365,8 @@ async function exportarRelatorioPdf(){
 
   doc.save(`relatorio_${currentMonthKey()}.pdf`);
 }
-function exportarLeads(){
-  baixarCsv(filteredLeads(), `contatos_${currentMonthKey()}.csv`);
+function exportarLeads(formato){
+  baixarPlanilhaLeads(filteredLeads(), `contatos_${currentMonthKey()}`, formato === 'csv' ? 'csv' : 'xlsx');
 }
 async function connectGoogleCalendar(){
   try{
@@ -3906,7 +3938,7 @@ function parseCsvLeads(texto){
 async function importarLeadsCsv(){
   const fileInput = document.getElementById('import-arquivo');
   const file = fileInput && fileInput.files && fileInput.files[0];
-  if(!file){ errorMsg = 'Escolha um arquivo CSV primeiro.'; renderApp(); return; }
+  if(!file){ errorMsg = 'Escolha um arquivo (.xlsx ou .csv) primeiro.'; renderApp(); return; }
   const columnId = importColumnId || (document.getElementById('import-coluna') || {}).value;
   if(!columnId){ errorMsg = 'Escolha a coluna de destino.'; renderApp(); return; }
 
@@ -3914,8 +3946,18 @@ async function importarLeadsCsv(){
   importResultado = null;
   renderApp();
 
-  const texto = await file.text();
-  const linhas = parseCsvLeads(texto);
+  let linhas;
+  if(/\.xlsx?$/i.test(file.name)){
+    try{ await carregarBiblioteca('xlsx'); }catch(e){ importando = false; errorMsg = e.message; renderApp(); return; }
+    const wb = XLSX.read(await file.arrayBuffer(), { type:'array' });
+    const matriz = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header:1, defval:'', raw:false });
+    const inicio = matriz.length && /nome/i.test(String(matriz[0][0])) ? 1 : 0;
+    linhas = matriz.slice(inicio).filter(l=> String(l[0]||'').trim()).map(l=>{
+      const v = String(l[2]||'0').replace(/[^\d,.-]/g,'');
+      const valor = /,\d{1,2}$/.test(v) ? parseFloat(v.replace(/\./g,'').replace(',','.')) : parseFloat(v.replace(/,/g,''));
+      return { nome: String(l[0]).trim(), telefone: String(l[1]||'').trim(), valor: valor || 0 };
+    });
+  } else linhas = parseCsvLeads(await file.text());
   let sucesso = 0, falha = 0;
   for(const linha of linhas){
     try{
@@ -4778,7 +4820,7 @@ function renderLeadsPage(){
         ${board.columns.map(c=>`<option value="${c.id}" ${leadsStatusFilter===c.id?'selected':''}>${esc(c.nome)}</option>`).join('')}
       </select>
       ${renderBotaoOrdenar('leads', leadsOrdenarPor)}
-      <button class="btn-outline" data-action="exportar-leads">Exportar</button>
+      <button class="btn-outline" data-action="exportar-leads" title="Baixa a lista em Excel (.xlsx)">Exportar (.xlsx)</button>
     </div>
 
     ${leadsSelecionados.size ? `
@@ -5671,7 +5713,7 @@ function renderConfigImportar(){
   return `
     <div class="settings-page-section">
       <h3>Importar leads</h3>
-      <p class="settings-page-note">Envie um arquivo CSV com as colunas <b>Nome, Telefone, Valor</b> (nessa ordem, cabeçalho na primeira linha).</p>
+      <p class="settings-page-note">Envie uma planilha (.xlsx) ou CSV com as colunas <b>Nome, Telefone, Valor</b> (nessa ordem, cabeçalho na primeira linha). Para escolher as colunas de qualquer planilha, use a aba Importar/Exportar.</p>
       <div class="field">
         <label>Coluna de destino</label>
         <select id="import-coluna">
@@ -5679,8 +5721,9 @@ function renderConfigImportar(){
         </select>
       </div>
       <div class="field">
-        <label>Arquivo CSV</label>
-        <input type="file" id="import-arquivo" accept=".csv,text/csv" />
+        <label>Arquivo (.xlsx ou .csv)</label>
+        <label class="btn-outline btn-arquivo" style="align-self:flex-start">Escolher arquivo<input type="file" id="import-arquivo" accept=".csv,.xlsx,.xls,text/csv" hidden /></label>
+        <span class="arquivo-nome" id="import-arquivo-nome">Nenhum arquivo escolhido</span>
       </div>
       ${importResultado ? `<p class="settings-page-msg ok">${importResultado.sucesso} lead(s) importado(s)${importResultado.falha ? `, ${importResultado.falha} falharam` : ''}.</p>` : ''}
       <button class="btn-primary" id="import-btn" ${importando?'disabled':''}>${importando?'Importando…':'Importar'}</button>
@@ -6169,6 +6212,10 @@ function bindAppEvents(){
   });
 
   /* -- Importar/Exportar -- */
+  const importArquivoInput = document.getElementById('import-arquivo');
+  if(importArquivoInput) importArquivoInput.addEventListener('change', ()=>{ const n = document.getElementById('import-arquivo-nome'); if(n) n.textContent = importArquivoInput.files[0] ? importArquivoInput.files[0].name : 'Nenhum arquivo escolhido'; });
+  const modeloLeadsBtn = app.querySelector('[data-action="modelo-planilha-leads"]');
+  if(modeloLeadsBtn) modeloLeadsBtn.addEventListener('click', baixarModeloLeads);
   const planilhaInput = document.getElementById('planilha-input');
   if(planilhaInput) planilhaInput.addEventListener('change', (e)=>{
     const file = e.target.files && e.target.files[0];
@@ -6199,8 +6246,7 @@ function bindAppEvents(){
   /* -- Relatórios -- */
   const relatorioFunilSelect = document.getElementById('relatorio-funil-select');
   if(relatorioFunilSelect) relatorioFunilSelect.addEventListener('change', (e)=>{ relatorioFunilId = e.target.value; renderApp(); });
-  const exportarCsvBtn = app.querySelector('[data-action="exportar-csv"]');
-  if(exportarCsvBtn) exportarCsvBtn.addEventListener('click', exportarCsv);
+  app.querySelectorAll('[data-action="exportar-csv"]').forEach(b=> b.addEventListener('click', ()=> exportarCsv(b.dataset.formato)));
   const exportarPdfBtn = app.querySelector('[data-action="exportar-relatorio-pdf"]');
   if(exportarPdfBtn) exportarPdfBtn.addEventListener('click', exportarRelatorioPdf);
 
@@ -6418,8 +6464,7 @@ function bindAppEvents(){
   /* -- Leads -- */
   const openNewLeadBtn = app.querySelector('[data-action="open-new-lead"]');
   if(openNewLeadBtn) openNewLeadBtn.addEventListener('click', ()=> openNewCard());
-  const exportarLeadsBtn = app.querySelector('[data-action="exportar-leads"]');
-  if(exportarLeadsBtn) exportarLeadsBtn.addEventListener('click', exportarLeads);
+  app.querySelectorAll('[data-action="exportar-leads"]').forEach(b=> b.addEventListener('click', ()=> exportarLeads(b.dataset.formato)));
   const toggleArquivadosBtn = app.querySelector('[data-action="toggle-mostrar-arquivados"]');
   if(toggleArquivadosBtn) toggleArquivadosBtn.addEventListener('click', ()=>{ mostrarArquivados = !mostrarArquivados; renderApp(); });
 
@@ -8102,7 +8147,8 @@ function renderRelatoriosPage(){
           <option value="">Todos os funis</option>
           ${funis.map(f=>`<option value="${f.id}" ${relatorioFunilId===f.id?'selected':''}>${esc(f.nome)}</option>`).join('')}
         </select>
-        <button class="btn-outline" data-action="exportar-csv">Exportar CSV</button>
+        <button class="btn-outline" data-action="exportar-csv">Exportar Excel (.xlsx)</button>
+        <button class="btn-outline" data-action="exportar-csv" data-formato="csv">CSV</button>
         <button class="btn-outline" data-action="exportar-relatorio-pdf">Exportar PDF</button>
       </div>
     </div>
@@ -8482,7 +8528,11 @@ function renderImportExportPage(){
 
     <div class="settings-page-section">
       <h3>1. Importar planilha</h3>
-      <input type="file" id="planilha-input" accept=".csv,.xlsx,.xls" />
+      <div class="arquivo-linha">
+        <label class="btn-outline btn-arquivo">Escolher planilha (.xlsx ou .csv)<input type="file" id="planilha-input" accept=".csv,.xlsx,.xls" hidden /></label>
+        <span class="arquivo-nome">${importPlanilhaNomeArquivo ? esc(importPlanilhaNomeArquivo) : 'Nenhum arquivo escolhido'}</span>
+        <button class="btn-link" data-action="modelo-planilha-leads">Baixar planilha modelo</button>
+      </div>
       ${importPlanilhaColunas.length ? `
         <p class="settings-page-note" style="margin-top:10px;">${importPlanilhaLinhas.length} linha(s) encontrada(s) em "${esc(importPlanilhaNomeArquivo)}". Escolha qual coluna da planilha é qual campo:</p>
         <div class="field-row">
@@ -8540,8 +8590,11 @@ function renderImportExportPage(){
 
     <div class="settings-page-section">
       <h3>3. Exportar</h3>
-      <p class="settings-page-note">Baixa todos os clientes já confirmados (que estão na aba Leads) em CSV.</p>
-      <button class="btn-outline" data-action="exportar-leads">Exportar Leads (CSV)</button>
+      <p class="settings-page-note">Baixa todos os clientes já confirmados (que estão na aba Leads) em Excel (.xlsx) ou CSV.</p>
+      <div class="arquivo-linha">
+        <button class="btn-outline" data-action="exportar-leads">Exportar Leads (.xlsx)</button>
+        <button class="btn-outline" data-action="exportar-leads" data-formato="csv">Exportar Leads (CSV)</button>
+      </div>
     </div>
   `;
 }

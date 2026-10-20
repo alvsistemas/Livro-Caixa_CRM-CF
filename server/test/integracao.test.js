@@ -14,10 +14,10 @@ describe('API com PostgreSQL (integração)', { skip: pular }, () => {
   let servidor;
   let base;
   let pool;
-  const api = async (metodo, caminho, corpo, token) => {
+  const api = async (metodo, caminho, corpo, token, extras = {}) => {
     const res = await fetch(base + caminho, {
       method: metodo,
-      headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+      headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}), ...extras },
       body: corpo === undefined ? undefined : JSON.stringify(corpo),
     });
     let dados = null;
@@ -1393,12 +1393,336 @@ describe('API com PostgreSQL (integração)', { skip: pular }, () => {
     assert.equal(peds.filter((p) => p.status === 'novo').length, 2);
     assert.ok(peds.some((p) => p.querBeneficio));
     assert.ok((await api('GET', '/api/estoque/vendas', undefined, t)).dados.vendas.length >= 20);
+    // caixa de hoje aberto com vendas, troco e sangria; Diego deve um fiado
+    assert.ok(est.caixa.aberto, 'caixa aberto');
+    assert.equal(est.caixa.aberto.vendas.quantidade, 3);
+    assert.equal(est.caixa.aberto.movimentos.sangria, 100);
+    const fiado = (await api('GET', '/api/estoque/clientes?filtro=fiado', undefined, t)).dados.clientes;
+    assert.deepEqual(fiado.map((c) => c.nome), ['Diego Santos']);
+    const mapa = (await api('GET', '/api/estoque/mesas', undefined, t)).dados;
+    assert.equal(mapa.mesas.length, 10);
+    assert.equal(mapa.mesas.filter((m) => m.comanda).length, 3);
+    assert.equal(mapa.mesas[4].comanda.status, 'conta');
+    assert.equal(mapa.mesas[7].comanda.prontos, 1);
+    assert.equal(est.pdv.exigirOperador, false, 'o exemplo abre sem pedir PIN');
     const pub = await api('GET', `/api/publico/cardapio/${r.slug}`);
     assert.equal(pub.status, 200);
     assert.ok(!pub.dados.produtos.some((p) => p.nome.startsWith('Vinho')), 'produto fora do cardápio não aparece');
     // conta liberada sem cobrança
     const ass = (await api('GET', '/api/assinatura', undefined, t)).dados;
     assert.equal(ass.liberado, true);
+  });
+
+  test('PDV caixa: abertura, pagamento dividido com troco, fiado, sangria, despesa, fechamento e operadores', async () => {
+    const t = (await api('POST', '/api/auth/register', { nome: 'Caixa', email: 'caixa-pdv@teste.com', senha: 'senha123' })).dados.token;
+    await api('PUT', '/api/estoque/negocio', { tipo: 'loja', nome: 'Mercadinho' }, t);
+    const prod = (await api('POST', '/api/estoque/produtos', { nome: 'Cesta', preco: 70, custo: 30, controlaEstoque: false }, t)).dados.produto;
+    const cli = (await api('POST', '/api/estoque/clientes', { nome: 'Dona Lúcia', telefone: '11911112222' }, t)).dados.cliente;
+    // ainda sem caixa: situação vazia; abrir com R$ 100 de troco
+    let r = await api('GET', '/api/estoque/caixa', undefined, t);
+    assert.equal(r.dados.aberto, null);
+    r = await api('POST', '/api/estoque/caixa/abrir', { trocoInicial: 100 }, t);
+    assert.equal(r.status, 200, JSON.stringify(r.dados));
+    assert.equal((await api('POST', '/api/estoque/caixa/abrir', { trocoInicial: 10 }, t)).status, 400, 'só um caixa aberto');
+    // venda de 70: 30 no Pix + 50 em dinheiro = troco de 10
+    r = await api('POST', '/api/estoque/vendas', { itens: [{ produtoId: prod.id, qtd: 1 }], pagamentos: [{ meio: 'pix', valor: 30 }, { meio: 'dinheiro', valor: 50 }] }, t);
+    assert.equal(r.status, 200, JSON.stringify(r.dados));
+    const v1 = r.dados.venda;
+    assert.equal(v1.troco, 10);
+    assert.equal(v1.meio, 'misto');
+    assert.deepEqual(v1.pagamentos.map((p) => [p.meio, p.valor]), [['pix', 30], ['dinheiro', 40]]);
+    assert.ok(v1.caixaId);
+    // pagamento a menos e troco no cartão: erro
+    assert.equal((await api('POST', '/api/estoque/vendas', { itens: [{ produtoId: prod.id, qtd: 1 }], pagamentos: [{ meio: 'pix', valor: 60 }] }, t)).status, 400);
+    assert.equal((await api('POST', '/api/estoque/vendas', { itens: [{ produtoId: prod.id, qtd: 1 }], pagamentos: [{ meio: 'credito', valor: 80 }] }, t)).status, 400);
+    // fiado precisa de cliente
+    assert.equal((await api('POST', '/api/estoque/vendas', { itens: [{ produtoId: prod.id, qtd: 1 }], meio: 'fiado' }, t)).status, 400);
+    r = await api('POST', '/api/estoque/vendas', { clienteId: cli.id, itens: [{ produtoId: prod.id, qtd: 1 }], pagamentos: [{ meio: 'fiado', valor: 70 }] }, t);
+    assert.equal(r.status, 200, JSON.stringify(r.dados));
+    const vFiado = r.dados.venda;
+    assert.equal(vFiado.fiadoAberto, 70);
+    // financeiro: duas receitas da venda dividida e a pendência do fiado
+    let fin = (await api('GET', '/api/financeiro', undefined, t)).dados.dados.transacoes;
+    assert.deepEqual(fin.filter((x) => x.estoque && x.estoque.vendaId === v1.id && x.estoque.origem === 'venda').map((x) => x.value || x.valor).sort(), [30, 40]);
+    assert.equal(fin.find((x) => x.estoque && x.estoque.vendaId === vFiado.id).status, 'Pendente');
+    // sangria, despesa paga do caixa e sangria maior que o dinheiro
+    assert.equal((await api('POST', '/api/estoque/caixa/movimento', { tipo: 'sangria', valor: 50 }, t)).status, 200);
+    assert.equal((await api('POST', '/api/estoque/caixa/movimento', { tipo: 'despesa', valor: 20, descricao: 'Gás' }, t)).status, 200);
+    assert.equal((await api('POST', '/api/estoque/caixa/movimento', { tipo: 'sangria', valor: 500 }, t)).status, 400);
+    // recebe R$ 30 do fiado em dinheiro
+    r = await api('POST', `/api/estoque/clientes/${cli.id}/fiado/receber`, { valor: 30, meio: 'dinheiro' }, t);
+    assert.equal(r.status, 200, JSON.stringify(r.dados));
+    assert.equal(r.dados.conta.total, 40);
+    assert.equal((await api('POST', `/api/estoque/clientes/${cli.id}/fiado/receber`, { valor: 100, meio: 'pix' }, t)).status, 400, 'mais do que deve');
+    fin = (await api('GET', '/api/financeiro', undefined, t)).dados.dados.transacoes;
+    assert.equal(fin.find((x) => x.estoque && x.estoque.vendaId === vFiado.id && x.estoque.origem === 'venda').value, 40);
+    assert.ok(fin.some((x) => x.estoque && x.estoque.origem === 'fiado' && x.status === 'Pago' && x.value === 30));
+    assert.ok(fin.some((x) => x.estoque && x.estoque.origem === 'gasto' && x.desc === 'Gás'));
+    const lista = (await api('GET', '/api/estoque/clientes?filtro=fiado', undefined, t)).dados;
+    assert.equal(lista.clientes[0].deve, 40);
+    assert.equal(lista.fiado.total, 40);
+    // venda fiado com parte já paga não cancela
+    assert.equal((await api('POST', `/api/estoque/vendas/${vFiado.id}/cancelar`, {}, t)).status, 400);
+    // esperado no dinheiro: 100 + 40 − 50 − 20 + 30 = 100
+    r = await api('GET', '/api/estoque/caixa', undefined, t);
+    assert.equal(r.dados.aberto.esperado.dinheiro, 100);
+    assert.equal(r.dados.aberto.esperado.pix, 30);
+    assert.equal(r.dados.aberto.vendas.fiado, 70);
+    // fechar contando R$ 95: quebra de caixa de R$ 5 vira despesa
+    assert.equal((await api('POST', '/api/estoque/caixa/fechar', { contado: {} }, t)).status, 400);
+    r = await api('POST', '/api/estoque/caixa/fechar', { contado: { dinheiro: 95, pix: 30 } }, t);
+    assert.equal(r.status, 200, JSON.stringify(r.dados));
+    assert.equal(r.dados.caixa.diferenca, -5);
+    assert.equal(r.dados.caixa.status, 'fechado');
+    fin = (await api('GET', '/api/financeiro', undefined, t)).dados.dados.transacoes;
+    assert.ok(fin.some((x) => x.estoque && x.estoque.origem === 'caixa' && x.type === 'Despesa' && x.value === 5));
+    const hist = (await api('GET', '/api/estoque/caixa/historico', undefined, t)).dados.caixas;
+    assert.equal(hist.length, 1);
+    assert.equal(hist[0].vendas, 2);
+    // operadores: gerente e caixa com PIN; exigir PIN
+    assert.equal((await api('PUT', '/api/estoque/pdv', { exigirOperador: true }, t)).status, 400, 'sem gerente não liga');
+    const ger = (await api('POST', '/api/estoque/operadores', { nome: 'Rosa', papel: 'gerente', pin: '1234' }, t)).dados.operador;
+    const cx = (await api('POST', '/api/estoque/operadores', { nome: 'Leo', papel: 'caixa', pin: '5555' }, t)).dados.operador;
+    assert.equal((await api('POST', '/api/estoque/operadores', { nome: 'X', pin: '12' }, t)).status, 400);
+    r = await api('PUT', '/api/estoque/pdv', { exigirOperador: true, descontoMaxCaixa: 10 }, t);
+    assert.equal(r.status, 200, JSON.stringify(r.dados));
+    assert.equal((await api('POST', '/api/estoque/vendas', { itens: [{ produtoId: prod.id, qtd: 1 }], meio: 'pix' }, t)).status, 403);
+    assert.equal((await api('POST', '/api/estoque/operadores/entrar', { id: cx.id, pin: '0000' }, t)).status, 400);
+    const tokCx = (await api('POST', '/api/estoque/operadores/entrar', { id: cx.id, pin: '5555' }, t)).dados.token;
+    const tokGer = (await api('POST', '/api/estoque/operadores/entrar', { id: ger.id, pin: '1234' }, t)).dados.token;
+    const comCx = { 'x-operador': tokCx }; const comGer = { 'x-operador': tokGer };
+    r = await api('POST', '/api/estoque/vendas', { itens: [{ produtoId: prod.id, qtd: 1 }], meio: 'pix', desconto: 20 }, t, comCx);
+    assert.equal(r.status, 400, 'desconto acima do limite do caixa');
+    r = await api('POST', '/api/estoque/vendas', { itens: [{ produtoId: prod.id, qtd: 1 }], meio: 'pix', desconto: 5 }, t, comCx);
+    assert.equal(r.status, 200, JSON.stringify(r.dados));
+    assert.equal(r.dados.venda.operador, 'Leo');
+    assert.equal(r.dados.venda.caixaId, null, 'sem caixa aberto a venda fica fora do caixa');
+    assert.equal((await api('POST', `/api/estoque/vendas/${r.dados.venda.id}/cancelar`, {}, t, comCx)).status, 403, 'caixa não cancela');
+    assert.equal((await api('POST', `/api/estoque/vendas/${r.dados.venda.id}/cancelar`, {}, t, comGer)).status, 200);
+    assert.equal((await api('PUT', '/api/estoque/pdv', { exigirOperador: false }, t, comCx)).status, 403);
+    assert.equal((await api('DELETE', `/api/estoque/operadores/${ger.id}`, undefined, t, comGer)).status, 400, 'não fica sem gerente');
+    assert.equal((await api('PUT', '/api/estoque/pdv', { exigirOperador: false }, t, comGer)).status, 200);
+  });
+
+  test('PDV restaurante: mesas, comanda pelo garçom, cozinha, fechar a conta e planilha .xlsx', async () => {
+    const t = (await api('POST', '/api/auth/register', { nome: 'Rest', email: 'mesas-pdv@teste.com', senha: 'senha123' })).dados.token;
+    await api('PUT', '/api/estoque/negocio', { tipo: 'restaurante', nome: 'Cantina Teste', controlaEstoque: true }, t);
+    const pizza = (await api('POST', '/api/estoque/produtos', { nome: 'Pizza', preco: 0, custo: 0, controlaEstoque: false,
+      variacoes: [{ nome: 'Média', preco: 40, custo: 12 }, { nome: 'Grande', preco: 55, custo: 16 }],
+      opcoes: [{ nome: 'Borda', tipo: 'um', escolhas: [{ nome: 'Sem borda', preco: 0 }, { nome: 'Catupiry', preco: 8 }] }] }, t)).dados.produto;
+    const coca = (await api('POST', '/api/estoque/produtos', { nome: 'Coca lata', preco: 7, custo: 3, estoqueInicial: 10, cozinha: false }, t)).dados.produto;
+    assert.equal(coca.cozinha, false);
+    let r = await api('PUT', '/api/estoque/mesas', { mesas: [{ nome: 'Mesa 1' }, { nome: 'Mesa 2' }, { nome: 'Mesa 3' }] }, t);
+    assert.equal(r.status, 200, JSON.stringify(r.dados));
+    const [m1, m2] = r.dados.mesas;
+    assert.equal((await api('PUT', '/api/estoque/mesas', { mesas: [{ nome: 'A' }, { nome: 'a' }] }, t)).status, 400, 'nome repetido');
+    // operador garçom: abre a mesa, lança e manda para a cozinha, mas não cobra
+    const ger = (await api('POST', '/api/estoque/operadores', { nome: 'Dona', papel: 'gerente', pin: '1111' }, t)).dados.operador;
+    const gar = (await api('POST', '/api/estoque/operadores', { nome: 'Tito', papel: 'garcom', pin: '2222' }, t)).dados.operador;
+    assert.equal(gar.papel, 'garcom');
+    await api('PUT', '/api/estoque/pdv', { exigirOperador: true, taxaServico: 10 }, t);
+    const comGar = { 'x-operador': (await api('POST', '/api/estoque/operadores/entrar', { id: gar.id, pin: '2222' }, t)).dados.token };
+    const comGer = { 'x-operador': (await api('POST', '/api/estoque/operadores/entrar', { id: ger.id, pin: '1111' }, t)).dados.token };
+    r = await api('POST', '/api/estoque/comandas', { mesaId: m1.id, pessoas: 2 }, t, comGar);
+    assert.equal(r.status, 200, JSON.stringify(r.dados));
+    const cid = r.dados.comanda.id;
+    assert.equal(r.dados.comanda.rotulo, 'Mesa 1');
+    assert.equal((await api('POST', '/api/estoque/comandas', { mesaId: m1.id }, t, comGar)).dados.comanda.id, cid, 'mesma mesa: mesma comanda');
+    r = await api('POST', `/api/estoque/comandas/${cid}/itens`, { itens: [
+      { produtoId: pizza.id, variacaoId: pizza.variacoes[1].id, qtd: 1, opcoes: { 0: [1] }, obs: 'sem cebola' },
+      { produtoId: coca.id, qtd: 2 },
+    ] }, t, comGar);
+    assert.equal(r.status, 200, JSON.stringify(r.dados));
+    assert.equal(r.dados.comanda.subtotal, 77); // 55 + 8 + 2×7
+    assert.equal(r.dados.comanda.taxaServico, 7.7);
+    assert.equal(r.dados.comanda.pendentes, 0, 'enviado na hora');
+    assert.equal((await api('POST', '/api/estoque/comandas', { pessoas: 1 }, t, comGar)).dados.comanda.rotulo.startsWith('Comanda'), true, 'avulsa');
+    // cozinha: só a pizza (coca não vai para a cozinha)
+    let coz = (await api('GET', '/api/estoque/cozinha', undefined, t)).dados;
+    assert.equal(coz.tickets.length, 1);
+    assert.deepEqual(coz.tickets[0].itens.map((i) => i.nome), ['Pizza (Grande)']);
+    assert.equal(coz.tickets[0].itens[0].obs, 'sem cebola');
+    assert.equal(coz.tickets[0].origem, 'Mesa 1');
+    assert.equal((await api('PUT', `/api/estoque/cozinha/${coz.tickets[0].id}`, { status: 'pronto' }, t, comGar)).dados.ticket.status, 'pronto');
+    let mapa = (await api('GET', '/api/estoque/mesas', undefined, t)).dados;
+    assert.equal(mapa.mesas[0].comanda.prontos, 1);
+    assert.equal(mapa.mesas[0].comanda.total, 77);
+    assert.equal(mapa.mesas[1].comanda, null);
+    assert.equal(mapa.avulsas.length, 1);
+    // item já enviado: garçom não cancela, gerente sim
+    r = await api('POST', `/api/estoque/comandas/${cid}/itens`, { itens: [{ produtoId: coca.id, qtd: 1 }] }, t, comGar);
+    const extra = r.dados.comanda.itens.at(-1);
+    assert.equal((await api('DELETE', `/api/estoque/comandas/${cid}/itens/${extra.id}`, { motivo: 'errado' }, t, comGar)).status, 403);
+    r = await api('DELETE', `/api/estoque/comandas/${cid}/itens/${extra.id}`, { motivo: 'errado' }, t, comGer);
+    assert.equal(r.status, 200, JSON.stringify(r.dados));
+    assert.equal(r.dados.comanda.subtotal, 77);
+    // trocar de mesa e pedir a conta
+    r = await api('PUT', `/api/estoque/comandas/${cid}`, { mesaId: m2.id, status: 'conta' }, t, comGar);
+    assert.equal(r.dados.comanda.rotulo, 'Mesa 2');
+    assert.equal(r.dados.comanda.status, 'conta');
+    // garçom não fecha a conta; o gerente fecha com dinheiro e troco
+    const pag = { pagamentos: [{ meio: 'pix', valor: 40 }, { meio: 'dinheiro', valor: 50 }] };
+    assert.equal((await api('POST', `/api/estoque/comandas/${cid}/fechar`, pag, t, comGar)).status, 403);
+    r = await api('POST', `/api/estoque/comandas/${cid}/fechar`, pag, t, comGer);
+    assert.equal(r.status, 200, JSON.stringify(r.dados));
+    assert.equal(r.dados.venda.total, 84.7);
+    assert.equal(r.dados.venda.troco, 5.3);
+    assert.equal(r.dados.venda.acrescimo, 7.7);
+    assert.equal(r.dados.venda.comandaId, cid);
+    const coca2 = (await api('GET', '/api/estoque/produtos', undefined, t)).dados.produtos.find((p) => p.id === coca.id);
+    assert.equal(coca2.estoque, 8, 'estoque baixa ao fechar a conta');
+    mapa = (await api('GET', '/api/estoque/mesas', undefined, t)).dados;
+    assert.equal(mapa.mesas[1].comanda, null, 'mesa livre');
+    assert.equal((await api('GET', '/api/estoque/cozinha', undefined, t)).dados.tickets.length, 0);
+    // cancelar a venda devolve a conta para cobrar de novo
+    assert.equal((await api('POST', `/api/estoque/vendas/${r.dados.venda.id}/cancelar`, {}, t, comGer)).status, 200);
+    assert.equal((await api('GET', `/api/estoque/comandas/${cid}`, undefined, t)).dados.comanda.status, 'conta');
+    r = await api('POST', `/api/estoque/comandas/${cid}/fechar`, { meio: 'debito', semTaxa: true }, t, comGer);
+    assert.equal(r.dados.venda.total, 77);
+    // comanda vazia: qualquer um cancela
+    const vazia = mapa.avulsas[0].id;
+    assert.equal((await api('POST', `/api/estoque/comandas/${vazia}/cancelar`, {}, t, comGar)).status, 200);
+    // pedido do cardápio vai para a cozinha
+    await api('PUT', '/api/estoque/negocio', { whatsapp: '11999990000', cardapioAtivo: true, aceitaRetirada: true }, t, comGer);
+    const slug = (await api('GET', '/api/estoque', undefined, t)).dados.negocio.slug;
+    // outro restaurante com o mesmo nome ganha outro endereço (antes batia na trava por usuário e dava erro)
+    const t2 = (await api('POST', '/api/auth/register', { nome: 'Outro', email: 'mesas-pdv-2@teste.com', senha: 'senha123' })).dados.token;
+    r = await api('PUT', '/api/estoque/negocio', { tipo: 'restaurante', nome: 'Cantina Teste' }, t2);
+    assert.equal(r.status, 200, JSON.stringify(r.dados));
+    assert.notEqual(r.dados.negocio.slug, slug);
+    r = await api('POST', `/api/publico/cardapio/${slug}/pedido`, { nome: 'Lia', telefone: '11988887777', tipo: 'retirada', pagamento: 'pix',
+      itens: [{ produtoId: pizza.id, variacaoId: pizza.variacoes[0].id, qtd: 1, opcoes: { 0: [0] } }, { produtoId: coca.id, qtd: 1 }] });
+    assert.equal(r.status, 200, JSON.stringify(r.dados));
+    const ped = (await api('GET', '/api/estoque/pedidos', undefined, t)).dados.pedidos[0];
+    r = await api('POST', `/api/estoque/pedidos/${ped.id}/cozinha`, {}, t, comGar);
+    assert.equal(r.status, 200, JSON.stringify(r.dados));
+    assert.match(r.dados.ticket.origem, /^Pedido #001 · retirada · Lia/);
+    assert.equal(r.dados.ticket.itens.length, 1);
+    await api('PUT', '/api/estoque/pdv', { exigirOperador: false }, t, comGer);
+    // planilha do mês
+    const res = await fetch(`${base}/api/estoque/exportar.xlsx`, { headers: { Authorization: `Bearer ${t}` } });
+    assert.equal(res.status, 200);
+    assert.match(res.headers.get('content-type'), /spreadsheetml/);
+    const buf = Buffer.from(await res.arrayBuffer());
+    assert.equal(buf.slice(0, 2).toString(), 'PK');
+    const ExcelJS = require('exceljs');
+    const wb = new ExcelJS.Workbook(); await wb.xlsx.load(buf);
+    assert.deepEqual(wb.worksheets.map((w) => w.name), ['Resumo', 'Vendas', 'Itens vendidos', 'Mais vendidos', 'Pagamentos', 'Caixas', 'Despesas', 'Compras', 'Estoque (hoje)', 'Clientes']);
+    const vendas = wb.getWorksheet('Vendas');
+    assert.equal(vendas.getRow(2).getCell(4).value, 'Mesa/comanda');
+    assert.equal(vendas.rowCount, 4, 'cabeçalho + 2 vendas (uma cancelada) + total');
+  });
+
+  test('PDV fase 3: planilhas de produtos/clientes, análises (ABC e horários) e compra pelo XML da NF-e', async () => {
+    const ExcelJS = require('exceljs');
+    const t = (await api('POST', '/api/auth/register', { nome: 'Loja', email: 'fase3-pdv@teste.com', senha: 'senha123' })).dados.token;
+    await api('PUT', '/api/estoque/negocio', { tipo: 'loja', nome: 'Empório Teste', controlaEstoque: true }, t);
+    await api('PUT', '/api/estoque/pdv', { exigirCaixa: false }, t);
+    const cafe = (await api('POST', '/api/estoque/produtos', { nome: 'Café 500g', preco: 20, custo: 12, estoqueInicial: 10, codigo: '7891000100103' }, t)).dados.produto;
+    const blusa = (await api('POST', '/api/estoque/produtos', { nome: 'Blusa', preco: 50, custo: 20, variacoes: [{ nome: 'P', estoqueInicial: 2 }, { nome: 'M', estoqueInicial: 3 }] }, t)).dados.produto;
+    // planilha de produtos: exporta, muda preço, estoque e cria um novo, importa de volta
+    let res = await fetch(`${base}/api/estoque/exportar/produtos.xlsx`, { headers: { Authorization: `Bearer ${t}` } });
+    assert.equal(res.status, 200);
+    const wb = new ExcelJS.Workbook(); await wb.xlsx.load(Buffer.from(await res.arrayBuffer()));
+    const ws = wb.getWorksheet('Produtos');
+    assert.equal(ws.rowCount, 4, 'cabeçalho + café + 2 variações');
+    const linhaCafe = [2, 3, 4].find((r) => ws.getRow(r).getCell(2).value === 'Café 500g');
+    ws.getRow(linhaCafe).getCell(7).value = 22.5; // preço
+    ws.getRow(linhaCafe).getCell(9).value = 7;    // estoque contado
+    ws.addRow(['', 'Açúcar 1kg', '', 'Mercearia', '', 'un', 6, 3.5, 30, 5, 'Sim', 'Não', 'Não', 'Sim', '']);
+    const arquivo = Buffer.from(await wb.xlsx.writeBuffer()).toString('base64');
+    let r = await api('POST', '/api/estoque/importar/produtos', { arquivo }, t);
+    assert.equal(r.status, 200, JSON.stringify(r.dados));
+    assert.deepEqual(r.dados.resumo, { novo: 1, atualizar: 1, igual: 1, erro: 0 });
+    assert.ok(r.dados.itens.find((x) => x.nome === 'Café 500g').estoque, 'mostra a diferença de estoque');
+    r = await api('POST', '/api/estoque/importar/produtos', { arquivo, aplicar: true, atualizarEstoque: true }, t);
+    assert.equal(r.status, 200, JSON.stringify(r.dados));
+    let prods = (await api('GET', '/api/estoque/produtos', undefined, t)).dados.produtos;
+    assert.equal(prods.find((p) => p.id === cafe.id).preco, 22.5);
+    assert.equal(prods.find((p) => p.id === cafe.id).estoque, 7);
+    assert.equal(prods.find((p) => p.nome === 'Açúcar 1kg').estoque, 30);
+    assert.equal(prods.find((p) => p.id === blusa.id).variacoes.length, 2, 'variações mantidas');
+    assert.equal((await api('POST', '/api/estoque/importar/produtos', { arquivo: Buffer.from('não é xlsx nenhum, é texto puro com mais de cem caracteres para passar do tamanho mínimo de um arquivo.....').toString('base64') }, t)).status, 400);
+    // planilha de clientes
+    const wc = new ExcelJS.Workbook(); const sc = wc.addWorksheet('x');
+    sc.addRow(['Nome', 'Telefone', 'Endereço', 'Participa da fidelidade']); sc.addRow(['Ana Lima', '(11) 98888-1111', 'Rua A, 1', 'Sim']); sc.addRow(['Bia', '119', '', '']);
+    r = await api('POST', '/api/estoque/importar/clientes', { arquivo: Buffer.from(await wc.xlsx.writeBuffer()).toString('base64') }, t);
+    assert.deepEqual(r.dados.resumo, { novo: 1, atualizar: 0, igual: 0, erro: 1 });
+    assert.equal((await api('POST', '/api/estoque/importar/clientes', { arquivo: Buffer.from(await wc.xlsx.writeBuffer()).toString('base64'), aplicar: true }, t)).status, 400, 'com erro não aplica');
+    sc.spliceRows(3, 1);
+    r = await api('POST', '/api/estoque/importar/clientes', { arquivo: Buffer.from(await wc.xlsx.writeBuffer()).toString('base64'), aplicar: true }, t);
+    assert.equal(r.status, 200, JSON.stringify(r.dados));
+    assert.equal((await api('GET', '/api/estoque/clientes', undefined, t)).dados.clientes[0].telefone, '11988881111');
+    // vendas para as análises
+    const hoje = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' });
+    await api('POST', '/api/estoque/vendas', { itens: [{ produtoId: cafe.id, qtd: 2 }], meio: 'pix' }, t);
+    await api('POST', '/api/estoque/vendas', { itens: [{ produtoId: blusa.id, variacaoId: blusa.variacoes[0].id, qtd: 1 }, { produtoId: cafe.id, qtd: 1 }], meio: 'dinheiro', desconto: 10 }, t);
+    const acucar = prods.find((p) => p.nome === 'Açúcar 1kg');
+    await api('POST', '/api/estoque/vendas', { itens: [{ produtoId: acucar.id, qtd: 1, unit: 3 }], meio: 'pix' }, t); // vendeu abaixo do custo
+    r = await api('GET', `/api/estoque/analises?de=${hoje.slice(0, 8)}01&ate=${hoje}`, undefined, t);
+    assert.equal(r.status, 200, JSON.stringify(r.dados));
+    const an = r.dados;
+    assert.equal(an.vendas, 3);
+    const l = an.produtos.lista;
+    assert.equal(l[0].nome, 'Café 500g', 'mais lucro primeiro (2 vendas: 21 + 7,40)');
+    assert.equal(l[0].lucro, 28.4);
+    assert.equal(l[0].classe, 'A');
+    const blusaA = l.find((x) => x.nome === 'Blusa');
+    assert.equal(l.find((x) => x.nome === 'Açúcar 1kg').classe, 'C');
+    assert.ok(l.find((x) => x.nome === 'Açúcar 1kg').lucro < 0);
+    // desconto de 10 dividido entre blusa (50) e café (22,50): a blusa fica com 50 − 6,90
+    assert.equal(blusaA.faturamento, 43.1);
+    assert.ok(Math.abs(an.produtos.faturamento - (45 + 43.1 + 19.4 + 3)) < 0.02, String(an.produtos.faturamento));
+    const dow = new Date(`${hoje}T12:00:00Z`).getUTCDay();
+    assert.equal(an.horarios.dias[dow].vendas, 3);
+    assert.equal(an.horarios.grade[dow].reduce((s, c) => s + c.vendas, 0), 3);
+    assert.equal((await api('GET', '/api/estoque/analises?de=x&ate=y', undefined, t)).status, 400);
+    // compra pelo XML da NF-e
+    const chave = '35261012345678000199550010000012341000012345';
+    const det = (n, cProd, ean, xProd, u, q, vu, extra = '') => `<det nItem="${n}"><prod><cProd>${cProd}</cProd><cEAN>${ean}</cEAN><xProd>${xProd}</xProd><NCM>09012100</NCM><uCom>${u}</uCom><qCom>${q}</qCom><vUnCom>${vu}</vUnCom><vProd>${(q * vu).toFixed(2)}</vProd>${extra}</prod><imposto><IPI><IPITrib><vIPI>0.00</vIPI></IPITrib></IPI></imposto></det>`;
+    const xml = `<?xml version="1.0" encoding="UTF-8"?><nfeProc xmlns="http://www.portalfiscal.inf.br/nfe"><NFe><infNFe Id="NFe${chave}" versao="4.00">
+      <ide><mod>55</mod><serie>1</serie><nNF>1234</nNF><dhEmi>${hoje}T10:00:00-03:00</dhEmi></ide>
+      <emit><CNPJ>12345678000199</CNPJ><xNome>Distribuidora Paulista LTDA</xNome><xFant>Distribuidora Paulista</xFant></emit>
+      ${det(1, 'CF500', '7891000100103', 'CAFE TORRADO 500G', 'CX', 2, 120, '<vDesc>10.00</vDesc>')}
+      ${det(2, 'BOL01', 'SEM GTIN', 'BOLACHA MARIA 200G', 'UN', 24, 3.2)}
+      ${det(3, 'AC001', 'SEM GTIN', 'ACUCAR REFINADO 1KG', 'UN', 10, 3.6)}
+      <total><ICMSTot><vProd>352.80</vProd><vFrete>20.00</vFrete><vDesc>10.00</vDesc><vNF>362.80</vNF></ICMSTot></total>
+      <cobr><dup><nDup>001</nDup><dVenc>2099-12-20</dVenc><vDup>362.80</vDup></dup></cobr>
+    </infNFe></NFe></nfeProc>`;
+    r = await api('POST', '/api/estoque/compras/nfe/previa', { xml }, t);
+    assert.equal(r.status, 200, JSON.stringify(r.dados));
+    const pv = r.dados;
+    assert.equal(pv.numero, '1234');
+    assert.equal(pv.fornecedor.nome, 'Distribuidora Paulista');
+    assert.equal(pv.itens[0].sugestao.produtoId, cafe.id, 'pelo código de barras');
+    assert.equal(pv.itens[0].embalagem, true);
+    assert.equal(pv.itens[2].sugestao.produtoId, acucar.id, 'pelo nome parecido');
+    assert.equal(pv.itens[1].sugestao, null);
+    assert.equal(pv.itens[0].custoUnit, 115);
+    assert.equal((await api('POST', '/api/estoque/compras/nfe/previa', { xml: '<html>oi</html>' }, t)).status, 400);
+    r = await api('POST', '/api/estoque/compras/nfe', { xml, itens: [
+      { n: 1, acao: 'ligar', produtoId: cafe.id, fator: 12 },
+      { n: 2, acao: 'novo', novo: { nome: 'Bolacha Maria 200g', categoria: 'Mercearia', preco: 5.5 } },
+      { n: 3, acao: 'ignorar' },
+    ] }, t);
+    assert.equal(r.status, 200, JSON.stringify(r.dados));
+    assert.equal(r.dados.ignorados, 1);
+    const compra = r.dados.compra;
+    assert.equal(compra.nfeNumero, '1234');
+    assert.equal(compra.meio, 'boleto');
+    assert.equal(compra.vencimento, '2099-12-20');
+    assert.equal(compra.total, 2 * 120 - 10 + 24 * 3.2 + 20);
+    prods = (await api('GET', '/api/estoque/produtos', undefined, t)).dados.produtos;
+    assert.equal(prods.find((p) => p.id === cafe.id).estoque, 7 - 3 + 24, '2 caixas × 12');
+    const bolacha = prods.find((p) => p.nome === 'Bolacha Maria 200g');
+    assert.equal(bolacha.estoque, 24);
+    assert.equal(bolacha.preco, 5.5);
+    assert.equal((await api('POST', '/api/estoque/compras/nfe', { xml, itens: [] }, t)).status, 400, 'nota repetida');
+    r = await api('POST', '/api/estoque/compras/nfe/previa', { xml }, t);
+    assert.ok(r.dados.jaLancada);
+    assert.equal(r.dados.itens[0].sugestao.por, 'antes');
+    assert.equal(r.dados.itens[0].sugestao.fator, 12, 'lembra quantas vêm na caixa');
+    assert.equal(r.dados.itens[1].sugestao.produtoId, bolacha.id);
   });
 
   test('sair de todos os aparelhos invalida o token antigo', async () => {

@@ -16,6 +16,8 @@ const E = require('./estoque');
 const F = require('./fidelidade');
 const { salvarTaxas, hojeBR } = require('./fechamento');
 const A = require('./assinatura');
+const C = require('./caixa');
+const M = require('./comandas');
 
 const diasAtras = (hoje, n) => F.somarDias(hoje, -n);
 
@@ -63,12 +65,12 @@ async function criarRestauranteDemo({ whatsapp = '' } = {}, agora = new Date()) 
     await mk('lasanha', { nome: 'Lasanha à bolonhesa', categoria: 'Massas', descricao: 'Massa fresca, ragu de carne cozido por 6 horas e molho branco gratinado. Serve 1 pessoa.', preco: 44, custo: 13, controlaEstoque: false, destaque: true });
     await mk('nhoque', { nome: 'Nhoque ao sugo', categoria: 'Massas', descricao: 'Nhoque de batata feito na casa com molho de tomate fresco.', preco: 38, custo: 9, controlaEstoque: false, opcoes: [{ nome: 'Extras', tipo: 'varios', escolhas: [{ nome: 'Parmesão extra', preco: 4 }, { nome: 'Almôndegas (3 un.)', preco: 12 }] }] });
     await mk('carbonara', { nome: 'Espaguete à carbonara', categoria: 'Massas', descricao: 'Guanciale, gema, pecorino e pimenta-do-reino.', preco: 47, custo: 12, controlaEstoque: false });
-    await mk('refri', { nome: 'Refrigerante lata 350ml', categoria: 'Bebidas', preco: 7, custo: 3.1, controlaEstoque: true, variacoes: [{ nome: 'Coca-Cola', estoqueInicial: 30, estoqueMinimo: 12 }, { nome: 'Guaraná', estoqueInicial: 8, estoqueMinimo: 12 }, { nome: 'Coca-Cola Zero', estoqueInicial: 18, estoqueMinimo: 6 }] });
+    await mk('refri', { cozinha: false, nome: 'Refrigerante lata 350ml', categoria: 'Bebidas', preco: 7, custo: 3.1, controlaEstoque: true, variacoes: [{ nome: 'Coca-Cola', estoqueInicial: 30, estoqueMinimo: 12 }, { nome: 'Guaraná', estoqueInicial: 8, estoqueMinimo: 12 }, { nome: 'Coca-Cola Zero', estoqueInicial: 18, estoqueMinimo: 6 }] });
     await mk('suco', { nome: 'Suco natural 500ml', categoria: 'Bebidas', descricao: 'Laranja, limão ou abacaxi com hortelã.', preco: 12, custo: 3.5, controlaEstoque: false });
-    await mk('agua', { nome: 'Água mineral 500ml', categoria: 'Bebidas', preco: 5, custo: 1.4, controlaEstoque: true, estoqueInicial: 24, estoqueMinimo: 10, unidade: 'un' });
-    await mk('pudim', { nome: 'Pudim de leite', categoria: 'Sobremesas', descricao: 'Fatia generosa, receita da nonna.', preco: 14, custo: 4, controlaEstoque: true, estoqueInicial: 6, estoqueMinimo: 4 });
+    await mk('agua', { cozinha: false, nome: 'Água mineral 500ml', categoria: 'Bebidas', preco: 5, custo: 1.4, controlaEstoque: true, estoqueInicial: 24, estoqueMinimo: 10, unidade: 'un' });
+    await mk('pudim', { cozinha: false, nome: 'Pudim de leite', categoria: 'Sobremesas', descricao: 'Fatia generosa, receita da nonna.', preco: 14, custo: 4, controlaEstoque: true, estoqueInicial: 6, estoqueMinimo: 4 });
     await mk('petit', { nome: 'Petit gâteau com sorvete', categoria: 'Sobremesas', preco: 22, custo: 7, controlaEstoque: true, estoqueInicial: 0, estoqueMinimo: 3 });
-    await mk('vinho', { nome: 'Vinho tinto da casa (taça)', categoria: 'Bebidas', preco: 19, custo: 6, controlaEstoque: false, noCardapio: false });
+    await mk('vinho', { cozinha: false, nome: 'Vinho tinto da casa (taça)', categoria: 'Bebidas', preco: 19, custo: 6, controlaEstoque: false, noCardapio: false });
 
     const vr = (chave, nome) => prod[chave].variacoes.find((v) => v.nome.startsWith(nome)).id;
 
@@ -105,12 +107,41 @@ async function criarRestauranteDemo({ whatsapp = '' } = {}, agora = new Date()) 
       ...[21, 8].map((d) => ({ dias: d, cliente: 'elisa', meio: 'credito', itens: [pizzaG('portuguesa'), pizzaM('margherita'), coca(3)], acrescimo: 7 })),
       { dias: 35, cliente: 'fabio', meio: 'pix', itens: [{ produtoId: prod.nhoque.id, qtd: 1, opcoes: ['Almôndegas (3 un.)'], unit: 50 }, { produtoId: prod.refri.id, variacaoId: vr('refri', 'Guaraná'), qtd: 1 }] },
       // balcão sem cliente cadastrado
-      ...[27, 19, 11, 5, 1, 0].map((d, i) => ({ dias: d, meio: ['dinheiro', 'pix', 'debito'][i % 3], cliente: null, itens: [pizzaM(['margherita', 'calabresa', 'portuguesa'][i % 3]), { produtoId: prod.agua.id, qtd: 1 }] })),
+      ...[27, 19, 11, 5, 1].map((d, i) => ({ dias: d, meio: ['dinheiro', 'pix', 'debito'][i % 3], cliente: null, itens: [pizzaM(['margherita', 'calabresa', 'portuguesa'][i % 3]), { produtoId: prod.agua.id, qtd: 1 }] })),
+      // Diego pendurou uma conta (fiado) há 6 dias
+      { dias: 6, cliente: 'diego', meio: 'fiado', itens: [{ produtoId: prod.lasanha.id, qtd: 1 }, { produtoId: prod.vinho.id, qtd: 1 }] },
     ];
     for (const v of vendas) {
       await E.registrarVenda(userId, { meio: v.meio, data: diasAtras(hoje, v.dias), itens: v.itens, acrescimo: v.acrescimo || 0,
         ...(v.cliente ? { clienteId: cli[v.cliente].id } : {}) }, agora);
     }
+    // o caixa de hoje, aberto com troco, com vendas (uma com troco, uma dividida) e uma sangria
+    await C.abrirCaixa(userId, { trocoInicial: 200 }, 'Marco');
+    const hojeVenda = (extra) => E.registrarVenda(userId, { data: hoje, _operador: 'Marco', ...extra }, agora);
+    await hojeVenda({ pagamentos: [{ meio: 'dinheiro', valor: 100 }], itens: [pizzaM('margherita'), { produtoId: prod.agua.id, qtd: 1 }] });
+    await hojeVenda({ pagamentos: [{ meio: 'pix', valor: 30 }, { meio: 'dinheiro', valor: 100 }], itens: [pizzaG('calabresa'), coca(2)] });
+    await hojeVenda({ meio: 'debito', clienteId: cli.bruno.id, itens: [{ produtoId: prod.lasanha.id, qtd: 1 }, { produtoId: prod.suco.id, qtd: 1 }] });
+    await C.movimentarCaixa(userId, { tipo: 'sangria', valor: 100, descricao: 'Levado para o cofre' }, 'Marco', agora, E.registrarGasto);
+    // salão: 10 mesas, garçom, taxa de serviço; algumas mesas ocupadas e pedidos na cozinha
+    await C.salvarPdv(userId, { taxaServico: 10 });
+    await C.salvarOperador(userId, { nome: 'Marco', papel: 'gerente', pin: '1234' });
+    await C.salvarOperador(userId, { nome: 'Tito', papel: 'garcom', pin: '2222' });
+    const mesas = await M.salvarMesas(userId, Array.from({ length: 10 }, (_, i) => ({ nome: `Mesa ${i + 1}` })));
+    const pizzaComanda = (chave, tam, borda, extra = []) => ({ produtoId: prod[chave].id, variacaoId: vr(chave, tam), qtd: 1, opcoes: { 0: [borda], 1: extra } });
+    const m3 = await M.abrirComanda(userId, { mesaId: mesas[2].id, pessoas: 4 }, 'Tito');
+    await M.adicionarItens(userId, m3.id, { itens: [pizzaComanda('margherita', 'Grande', 1), pizzaComanda('calabresa', 'Grande', 0, [2]), { produtoId: prod.refri.id, variacaoId: vr('refri', 'Coca-Cola'), qtd: 3 }, { produtoId: prod.suco.id, qtd: 1, obs: 'laranja, sem açúcar' }] }, 'Tito');
+    const m5 = await M.abrirComanda(userId, { mesaId: mesas[4].id, pessoas: 2 }, 'Tito');
+    await M.adicionarItens(userId, m5.id, { itens: [{ produtoId: prod.lasanha.id, qtd: 1 }, { produtoId: prod.carbonara.id, qtd: 1, obs: 'sem pimenta' }, { produtoId: prod.vinho.id, qtd: 2 }] }, 'Tito');
+    await M.adicionarItens(userId, m5.id, { itens: [{ produtoId: prod.pudim.id, qtd: 2 }] }, 'Tito');
+    await M.atualizarComanda(userId, m5.id, { status: 'conta' });
+    const m8 = await M.abrirComanda(userId, { mesaId: mesas[7].id, pessoas: 3 }, 'Tito');
+    await M.adicionarItens(userId, m8.id, { itens: [{ produtoId: prod.nhoque.id, qtd: 2, opcoes: { 0: [1] } }, { produtoId: prod.agua.id, qtd: 3 }] }, 'Tito');
+    // a cozinha já começou a da mesa 5 (pronta) e a da mesa 3 (preparando)
+    const coz = (await M.listarCozinha(userId)).tickets;
+    const tk = (cid) => coz.find((t) => t.comandaId === cid);
+    if (tk(m5.id)) { await M.mudarTicket(userId, tk(m5.id).id, 'preparando'); await M.mudarTicket(userId, tk(m5.id).id, 'pronto'); await M.mudarTicket(userId, tk(m5.id).id, 'entregue'); }
+    if (tk(m3.id)) await M.mudarTicket(userId, tk(m3.id).id, 'preparando');
+    if (tk(m8.id)) { await M.mudarTicket(userId, tk(m8.id).id, 'preparando'); await M.mudarTicket(userId, tk(m8.id).id, 'pronto'); }
     // ajuste de estoque (perda) para aparecer no histórico
     await E.ajustarEstoque(userId, { produtoId: prod.pudim.id, modo: 'perda', qtd: 1, obs: 'Caiu no chão na hora de servir' });
 
