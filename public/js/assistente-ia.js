@@ -56,8 +56,8 @@
       const pos = JSON.parse(lerLocal('assistente-bolha-pos') || 'null');
       if (pos && typeof pos.x === 'number' && typeof pos.y === 'number') {
         // mantém dentro da tela (a janela pode ter mudado de tamanho desde a última vez)
-        st.bolhaX = Math.min(Math.max(4, pos.x), window.innerWidth - 60);
-        st.bolhaY = Math.min(Math.max(4, pos.y), window.innerHeight - 60);
+        st.bolhaX = Math.min(Math.max(4, pos.x), window.innerWidth / (window.zoomDaTela ? window.zoomDaTela() : 1) - 60);
+        st.bolhaY = Math.min(Math.max(4, pos.y), window.innerHeight / (window.zoomDaTela ? window.zoomDaTela() : 1) - 60);
       }
     } catch (e) { /* posição salva inválida: usa a padrão */ }
     try {
@@ -82,7 +82,7 @@
     const quem = st.nome === NOME_PADRAO ? 'o assistente do Livro-Caixa' : st.nome;
     return st.contexto === 'financeiro'
       ? `Oi! Eu sou ${quem}. Pergunte sobre seus gastos, saldo, lucro, cartões e objetivos, peça uma dica, ou me diga um gasto pra eu lançar (ex.: "gastei 52 no mercado no débito"). Também ajudo com o CRM.`
-      : `Oi! Eu sou ${quem}. Pode perguntar qualquer coisa sobre como usar o CRM — Pipeline, Agenda, Rotina, Comissões, Fluxos — e também sobre o Controle financeiro.`;
+      : `Oi! Eu sou ${quem}. Pode perguntar qualquer coisa sobre como usar o CRM — Negociações, Contatos, Agenda, Comissões, Sequências — e também sobre o Controle financeiro.`;
   }
 
   function listaDeAlertas() {
@@ -164,15 +164,16 @@
     const painel = document.getElementById('assistente-painel');
     if (!bolha || !painel) return;
     const rb = bolha.getBoundingClientRect();
-    const largura = painel.offsetWidth || 336;
-    const altura = painel.offsetHeight || 460;
+    const z = (window.zoomDaTela ? window.zoomDaTela() : 1); // letra maior (acessibilidade)
+    const largura = (painel.offsetWidth || 336) * z;
+    const altura = (painel.offsetHeight || 460) * z;
     let left = rb.right - largura;
     let top = rb.top - altura - 12;
     if (top < 12) top = rb.bottom + 12; // não cabe em cima: abre embaixo
     left = Math.min(Math.max(12, left), window.innerWidth - largura - 12);
     top = Math.min(Math.max(12, top), window.innerHeight - altura - 12);
-    painel.style.left = left + 'px';
-    painel.style.top = top + 'px';
+    painel.style.left = left / z + 'px';
+    painel.style.top = top / z + 'px';
     painel.style.transformOrigin = `${rb.left + rb.width / 2 - left}px ${rb.top + rb.height / 2 - top}px`;
   }
 
@@ -255,9 +256,10 @@
         const dx = e.clientX - d.x0, dy = e.clientY - d.y0;
         if (!d.moveu && Math.sqrt(dx * dx + dy * dy) < 5) return; // tremidinha, ainda não é arrastar
         d.moveu = true;
-        const x = Math.min(Math.max(4, d.bx + dx), window.innerWidth - bolha.offsetWidth - 4);
-        const y = Math.min(Math.max(4, d.by + dy), window.innerHeight - bolha.offsetHeight - 4);
-        Object.assign(bolha.style, { left: x + 'px', top: y + 'px', right: 'auto', bottom: 'auto' });
+        const z = (window.zoomDaTela ? window.zoomDaTela() : 1);
+        const x = Math.min(Math.max(4, d.bx + dx), window.innerWidth - bolha.offsetWidth * z - 4);
+        const y = Math.min(Math.max(4, d.by + dy), window.innerHeight - bolha.offsetHeight * z - 4);
+        Object.assign(bolha.style, { left: x / z + 'px', top: y / z + 'px', right: 'auto', bottom: 'auto' });
         if (document.getElementById('assistente-painel')) posicionarPainel();
       });
       bolha.addEventListener('pointerup', (e) => {

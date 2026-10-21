@@ -174,14 +174,14 @@ function produtoObj(r, variacoes = []) {
     id: r.id, nome: r.nome, categoria: r.categoria, descricao: r.descricao, codigo: r.codigo, unidade: r.unidade,
     preco: Number(r.preco), custo: Number(r.custo), controlaEstoque: r.controla_estoque,
     estoque: qtd3(estoque), estoqueMinimo: Number(r.estoque_minimo), opcoes: r.opcoes || [],
-    noCardapio: r.no_cardapio, destaque: r.destaque, ativo: r.ativo, cozinha: r.cozinha !== false,
+    noCardapio: r.no_cardapio, destaque: r.destaque, ativo: r.ativo, cozinha: r.cozinha !== false, fiscal: r.fiscal || {},
     foto: r.tem_foto ? `/api/publico/foto/${r.user_id}/${r.id}?v=${new Date(r.updated_at).getTime()}` : '',
     variacoes: vs, situacao: sit, posicao: r.posicao,
   };
 }
 
 const COLS_PRODUTO = `user_id, id, nome, categoria, descricao, codigo, unidade, preco, custo, controla_estoque, estoque, estoque_minimo,
-  opcoes, no_cardapio, destaque, ativo, cozinha, posicao, updated_at, (foto IS NOT NULL) AS tem_foto`;
+  opcoes, no_cardapio, destaque, ativo, cozinha, fiscal, posicao, updated_at, (foto IS NOT NULL) AS tem_foto`;
 
 async function listarProdutos(userId, { ids = null } = {}) {
   const filtro = ids ? 'AND id = ANY($2::uuid[])' : '';
@@ -238,6 +238,19 @@ async function movimentar(userId, { produtoId, variacaoId = null, delta, tipo, r
   return saldo;
 }
 
+// dados fiscais do produto (NFC-e): NCM de 8 números, CFOP de venda (5xxx/6xxx), CSOSN, origem, CEST
+function fiscalDe(f) {
+  if (!f || typeof f !== 'object') return {};
+  const o = {};
+  const ncm = String(f.ncm || '').replace(/\D/g, '');
+  if (ncm) { if (ncm.length !== 8) throw erro('O NCM tem 8 números (veja na nota do fornecedor).'); o.ncm = ncm; }
+  if (f.cfop) { if (!/^[56]\d{3}$/.test(String(f.cfop))) throw erro('CFOP inválido (ex.: 5102).'); o.cfop = String(f.cfop); }
+  if (f.csosn) { if (!/^\d{3}$/.test(String(f.csosn))) throw erro('CSOSN inválido (ex.: 102).'); o.csosn = String(f.csosn); }
+  if (f.origem !== undefined && f.origem !== '') { if (!/^[0-8]$/.test(String(f.origem))) throw erro('Origem inválida.'); o.origem = String(f.origem); }
+  const cest = String(f.cest || '').replace(/\D/g, ''); if (cest) { if (cest.length !== 7) throw erro('O CEST tem 7 números.'); o.cest = cest; }
+  return o;
+}
+
 async function salvarProduto(userId, d = {}, id = null) {
   const nome = texto(d.nome, 80);
   if (!nome) throw erro('Dê um nome para o produto.');
@@ -266,7 +279,7 @@ async function salvarProduto(userId, d = {}, id = null) {
     };
   });
   const campos = [nome, texto(d.categoria, 60), texto(d.descricao, 400), texto(d.codigo, 40), unidade, preco, custo, controla, minimo,
-    JSON.stringify(opcoes), d.noCardapio !== false, !!d.destaque, d.ativo !== false, d.cozinha !== false];
+    JSON.stringify(opcoes), d.noCardapio !== false, !!d.destaque, d.ativo !== false, d.cozinha !== false, d.fiscal === undefined ? null : JSON.stringify(fiscalDe(d.fiscal))];
 
   return transacao(async () => {
     let pid = id;
@@ -274,7 +287,7 @@ async function salvarProduto(userId, d = {}, id = null) {
       if (!ehUuid(pid)) throw erro('Produto não encontrado.');
       const r = await query(
         `UPDATE estoque_produtos SET nome = $3, categoria = $4, descricao = $5, codigo = $6, unidade = $7, preco = $8, custo = $9,
-           controla_estoque = $10, estoque_minimo = $11, opcoes = $12::jsonb, no_cardapio = $13, destaque = $14, ativo = $15, cozinha = $16, updated_at = now()
+           controla_estoque = $10, estoque_minimo = $11, opcoes = $12::jsonb, no_cardapio = $13, destaque = $14, ativo = $15, cozinha = $16, fiscal = COALESCE($17::jsonb, fiscal), updated_at = now()
          WHERE user_id = $1::uuid AND id = $2::uuid RETURNING id`, [userId, pid, ...campos]);
       if (!r.rows.length) throw erro('Produto não encontrado.');
     } else {
@@ -282,8 +295,8 @@ async function salvarProduto(userId, d = {}, id = null) {
       if (c[0].n >= 5000) throw erro('Limite de 5.000 produtos atingido.');
       const r = await query(
         `INSERT INTO estoque_produtos (user_id, nome, categoria, descricao, codigo, unidade, preco, custo, controla_estoque, estoque_minimo,
-           opcoes, no_cardapio, destaque, ativo, cozinha, posicao)
-         VALUES ($1::uuid, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::jsonb, $12, $13, $14, $15, $16) RETURNING id`, [userId, ...campos, c[0].n]);
+           opcoes, no_cardapio, destaque, ativo, cozinha, fiscal, posicao)
+         VALUES ($1::uuid, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::jsonb, $12, $13, $14, $15, COALESCE($16::jsonb, '{}'::jsonb), $17) RETURNING id`, [userId, ...campos, c[0].n]);
       pid = r.rows[0].id;
       const inicial = vs.length ? 0 : qtd3(numero(d.estoqueInicial || 0, { min: -1e9, max: 1e9, nome: 'Estoque inicial' }));
       if (inicial && controla) await movimentar(userId, { produtoId: pid, delta: inicial, tipo: 'inicial', custoUnit: custo, obs: 'Estoque inicial' });
@@ -433,6 +446,19 @@ async function montarItens(userId, itens, { exigirEstoque = false } = {}) {
 }
 
 async function registrarVenda(userId, d = {}, agora = new Date()) {
+  // venda feita sem internet e reenviada: o mesmo código não vira duas vendas
+  const refCliente = typeof d.refCliente === 'string' && /^[\w-]{8,64}$/.test(d.refCliente) ? d.refCliente : null;
+  if (refCliente) {
+    const ja = await query('SELECT id FROM estoque_vendas WHERE user_id = $1::uuid AND ref_cliente = $2', [userId, refCliente]);
+    if (ja.rows.length) return { venda: await vendaPorId(userId, ja.rows[0].id), alertas: [], repetida: true };
+  }
+  // hora em que a venda aconteceu de verdade (sem internet), até 7 dias atrás
+  let feitaEm = null;
+  if (d.feitaEm) {
+    const t = new Date(d.feitaEm);
+    if (!Number.isNaN(t.getTime()) && t <= new Date(agora.getTime() + 5 * 60000) && t >= new Date(agora.getTime() - 7 * 86400000)) feitaEm = t;
+  }
+  if (feitaEm && !d.data) d = { ...d, data: hojeBR(feitaEm) };
   const hoje = hojeBR(agora);
   const data = dataOu(d.data, hoje);
   // pagamentos: [{ meio, valor }] (pode dividir; o dinheiro pode passar do total e vira troco)
@@ -512,6 +538,13 @@ async function registrarVenda(userId, d = {}, agora = new Date()) {
   const selosGanhos = participa && programa.modelo === 'selos' && baseC >= centavos(programa.selosMinimo || 0) && baseC > 0 ? 1 : 0;
 
   return transacao(async () => {
+    if (refCliente) {
+      // dois envios da mesma venda ao mesmo tempo (duas abas, internet voltando): trava a conta e confere de novo
+      await query('INSERT INTO estoque_negocio (user_id) VALUES ($1::uuid) ON CONFLICT (user_id) DO NOTHING', [userId]);
+      await query('SELECT 1 FROM estoque_negocio WHERE user_id = $1::uuid FOR UPDATE', [userId]);
+      const ja = await query('SELECT id FROM estoque_vendas WHERE user_id = $1::uuid AND ref_cliente = $2', [userId, refCliente]);
+      if (ja.rows.length) return { venda: await vendaPorId(userId, ja.rows[0].id), alertas: [], repetida: true };
+    }
     const numeroVenda = await proximoNumero(userId, 'seq_venda');
     const vendaId = crypto.randomUUID();
     const alertas = [];
@@ -551,14 +584,14 @@ async function registrarVenda(userId, d = {}, agora = new Date()) {
     await query(
       `INSERT INTO estoque_vendas (user_id, id, numero, data, itens, subtotal, desconto, acrescimo, total, cmv, taxa, meio, cliente, obs, pedido_id, lancamento_ids,
          cliente_id, cashback_usado, cashback_ganho, premio_valor, selos_ganhos, selos_usados, cashback_consumo,
-         caixa_id, operador, pagamentos, recebido, troco, fiado_aberto)
+         caixa_id, operador, pagamentos, recebido, troco, fiado_aberto, ref_cliente, offline, criado_em)
        VALUES ($1::uuid, $2::uuid, $3, $4, $5::jsonb, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15::uuid, $16::text[], $17::uuid, $18, $19, $20, $21, $22, $23::jsonb,
-         $24::uuid, $25, $26::jsonb, $27, $28, $29)`,
+         $24::uuid, $25, $26::jsonb, $27, $28, $29, $30, $31, COALESCE($32::timestamptz, now()))`,
       [userId, vendaId, numeroVenda, data, JSON.stringify(itensGuardados), reais(subC), reais(descC), reais(acrC), reais(totalC), reais(cmvC), reais(taxaC),
         meio, cliente, texto(d.obs, 300), ehUuid(d.pedidoId) ? d.pedidoId : null, lancIds,
         clienteRow ? clienteRow.id : null, reais(cashUsoC), reais(cashGanhoC), reais(premioC), selosGanhos, selosUsados, JSON.stringify(consumo),
         caixaAberto ? caixaAberto.id : null, texto(d._operador, 60), JSON.stringify(pagamentos.map((p) => ({ meio: p.meio, valor: reais(p.valorC) }))),
-        reais(recebidoC), reais(trocoC), reais(fiadoC)]
+        reais(recebidoC), reais(trocoC), reais(fiadoC), refCliente, !!feitaEm, feitaEm ? feitaEm.toISOString() : null]
     );
     await marcarChecklist(userId, 'venda');
     // estoque baixo (não acabou, mas chegou no mínimo)
@@ -581,16 +614,17 @@ function vendaObj(r) {
     clienteId: r.cliente_id, cashbackUsado: Number(r.cashback_usado || 0), cashbackGanho: Number(r.cashback_ganho || 0),
     premioValor: Number(r.premio_valor || 0), selosGanhos: r.selos_ganhos || 0, selosUsados: r.selos_usados || 0,
     caixaId: r.caixa_id || null, operador: r.operador || '', pagamentos: r.pagamentos || [], recebido: Number(r.recebido || 0), troco: Number(r.troco || 0),
-    fiadoAberto: Number(r.fiado_aberto || 0), comandaId: r.comanda_id || null,
+    fiadoAberto: Number(r.fiado_aberto || 0), comandaId: r.comanda_id || null, nfce: r.nfce || null, offline: !!r.offline,
   };
 }
 async function vendaPorId(userId, id) {
   const { rows } = await query('SELECT * FROM estoque_vendas WHERE user_id = $1::uuid AND id = $2::uuid', [userId, id]);
   return rows[0] ? vendaObj(rows[0]) : null;
 }
-async function listarVendas(userId, { de, ate } = {}) {
+// limite: a tela mostra até 1000; planilha e backup pedem tudo (limite maior)
+async function listarVendas(userId, { de, ate, limite = 1000 } = {}) {
   const ini = dataOu(de, '1900-01-01'); const fim = dataOu(ate, '2999-12-31');
-  const { rows } = await query('SELECT * FROM estoque_vendas WHERE user_id = $1::uuid AND data BETWEEN $2 AND $3 ORDER BY data DESC, numero DESC LIMIT 1000', [userId, ini, fim]);
+  const { rows } = await query('SELECT * FROM estoque_vendas WHERE user_id = $1::uuid AND data BETWEEN $2 AND $3 ORDER BY data DESC, numero DESC LIMIT $4', [userId, ini, fim, Math.min(Math.max(1, Number(limite) || 1000), 200000)]);
   return rows.map(vendaObj);
 }
 
@@ -601,6 +635,7 @@ async function cancelarVenda(userId, id) {
     const v = rows[0];
     if (!v) throw erro('Venda não encontrada.');
     if (v.cancelada) return vendaObj(v);
+    if (v.nfce && v.nfce.status === 'autorizada') throw erro('Essa venda tem NFC-e autorizada. Cancele a nota fiscal primeiro (no detalhe da venda) e depois a venda.');
     const fiadoTotal = (v.pagamentos || []).filter((p) => p.meio === 'fiado').reduce((a, p) => a + Number(p.valor), 0);
     if (fiadoTotal && Number(v.fiado_aberto) < fiadoTotal - 0.004) throw erro('O cliente já pagou parte deste fiado. Para desfazer, registre uma devolução no Controle financeiro.');
     for (const i of v.itens) {
@@ -691,8 +726,9 @@ async function compraPorId(userId, id) {
   const { rows } = await query('SELECT * FROM estoque_compras WHERE user_id = $1::uuid AND id = $2::uuid', [userId, id]);
   return rows[0] ? compraObj(rows[0]) : null;
 }
-async function listarCompras(userId) {
-  const { rows } = await query('SELECT * FROM estoque_compras WHERE user_id = $1::uuid ORDER BY data DESC, criado_em DESC LIMIT 500', [userId]);
+async function listarCompras(userId, { de, ate, limite = 500 } = {}) {
+  const ini = dataOu(de, '1900-01-01'); const fim = dataOu(ate, '2999-12-31');
+  const { rows } = await query('SELECT * FROM estoque_compras WHERE user_id = $1::uuid AND data BETWEEN $2 AND $3 ORDER BY data DESC, criado_em DESC LIMIT $4', [userId, ini, fim, Math.min(Math.max(1, Number(limite) || 500), 200000)]);
   return rows.map(compraObj);
 }
 async function cancelarCompra(userId, id) {
@@ -730,11 +766,12 @@ async function registrarGasto(userId, d = {}, agora = new Date()) {
   }]);
   return (await listarGastos(userId, id))[0];
 }
-async function listarGastos(userId, id = null) {
+async function listarGastos(userId, id = null, { de, ate, limite = 500 } = {}) {
+  const ini = dataOu(de, '1900-01-01'); const fim = dataOu(ate, '2999-12-31');
   const { rows } = await query(
     `SELECT id, data, descricao, categoria, status, valor, extras FROM financeiro_lancamentos
-      WHERE user_id = $1::uuid AND extras->'estoque'->>'origem' = 'gasto' ${id ? 'AND id = $2' : ''}
-      ORDER BY data DESC, created_at DESC LIMIT 500`, id ? [userId, id] : [userId]);
+      WHERE user_id = $1::uuid AND extras->'estoque'->>'origem' = 'gasto' AND data BETWEEN $2 AND $3 ${id ? 'AND id = $5' : ''}
+      ORDER BY data DESC, created_at DESC LIMIT $4`, id ? [userId, ini, fim, 1, id] : [userId, ini, fim, Math.min(Math.max(1, Number(limite) || 500), 200000)]);
   return rows.map((r) => ({ id: r.id, data: r.data, descricao: r.descricao, categoria: r.categoria, status: r.status, valor: Number(r.valor), meio: r.extras.estoque.meio, fornecedor: r.extras.estoque.fornecedor || '' }));
 }
 async function excluirGasto(userId, id) {
@@ -935,6 +972,8 @@ async function recusarPedido(userId, id) {
   if (!ehUuid(id)) throw erro('Pedido não encontrado.');
   const r = await query(`UPDATE estoque_pedidos SET status = 'recusado' WHERE user_id = $1::uuid AND id = $2::uuid AND status = 'novo' RETURNING *`, [userId, id]);
   if (!r.rows.length) throw erro('Esse pedido já foi resolvido.');
+  // se já tinha ido para a cozinha, sai da tela
+  await query(`UPDATE estoque_cozinha SET status = 'entregue', entregue_em = now() WHERE user_id = $1::uuid AND pedido_id = $2::uuid AND status <> 'entregue'`, [userId, id]);
   return pedidoObj(r.rows[0]);
 }
 // Pedido confirmado vira venda (baixa no estoque + receita no financeiro)
@@ -964,7 +1003,7 @@ module.exports = {
   ErroEstoque, TIPOS_NEGOCIO, UNIDADES, MEIOS_VENDA, NOME_MEIO, nomeComVar,
   slugDe, lerNegocio, salvarNegocio, marcarChecklist,
   listarProdutos, produtoPorId, salvarProduto, excluirProduto, salvarFoto, ajustarEstoque, movimentosDe,
-  registrarVenda, listarVendas, cancelarVenda, vendaPorId,
+  registrarVenda, listarVendas, cancelarVenda, vendaPorId, vendaObj,
   registrarCompra, listarCompras, cancelarCompra,
   registrarGasto, listarGastos, excluirGasto,
   resumo, negocioPorSlug, cardapioPublico, criarPedido, listarPedidos, recusarPedido, venderPedido, beneficioPublico,

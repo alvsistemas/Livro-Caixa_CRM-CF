@@ -362,6 +362,27 @@ function occurrencesForMonth(month, scope) {
   });
   return rows;
 }
+/* Resultado do mês (Painel, Lucro, Empresa, Relatórios) para quem usa o PDV.
+   Pelo lançamento puro, a mercadoria vira despesa quando a COMPRA é paga: o mês em que se compra
+   muito parece prejuízo, o mês em que se vende o estoque parece lucro alto, e o estoque que já
+   existia antes do PDV nunca vira despesa. No modo padrão ("vendido") a compra de mercadoria sai
+   do resultado e entra o custo dos produtos vendidos no mês (CMV), que já vem em cada venda.
+   A lista de Lançamentos e o saldo das contas continuam mostrando o dinheiro de verdade. */
+const contaMercadoriaPeloVendido = () => temCaixaEstoque() && (state.config.mercadoria || "vendido") === "vendido";
+function cmvDoMes(month) {
+  return state.txs.filter((t) => t.estoque && t.estoque.origem === "venda" && !t.estoque.parte && monthKey(t.date) === month)
+    .reduce((a, t) => a + (Number(t.estoque.cmv) || 0), 0);
+}
+function comprasDeMercadoria(rows) { return rows.filter((r) => r.tx.type === "Despesa" && r.tx.estoque && r.tx.estoque.origem === "compra"); }
+function resultadoDoMes(month, scope) {
+  const rows = occurrencesForMonth(month, scope);
+  if (!contaMercadoriaPeloVendido() || scope === "Pessoal") return rows;
+  const fora = new Set(comprasDeMercadoria(rows));
+  const out = rows.filter((r) => !fora.has(r));
+  const cmv = Math.round(cmvDoMes(month) * 100) / 100;
+  if (cmv > 0) out.push({ tx: { id: `cmv-${month}`, type: "Despesa", category: "Custo da mercadoria vendida", desc: "Custo dos produtos vendidos no PDV", scope: "Empresa", status: "Pago", estoque: { origem: "cmv" } }, value: cmv, status: "Pago", data: `${month}-01`, mes: month, sintetico: true });
+  return out;
+}
 // Muda o status de um lançamento num mês. Fixo/parcelado: só naquele mês (os outros meses
 // continuam com o status padrão). Único: muda o próprio lançamento.
 function definirStatusNoMes(tx, mes, status) {
@@ -561,7 +582,8 @@ function occTable(rows) {
 /* Painel (Dashboard)                                                       */
 /* ----------------------------------------------------------------------- */
 function renderDashboard() {
-  const rows = occurrencesForMonth(state.month, state.scopeFilter);
+  const rows = resultadoDoMes(state.month, state.scopeFilter);
+  const notaMercadoria = notaMercadoriaHtml(state.month, state.scopeFilter);
   const dashSums = sumsFromOccurrences(rows);
 
   const catMap = {};
@@ -593,8 +615,8 @@ function renderDashboard() {
 
     <div class="grid grid-3" style="margin-bottom:20px">
       ${statCard("Receitas do mês", fmtBRL(dashSums.rec), COLORS.pessoal, totalCrm(rows) > 0 ? `inclui ${fmtBRL(totalCrm(rows))} vindos do CRM` : "")}
-      ${statCard("Despesas do mês", fmtBRL(dashSums.desp), COLORS.red)}
-      ${statCard("Lucro do mês", fmtBRL(dashSums.saldo), dashSums.saldo < 0 ? COLORS.red : COLORS.gold, `<a href="#" class="link-lucro" data-goto="lucro">Ver de onde vem e para onde vai →</a>`)}
+      ${statCard("Despesas do mês", fmtBRL(dashSums.desp), COLORS.red, notaMercadoria)}
+      ${statCard("Lucro do mês", fmtBRL(dashSums.saldo), dashSums.saldo < 0 ? COLORS.red : COLORS.gold, `${saldoDeCaixaHtml(state.month, state.scopeFilter, dashSums.saldo)}<a href="#" class="link-lucro" data-goto="lucro">Ver de onde vem e para onde vai →</a>`)}
     </div>
 
     ${resumoDoDiaADia()}
@@ -746,7 +768,7 @@ function renderInvestimentos() {
 /* ----------------------------------------------------------------------- */
 function renderEmpresa() {
   const rows = occurrencesForMonth(state.month, "Empresa");
-  const s = sumsFromOccurrences(rows);
+  const s = sumsFromOccurrences(resultadoDoMes(state.month, "Empresa"));
   return `
     <div class="row-between">
       <div><h1 class="page-title" style="color:${COLORS.empresa}">Empresa</h1><p class="page-sub">Área separada do seu CNPJ · ${monthLabel(state.month)}</p></div>
@@ -754,8 +776,8 @@ function renderEmpresa() {
     </div>
     <div class="grid grid-3" style="margin-bottom:24px">
       ${statCard("Receitas", fmtBRL(s.rec), COLORS.empresa)}
-      ${statCard("Despesas", fmtBRL(s.desp), COLORS.red)}
-      ${statCard("Saldo", fmtBRL(s.saldo), COLORS.gold)}
+      ${statCard("Despesas", fmtBRL(s.desp), COLORS.red, notaMercadoriaHtml(state.month, "Empresa"))}
+      ${statCard(contaMercadoriaPeloVendido() ? "Lucro" : "Saldo", fmtBRL(s.saldo), COLORS.gold, saldoDeCaixaHtml(state.month, "Empresa", s.saldo).replace("<br/>", ""))}
     </div>
     <h2 class="section-title" style="border-color:${COLORS.empresa}">Lançamentos da empresa</h2>
     ${occTable(rows)}
@@ -804,7 +826,7 @@ function opcoesIntegracaoHtml() {
     ${state.crm.erro ? `<p class="integ-aviso">⚠ Não foi possível ler os dados do CRM agora (${escapeHtml(state.crm.erro)}). Os números abaixo estão sem as vendas do CRM.</p>` : ""}`;
 }
 function renderLucro() {
-  const rows = occurrencesForMonth(state.month, state.scopeFilter);
+  const rows = resultadoDoMes(state.month, state.scopeFilter);
   const s = sumsFromOccurrences(rows);
   const margem = s.rec > 0 ? s.saldo / s.rec : 0;
   const doCrm = totalCrm(rows);
@@ -826,7 +848,7 @@ function renderLucro() {
   const meses = [];
   for (let i = 5; i >= 0; i--) {
     const m = addMonths(state.month, -i);
-    const sm = sumsFromOccurrences(occurrencesForMonth(m, state.scopeFilter));
+    const sm = sumsFromOccurrences(resultadoDoMes(m, state.scopeFilter));
     meses.push({ m, ...sm });
   }
   const maxAbs = Math.max(1, ...meses.map((x) => Math.max(x.rec, x.desp)));
@@ -843,7 +865,7 @@ function renderLucro() {
 
     <div class="grid grid-4" style="margin-bottom:20px">
       ${statCard("Receitas", fmtBRL(s.rec), COLORS.pessoal, doCrm > 0 ? `${fmtBRL(doCrm)} vindos do CRM` : "")}
-      ${statCard("Despesas", fmtBRL(s.desp), COLORS.red)}
+      ${statCard("Despesas", fmtBRL(s.desp), COLORS.red, notaMercadoriaHtml(state.month, state.scopeFilter))}
       ${statCard("Lucro", fmtBRL(s.saldo), s.saldo < 0 ? COLORS.red : COLORS.gold, s.saldo < 0 ? "o mês está no prejuízo" : "")}
       ${statCard("Margem de lucro", s.rec > 0 ? fmtPct(margem) : "—", margem < 0 ? COLORS.red : COLORS.ink, "lucro ÷ receitas")}
     </div>
@@ -947,6 +969,30 @@ function lucroPorVendaHtml(month) {
    (CMV) junto; a taxa do cartão entra como despesa à parte. O CMV não é lançado como despesa
    (a compra da mercadoria já foi), só entra aqui no "quanto sobrou". */
 function temCaixaEstoque() { return state.txs.some((t) => t.estoque); }
+function mercadoriaOpcaoHtml() {
+  const modo = state.config.mercadoria || "vendido";
+  return `<div class="mercadoria-opcao">
+    <h3 class="taxas-titulo">Como a mercadoria entra no lucro do mês</h3>
+    <label class="integ-check"><input type="radio" name="mercadoria" value="vendido" ${modo === "vendido" ? "checked" : ""} /> <span><b>Pelo que foi vendido (recomendado)</b> — o custo de cada produto entra no mês em que ele é vendido. A compra de mercadoria vira estoque e fica fora das despesas do mês.</span></label>
+    <label class="integ-check"><input type="radio" name="mercadoria" value="comprado" ${modo === "comprado" ? "checked" : ""} /> <span><b>Pelo que foi pago ao fornecedor</b> — a compra entra como despesa no dia do pagamento (visão de caixa).</span></label>
+  </div>`;
+}
+// Com o PDV no modo "pelo vendido", o lucro não é o dinheiro que sobrou no caixa: mostra os dois
+function saldoDeCaixaHtml(month, scope, lucro) {
+  if (!temCaixaEstoque() || scope === "Pessoal" || !contaMercadoriaPeloVendido()) return "";
+  const caixa = sumsFromOccurrences(occurrencesForMonth(month, scope)).saldo;
+  if (Math.abs(caixa - lucro) < 0.005) return "";
+  return `No caixa (receitas − tudo o que foi pago, com as compras de mercadoria): ${caixa < 0 ? "−" : ""}${fmtBRL(Math.abs(caixa))}<br/>`;
+}
+// nota embaixo de "Despesas": o que foi trocado (compras → custo do vendido)
+function notaMercadoriaHtml(month, scope) {
+  if (!temCaixaEstoque() || scope === "Pessoal") return "";
+  const compras = comprasDeMercadoria(occurrencesForMonth(month, scope)).reduce((a, r) => a + r.value, 0);
+  const cmv = cmvDoMes(month);
+  if (!contaMercadoriaPeloVendido()) return cmv ? `custo do que foi vendido: ${fmtBRL(cmv)}` : "";
+  if (!cmv && !compras) return "";
+  return `inclui ${fmtBRL(cmv)} de custo dos produtos vendidos${compras ? ` · compras de mercadoria (${fmtBRL(compras)}) viram estoque` : ""}`;
+}
 function vendasBalcaoHtml(month) {
   // uma venda pode ter várias receitas (pagamento dividido): o custo vem só na primeira
   const partes = state.txs.filter((t) => t.estoque && t.estoque.origem === "venda" && monthKey(t.date) === month);
@@ -969,7 +1015,8 @@ function vendasBalcaoHtml(month) {
         <td class="mono" style="font-weight:700;color:${cor}">${fmtBRL(lucro)}</td>
         <td class="mono" style="color:var(--ink-muted)">${tot.receita > 0 ? fmtPct(lucro / tot.receita) : "—"}</td>
       </tr></tbody></table></div>
-    <p class="stat-sub" style="margin-top:8px">O custo da mercadoria vem do custo médio de cada produto. A compra já entrou como despesa quando foi paga, por isso ele não é descontado de novo no saldo. Vendas fiado contam pelo valor vendido (o que falta receber está em "A pagar e receber"). <a href="../estoque/#relatorios">Ver as vendas no PDV</a></p>
+    <p class="stat-sub" style="margin-top:8px">O custo da mercadoria vem do custo médio de cada produto. Vendas fiado contam pelo valor vendido (o que falta receber está em "A pagar e receber"). <a href="../estoque/#relatorios">Ver as vendas no PDV</a></p>
+    ${mercadoriaOpcaoHtml()}
   </div>`;
 }
 
@@ -993,7 +1040,7 @@ function buildAlerts() {
   const alerts = [];
   const mes = mesAtual();
   const rows = occurrencesForMonth(mes);
-  const s = sumsFromOccurrences(rows);
+  const s = sumsFromOccurrences(resultadoDoMes(mes));
   const pendencias = Calculos.aPagarEReceber(dadosParaCalculo(), { dias: 7 });
   const atrasadas = pendencias.filter((p) => p.atrasado && p.tipo === "pagar");
   if (atrasadas.length) alerts.push({ type: "warn", text: `${atrasadas.length} conta${atrasadas.length > 1 ? "s" : ""} em atraso, somando ${fmtBRL(atrasadas.reduce((a, p) => a + p.valor, 0))}.`, goto: "apagar" });
@@ -1152,6 +1199,7 @@ function attachMainEvents() {
       toast("Taxa guardada.", "ok");
     } catch (e) { toast(e.message || "Não foi possível guardar a taxa.", "erro"); }
   }));
+  document.querySelectorAll('input[name="mercadoria"]').forEach((r) => r.addEventListener("change", (e) => { state.config = { ...state.config, mercadoria: e.target.value }; saveConfig(); render(); }));
   const descontar = document.getElementById("descontar-comissoes");
   if (descontar) descontar.addEventListener("change", (e) => { state.config = { ...state.config, descontarComissoes: e.target.checked }; saveConfig(); render(); });
 

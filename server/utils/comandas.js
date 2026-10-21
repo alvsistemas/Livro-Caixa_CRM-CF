@@ -147,6 +147,9 @@ async function abrirComanda(userId, d = {}, operador = '') {
   }
   const rotulo = texto(d.rotulo, 40) || (mesa ? mesa.nome : '');
   return transacao(async () => {
+    // dois garçons abrindo a mesma mesa ao mesmo tempo: trava a conta antes de conferir
+    await query('INSERT INTO estoque_negocio (user_id) VALUES ($1::uuid) ON CONFLICT (user_id) DO NOTHING', [userId]);
+    await query('SELECT 1 FROM estoque_negocio WHERE user_id = $1::uuid FOR UPDATE', [userId]);
     if (mesa) {
       const ja = await query(`SELECT id FROM estoque_comandas WHERE user_id = $1::uuid AND mesa_id = $2::uuid AND ${ABERTAS}`, [userId, mesa.id]);
       if (ja.rows.length) return comandaPorId(userId, ja.rows[0].id); // alguém já abriu: usa a mesma

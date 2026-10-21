@@ -24,6 +24,8 @@ TELAS.aparencia = {
       </div>
       <div class="theme-swatches">${ACCENT_PRESETS.map((c) => `<button type="button" class="theme-swatch ${ativo(c)}" data-cor="${c}" style="background:${c}" title="${c}" aria-label="Cor ${c}"></button>`).join("")}
         <label class="theme-custom-label">Outra cor <input type="color" id="cor-livre" value="${/^#/.test(escolha) ? escolha : corPersonagem}" /></label></div>
+      <div class="sub-titulo" style="margin-top:18px">Acessibilidade</div>
+      <div data-a11y-painel style="margin-top:8px"></div>
     </div>`;
   },
   ligarNoPerfil() {

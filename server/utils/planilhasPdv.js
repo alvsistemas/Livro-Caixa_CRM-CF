@@ -8,6 +8,7 @@
      marcar "atualizar o estoque pela planilha" (vira um ajuste de contagem, com histórico).
    - Cliente: reconhecido pelo telefone (ou pelo nome, se não tiver telefone). */
 const ExcelJS = require('exceljs');
+const JSZip = require('jszip');
 const E = require('./estoque');
 const F = require('./fidelidade');
 const C = require('./caixa');
@@ -44,6 +45,12 @@ async function lerPlanilha(base64) {
   if (!base64 || typeof base64 !== 'string') throw erro('Escolha o arquivo da planilha.');
   const buf = Buffer.from(base64.replace(/^data:[^,]*,/, ''), 'base64');
   if (buf.length < 100 || buf.slice(0, 2).toString() !== 'PK') throw erro('Envie uma planilha do Excel (.xlsx). Se estiver em .xls ou .csv, abra no Excel ou no Google Planilhas e salve como .xlsx.');
+  // .xlsx é um zip: confere o tamanho descompactado antes de abrir (arquivo "bomba" travaria o servidor)
+  try {
+    const zip = await JSZip.loadAsync(buf);
+    let total = 0; zip.forEach((_, f) => { total += (f._data && f._data.uncompressedSize) || 0; });
+    if (total > 60 * 1024 * 1024) throw erro('Planilha grande demais. Divida em arquivos menores (até uns 20 mil linhas).');
+  } catch (e) { if (e instanceof ErroPlanilha) throw e; throw erro('Não consegui abrir essa planilha. Confira se é um arquivo .xlsx.'); }
   const wb = new ExcelJS.Workbook();
   try { await wb.xlsx.load(buf); } catch (e) { throw erro('Não consegui abrir essa planilha. Confira se é um arquivo .xlsx.'); }
   const ws = wb.worksheets.find((w) => w.rowCount > 1) || wb.worksheets[0];
@@ -79,11 +86,12 @@ const COLS_PRODUTOS = [
   { t: 'Código de barras', k: 'codigo', w: 16 }, { t: 'Unidade', k: 'unidade', w: 8 }, { t: 'Preço', k: 'preco', f: 'R$' }, { t: 'Custo', k: 'custo', f: 'R$' },
   { t: 'Estoque', k: 'estoque', f: '#,##0.###', w: 9 }, { t: 'Estoque mínimo', k: 'minimo', f: '#,##0.###', w: 14 }, { t: 'Controla estoque', k: 'controla', w: 15 },
   { t: 'No cardápio', k: 'cardapio', w: 11 }, { t: 'Vai para a cozinha', k: 'cozinha', w: 16 }, { t: 'Ativo', k: 'ativo', w: 7 }, { t: 'Descrição', k: 'descricao', w: 40 },
+  { t: 'NCM', k: 'ncm', w: 11 },
 ];
 async function exportarProdutos(userId) {
   const linhas = [];
   for (const p of await E.listarProdutos(userId)) {
-    const base = { id: p.id, produto: p.nome, categoria: p.categoria, unidade: p.unidade, controla: p.controlaEstoque ? 'Sim' : 'Não', cardapio: p.noCardapio ? 'Sim' : 'Não', cozinha: p.cozinha !== false ? 'Sim' : 'Não', descricao: p.descricao };
+    const base = { id: p.id, produto: p.nome, categoria: p.categoria, unidade: p.unidade, controla: p.controlaEstoque ? 'Sim' : 'Não', cardapio: p.noCardapio ? 'Sim' : 'Não', cozinha: p.cozinha !== false ? 'Sim' : 'Não', descricao: p.descricao, ncm: (p.fiscal && p.fiscal.ncm) || '' };
     if (p.variacoes.length) p.variacoes.forEach((v) => linhas.push({ ...base, variacao: v.nome, codigo: v.codigo, preco: v.precoFinal, custo: v.custoFinal, estoque: p.controlaEstoque ? v.estoque : null, minimo: v.estoqueMinimo, ativo: p.ativo && v.ativo ? 'Sim' : 'Não' }));
     else linhas.push({ ...base, variacao: '', codigo: p.codigo, preco: p.preco, custo: p.custo, estoque: p.controlaEstoque ? p.estoque : null, minimo: p.estoqueMinimo, ativo: p.ativo ? 'Sim' : 'Não' });
   }
@@ -132,6 +140,13 @@ async function importarProdutos(userId, d = {}) {
       set('categoria', String(campo(l0, 'categoria') || '').trim().slice(0, 60) || undefined, 'categoria');
       set('descricao', campo(l0, 'descricao') !== undefined ? String(campo(l0, 'descricao')).slice(0, 400) : undefined, 'descrição');
       if (unidade) set('unidade', unidade, 'unidade');
+      const ncmTxt = campo(l0, 'ncm');
+      if (ncmTxt !== undefined) {
+        const ncm = String(ncmTxt).replace(/\D/g, '');
+        if (ncm && ncm.length !== 8) throw erro(`Linha ${l0._linha}: o NCM tem 8 números.`);
+        const antes = (p && p.fiscal && p.fiscal.ncm) || '';
+        if (ncm !== antes) { corpo.fiscal = { ...((p && p.fiscal) || {}), ncm: ncm || undefined }; if (!ncm) delete corpo.fiscal.ncm; item.mudancas.push('NCM'); }
+      }
       for (const [k, cols, rot] of [['controlaEstoque', ['controla estoque', 'controla'], 'controle de estoque'], ['noCardapio', ['no cardapio', 'cardapio'], 'cardápio'], ['cozinha', ['vai para a cozinha', 'cozinha'], 'cozinha'], ['ativo', ['ativo'], 'ativo']]) {
         const v = campo(l0, ...cols); if (v !== undefined) set(k, simNao(v, corpo[k]), rot);
       }

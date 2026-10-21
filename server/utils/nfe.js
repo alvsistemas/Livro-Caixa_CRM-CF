@@ -140,6 +140,7 @@ async function importar(userId, d = {}, agora = new Date()) {
         const p = await E.salvarProduto(userId, {
           nome: String(nv.nome || i.nome).slice(0, 80), categoria: nv.categoria || '', codigo: fator === 1 ? i.ean : '', unidade,
           preco: Number(nv.preco) > 0 ? Number(nv.preco) : 0, custo, controlaEstoque: true, estoqueInicial: 0, noCardapio: false,
+          ...(/^\d{8}$/.test(i.ncm) ? { fiscal: { ncm: i.ncm } } : {}),
         });
         produtoId = p.id; variacaoId = null;
       } else {

@@ -41,6 +41,8 @@ function aplicarPermissoesNaTela() {
   for (const [aba, ok] of Object.entries(p.abas || {})) {
     if (!ok) document.querySelectorAll(`[data-action="nav"][data-page="${aba}"]`).forEach((el) => el.remove());
   }
+  // o grupo "Mais" sem nenhuma aba liberada some
+  document.querySelectorAll('.nav-mais').forEach((g) => { if (!g.querySelector('[data-page]')) g.remove(); });
 }
 // roda depois de cada redesenho (os botões já foram ligados, então tirar não quebra nada)
 new MutationObserver(() => { if (minhasPermissoes && minhasPermissoes.restrito) aplicarPermissoesNaTela(); })
@@ -63,7 +65,7 @@ function renderPermissoesEquipe() {
   return `
     <div class="settings-page-section perm-card">
       <h3 style="margin-top:0">O que os membros podem usar</h3>
-      <p class="settings-page-note">Vale para ${membros === 1 ? '1 membro' : `${membros} membros`} da equipe. Gestores sempre têm tudo. O Pipeline, o Chat e as Configurações pessoais ficam sempre abertos.</p>
+      <p class="settings-page-note">Vale para ${membros === 1 ? '1 membro' : `${membros} membros`} da equipe. Gestores sempre têm tudo. As Negociações, o Chat e as Configurações pessoais ficam sempre abertos.</p>
       <div class="perm-colunas">
         ${grupo('Abas', 'abas', cat.abas)}
         ${grupo('Funções', 'funcoes', cat.funcoes)}

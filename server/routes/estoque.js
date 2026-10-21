@@ -15,6 +15,7 @@ const { gerarPlanilha } = require('../utils/exportarXlsx');
 const P = require('../utils/planilhasPdv');
 const N = require('../utils/nfe');
 const { analisar } = require('../utils/analises');
+const NF = require('../utils/fiscal');
 const { hojeBR } = require('../utils/fechamento');
 const { criarMiddlewareLimite } = require('../utils/limiteTaxa');
 
@@ -45,7 +46,7 @@ const rota = (fn, msg, nivel = null) => async (req, res) => {
     res.json(await fn(req, res));
   } catch (err) {
     if (err instanceof ErroPermissao) return res.status(403).json({ error: err.message, operador: true });
-    if (err instanceof E.ErroEstoque || err instanceof F.ErroFidelidade || err instanceof C.ErroCaixa || err instanceof M.ErroComanda || err instanceof P.ErroPlanilha || err instanceof N.ErroNFe) return res.status(400).json({ error: err.message });
+    if (err instanceof E.ErroEstoque || err instanceof F.ErroFidelidade || err instanceof C.ErroCaixa || err instanceof M.ErroComanda || err instanceof P.ErroPlanilha || err instanceof N.ErroNFe || err instanceof NF.ErroFiscal) return res.status(400).json({ error: err.message });
     console.error(`${msg}:`, err.message);
     res.status(500).json({ error: `${msg}. Tente de novo.` });
   }
@@ -61,6 +62,7 @@ router.get('/', rota(async (req) => ({
   operadores: await C.listarOperadores(req.userId),
   operador: req.op,
   caixa: await C.situacaoCaixa(req.userId),
+  fiscal: await NF.lerConfig(req.userId),
 }), 'Erro ao carregar o PDV'));
 
 router.get('/resumo', rota(async (req) => ({ ...(await E.resumo(req.userId)), fiado: await C.fiadoEmAberto(req.userId) }), 'Erro ao carregar o resumo'));
@@ -115,6 +117,14 @@ router.get('/exportar/clientes.xlsx', async (req, res) => {
 });
 router.post('/importar/produtos', rota((req) => { if ((req.body || {}).aplicar) exigir(req, 'gerente'); return P.importarProdutos(req.userId, req.body || {}); }, 'Erro ao importar a planilha'));
 router.post('/importar/clientes', rota((req) => { if ((req.body || {}).aplicar) exigir(req, 'caixa'); return P.importarClientes(req.userId, req.body || {}); }, 'Erro ao importar a planilha'));
+
+// Nota fiscal ao consumidor (NFC-e) por parceiro emissor
+router.get('/fiscal', rota(async (req) => ({ fiscal: await NF.lerConfig(req.userId) }), 'Erro ao carregar a configuração fiscal'));
+router.put('/fiscal', rota(async (req) => ({ fiscal: await NF.salvarConfig(req.userId, req.body || {}) }), 'Erro ao salvar a configuração fiscal', 'gerente'));
+router.post('/fiscal/testar', rota((req) => NF.testar(req.userId), 'Erro ao testar o emissor', 'gerente'));
+router.post('/vendas/:id/nfce', rota(async (req) => ({ nfce: await NF.emitir(req.userId, req.params.id, req.body || {}, E.vendaObj) }), 'Erro ao emitir a NFC-e', 'caixa'));
+router.get('/vendas/:id/nfce', rota(async (req) => ({ nfce: await NF.consultar(req.userId, req.params.id) }), 'Erro ao consultar a NFC-e'));
+router.post('/vendas/:id/nfce/cancelar', rota(async (req) => ({ nfce: await NF.cancelar(req.userId, req.params.id, req.body || {}) }), 'Erro ao cancelar a NFC-e', 'gerente'));
 
 // Análises (curva ABC, margem, horários)
 router.get('/analises', rota((req) => analisar(req.userId, { de: req.query.de, ate: req.query.ate, base: req.query.base, agruparVariacoes: req.query.variacoes !== '1' }), 'Erro ao carregar as análises'));

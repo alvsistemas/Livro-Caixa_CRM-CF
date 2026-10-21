@@ -1,7 +1,10 @@
 const CACHE_NAME = 'livro-caixa-v1';
 
-self.addEventListener('install', () => {
+// O PDV precisa abrir mesmo sem internet (vender no balcão): a casca dele fica guardada desde a instalação
+const CASCA = ['/estoque/', '/manifest.json', '/icons/icon-192.png'];
+self.addEventListener('install', (event) => {
   self.skipWaiting(); // assume o controle assim que instalar, sem esperar todas as abas fecharem
+  event.waitUntil(caches.open(CACHE_NAME).then((c) => c.addAll(CASCA)).catch(() => {}));
 });
 
 self.addEventListener('activate', (event) => {
@@ -27,7 +30,8 @@ self.addEventListener('fetch', (event) => {
         caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copia));
         return resposta;
       })
-      .catch(() => caches.match(event.request))
+      // sem internet: a cópia guardada; se o arquivo mudou de versão (?v=...), a última que houver
+      .catch(() => caches.match(event.request).then((r) => r || caches.match(event.request, { ignoreSearch: true })))
   );
 });
 

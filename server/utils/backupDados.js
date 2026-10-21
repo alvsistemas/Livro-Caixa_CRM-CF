@@ -23,7 +23,7 @@ const { hojeBR } = require('./fechamento');
 // Os lançamentos de dinheiro já vão em controleFinanceiro.
 async function caixaEstoque(userId) {
   const [negocio, produtos, vendas, compras, pedidos, clientes] = await Promise.all([
-    Estoque.lerNegocio(userId), Estoque.listarProdutos(userId), Estoque.listarVendas(userId), Estoque.listarCompras(userId), Estoque.listarPedidos(userId),
+    Estoque.lerNegocio(userId), Estoque.listarProdutos(userId), Estoque.listarVendas(userId, { limite: 200000 }), Estoque.listarCompras(userId, { limite: 200000 }), Estoque.listarPedidos(userId),
     Fidelidade.listarClientes(userId, {}, hojeBR()),
   ]);
   if (!negocio && !produtos.length) return null;

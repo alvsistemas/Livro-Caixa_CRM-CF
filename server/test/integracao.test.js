@@ -110,7 +110,7 @@ describe('API com PostgreSQL (integração)', { skip: pular }, () => {
 
   test('cliente: criar, editar, mover para ganho gera comissão; dinheiro com centavos exatos', async () => {
     const t = contas.ana.token;
-    const leads = contas.ana.colunas.find((c) => c.nome === 'Leads');
+    const leads = contas.ana.colunas.find((c) => c.nome === 'Novos contatos');
     const ganho = contas.ana.colunas.find((c) => c.tipo === 'ganho');
     const c = await api('POST', '/api/cards', { cliente: 'João Silva', columnId: leads.id, valor: 10000.555, telefone: '(15) 99999-1234', etiquetas: ['vip'] }, t);
     assert.equal(c.status, 201, JSON.stringify(c.dados));
@@ -132,7 +132,7 @@ describe('API com PostgreSQL (integração)', { skip: pular }, () => {
 
   test('trocar a coluna pela ficha do cliente também gera a comissão', async () => {
     const t = contas.ana.token;
-    const leads = contas.ana.colunas.find((c) => c.nome === 'Leads');
+    const leads = contas.ana.colunas.find((c) => c.nome === 'Novos contatos');
     const ganho = contas.ana.colunas.find((c) => c.tipo === 'ganho');
     const c = await api('POST', '/api/cards', { cliente: 'Pela ficha', columnId: leads.id, valor: 2000 }, t);
     const ed = await api('PUT', `/api/cards/${c.dados.id}`, { columnId: ganho.id, valor: 2000 }, t);
@@ -197,7 +197,7 @@ describe('API com PostgreSQL (integração)', { skip: pular }, () => {
     assert.ok(bloco.status < 300, JSON.stringify(bloco.dados));
     const campo = await api('POST', '/api/campos-personalizados', { nome: 'CPF', tipo: 'texto' }, t);
     assert.ok(campo.status < 300, JSON.stringify(campo.dados));
-    const leads = contas.ana.colunas.find((c) => c.nome === 'Leads');
+    const leads = contas.ana.colunas.find((c) => c.nome === 'Novos contatos');
     const auto = await api('POST', '/api/automacoes', { nome: 'Tarefa ao entrar', colunaGatilhoId: leads.id, acaoTipo: 'criar_tarefa', acaoParams: { titulo: 'Primeiro contato', dias: 1 } }, t);
     assert.ok(auto.status < 300, JSON.stringify(auto.dados));
     const c2 = await api('POST', '/api/cards', { cliente: 'Maria', columnId: leads.id }, t);
@@ -652,7 +652,7 @@ describe('API com PostgreSQL (integração)', { skip: pular }, () => {
     const naoGestor = await api('GET', '/api/equipe/supervisao', undefined, contas.bia.token);
     assert.equal(naoGestor.status, 403);
     // lead novo nasce direto na conta da Bia
-    const leads = contas.ana.colunas.find((c) => c.nome === 'Leads');
+    const leads = contas.ana.colunas.find((c) => c.nome === 'Novos contatos');
     const novo = await api('POST', '/api/cards', { cliente: 'Lead da Bia', columnId: leads.id, atribuirParaId: contas.bia.id }, ana);
     assert.equal(novo.status, 201, JSON.stringify(novo.dados));
     assert.equal(novo.dados.transferido, true);
@@ -724,7 +724,7 @@ describe('API com PostgreSQL (integração)', { skip: pular }, () => {
   test('agendadores rodam sem erro (automação por tempo, fluxos, lembretes)', async () => {
     const t = contas.ana.token;
     const board = await api('GET', '/api/board', undefined, t);
-    const leads = board.dados.columns.find((c) => c.nome === 'Leads');
+    const leads = board.dados.columns.find((c) => c.nome === 'Novos contatos');
     const qualif = board.dados.columns.find((c) => c.nome === 'Qualificação');
     const auto = await api('POST', '/api/automacoes', { nome: 'Parado 1 dia', colunaGatilhoId: leads.id, gatilhoTipo: 'tempo_parado', acaoTipo: 'mover_coluna', acaoParams: { colunaDestinoId: qualif.id, diasParado: 1 } }, t);
     assert.ok(auto.status < 300, JSON.stringify(auto.dados));
@@ -756,7 +756,7 @@ describe('API com PostgreSQL (integração)', { skip: pular }, () => {
   test('agendamento público e importação de planilha', async () => {
     const t = contas.ana.token;
     const board = await api('GET', '/api/board', undefined, t);
-    const leads = board.dados.columns.find((c) => c.nome === 'Leads');
+    const leads = board.dados.columns.find((c) => c.nome === 'Novos contatos');
     const cfg = await api('PUT', '/api/auth/agendamento-publico', { ativo: true, horaInicio: '08:00', horaFim: '18:00', duracaoMinutos: 30, diasSemana: [0, 1, 2, 3, 4, 5, 6], colunaDestinoId: leads.id }, t);
     assert.ok(cfg.status < 300, JSON.stringify(cfg.dados));
     const pub = await api('GET', `/api/agendamento-publico/${contas.ana.id}/config`);
@@ -1500,6 +1500,23 @@ describe('API com PostgreSQL (integração)', { skip: pular }, () => {
     assert.equal((await api('POST', `/api/estoque/vendas/${r.dados.venda.id}/cancelar`, {}, t, comCx)).status, 403, 'caixa não cancela');
     assert.equal((await api('POST', `/api/estoque/vendas/${r.dados.venda.id}/cancelar`, {}, t, comGer)).status, 200);
     assert.equal((await api('PUT', '/api/estoque/pdv', { exigirOperador: false }, t, comCx)).status, 403);
+    // PIN sem internet: a credencial "offline" só registra venda guardada (refCliente + feitaEm), nada mais
+    const jwt = require('jsonwebtoken');
+    const entCx = (await api('POST', '/api/estoque/operadores/entrar', { id: cx.id, pin: '5555' }, t)).dados;
+    assert.ok(entCx.offline && entCx.offline !== entCx.token);
+    const comOff = { 'x-operador-offline': entCx.offline };
+    const agoraIso = new Date().toISOString();
+    assert.equal((await api('POST', '/api/estoque/vendas', { itens: [{ produtoId: prod.id, qtd: 1 }], meio: 'pix' }, t, comOff)).status, 403, 'sem refCliente/feitaEm não vale');
+    assert.equal((await api('PUT', '/api/estoque/pdv', { reciboRodape: 'x' }, t, comOff)).status, 403, 'não serve para outras rotas');
+    assert.equal((await api('POST', '/api/estoque/vendas', { itens: [{ produtoId: prod.id, qtd: 1 }], meio: 'pix', refCliente: 'off-pin-1', feitaEm: agoraIso }, t, { 'x-operador-offline': entCx.token })).status, 403, 'token comum não serve como offline');
+    r = await api('POST', '/api/estoque/vendas', { itens: [{ produtoId: prod.id, qtd: 1 }], meio: 'pix', refCliente: 'off-pin-1', feitaEm: agoraIso }, t, comOff);
+    assert.equal(r.status, 200, JSON.stringify(r.dados));
+    assert.equal(r.dados.venda.operador, 'Leo');
+    const antiga = new Date(Date.now() - 2 * 3600 * 1000).toISOString();
+    assert.equal((await api('POST', '/api/estoque/vendas', { itens: [{ produtoId: prod.id, qtd: 1 }], meio: 'pix', refCliente: 'off-pin-2', feitaEm: antiga }, t, comOff)).status, 403, 'venda de antes da credencial');
+    const p0 = jwt.decode(entCx.offline);
+    const vencida = jwt.sign({ u: p0.u, op: p0.op, off: 1, iat: Math.floor(Date.now() / 1000) - 9 * 86400, exp: Math.floor(Date.now() / 1000) - 86400 }, `${process.env.JWT_SECRET}:operador:offline`);
+    assert.equal((await api('POST', '/api/estoque/vendas', { itens: [{ produtoId: prod.id, qtd: 1 }], meio: 'pix', refCliente: 'off-pin-3', feitaEm: agoraIso }, t, { 'x-operador-offline': vencida })).status, 403, 'vencida');
     assert.equal((await api('DELETE', `/api/estoque/operadores/${ger.id}`, undefined, t, comGer)).status, 400, 'não fica sem gerente');
     assert.equal((await api('PUT', '/api/estoque/pdv', { exigirOperador: false }, t, comGer)).status, 200);
   });
@@ -1528,6 +1545,11 @@ describe('API com PostgreSQL (integração)', { skip: pular }, () => {
     const cid = r.dados.comanda.id;
     assert.equal(r.dados.comanda.rotulo, 'Mesa 1');
     assert.equal((await api('POST', '/api/estoque/comandas', { mesaId: m1.id }, t, comGar)).dados.comanda.id, cid, 'mesma mesa: mesma comanda');
+    const mesas3 = (await api('GET', '/api/estoque/mesas', undefined, t)).dados.mesas;
+    const [a1, a2] = await Promise.all([api('POST', '/api/estoque/comandas', { mesaId: mesas3[2].id }, t, comGar), api('POST', '/api/estoque/comandas', { mesaId: mesas3[2].id }, t, comGar)]);
+    assert.equal(a1.status, 200, JSON.stringify(a1.dados)); assert.equal(a2.status, 200, JSON.stringify(a2.dados));
+    assert.equal(a1.dados.comanda.id, a2.dados.comanda.id, 'dois garçons abrindo a mesma mesa');
+    await api('POST', `/api/estoque/comandas/${a1.dados.comanda.id}/cancelar`, {}, t, comGar);
     r = await api('POST', `/api/estoque/comandas/${cid}/itens`, { itens: [
       { produtoId: pizza.id, variacaoId: pizza.variacoes[1].id, qtd: 1, opcoes: { 0: [1] }, obs: 'sem cebola' },
       { produtoId: coca.id, qtd: 2 },
@@ -1723,6 +1745,112 @@ describe('API com PostgreSQL (integração)', { skip: pular }, () => {
     assert.equal(r.dados.itens[0].sugestao.por, 'antes');
     assert.equal(r.dados.itens[0].sugestao.fator, 12, 'lembra quantas vêm na caixa');
     assert.equal(r.dados.itens[1].sugestao.produtoId, bolacha.id);
+  });
+
+  test('PDV fase 4: venda sem internet (sem duplicar) e NFC-e pelo emissor (servidor falso da Focus NFe)', async () => {
+    const http = require('http');
+    const notas = new Map(); let ultimoCorpo = null;
+    const focus = http.createServer((req, res) => {
+      let corpo = ''; req.on('data', (c) => { corpo += c; });
+      req.on('end', () => {
+        const json = (st, o) => { res.writeHead(st, { 'Content-Type': 'application/json' }); res.end(JSON.stringify(o)); };
+        if (req.headers.authorization !== `Basic ${Buffer.from('tokenteste12345:').toString('base64')}`) return json(401, { codigo: 'permissao_negada', mensagem: 'token inválido' });
+        const u = new URL(req.url, 'http://x');
+        if (req.method === 'POST' && u.pathname === '/v2/nfce') {
+          const ref = u.searchParams.get('ref'); const d = JSON.parse(corpo); ultimoCorpo = d;
+          if (d.items.some((i) => /REJEITA/.test(i.descricao))) return json(200, { status: 'erro_autorizacao', status_sefaz: '778', mensagem_sefaz: 'Informado NCM inexistente' });
+          const n = { cnpj_emitente: d.cnpj_emitente, ref, status: 'autorizado', status_sefaz: '100', mensagem_sefaz: 'Autorizado o uso da NF-e', chave_nfe: `NFe352610${String(notas.size + 1).padStart(38, '0')}`, numero: String(notas.size + 1), serie: '1', caminho_xml_nota_fiscal: `/arquivos/${ref}.xml`, caminho_danfe: `/notas_fiscais_consumidor/${ref}.html` };
+          notas.set(ref, n); return json(201, n);
+        }
+        const m = u.pathname.match(/^\/v2\/nfce\/(.+)$/);
+        if (m && req.method === 'GET') return notas.has(m[1]) ? json(200, notas.get(m[1])) : json(404, { codigo: 'nao_encontrado', mensagem: 'Nota fiscal não encontrada' });
+        if (m && req.method === 'DELETE') { const n = notas.get(m[1]); if (!n) return json(404, {}); n.status = 'cancelado'; return json(200, { status: 'cancelado', status_sefaz: '135', mensagem_sefaz: 'Evento registrado', caminho_xml_cancelamento: '/c.xml' }); }
+        json(404, {});
+      });
+    });
+    await new Promise((ok) => focus.listen(0, ok));
+    process.env.FOCUS_NFE_URL = `http://127.0.0.1:${focus.address().port}`;
+    try {
+      const t = (await api('POST', '/api/auth/register', { nome: 'Fiscal', email: 'fase4-pdv@teste.com', senha: 'senha123' })).dados.token;
+      await api('PUT', '/api/estoque/negocio', { tipo: 'loja', nome: 'Loja Fiscal', controlaEstoque: true }, t);
+      await api('PUT', '/api/estoque/pdv', { exigirCaixa: false }, t);
+      const prod = (await api('POST', '/api/estoque/produtos', { nome: 'Camiseta', preco: 50, custo: 20, estoqueInicial: 10, codigo: '7891234567895', fiscal: { ncm: '6109.10.00' } }, t)).dados.produto;
+      assert.equal(prod.fiscal.ncm, '61091000');
+      const semNcm = (await api('POST', '/api/estoque/produtos', { nome: 'Boné', preco: 30, custo: 10, estoqueInicial: 5 }, t)).dados.produto;
+      // salvar sem mandar "fiscal" não apaga o NCM
+      await api('PUT', `/api/estoque/produtos/${prod.id}`, { nome: 'Camiseta', preco: 55, custo: 20 }, t);
+      assert.equal((await api('GET', '/api/estoque/produtos', undefined, t)).dados.produtos.find((p) => p.id === prod.id).fiscal.ncm, '61091000');
+      // venda feita sem internet: reenviada duas vezes, entra uma vez só, com a hora de quando aconteceu
+      const feitaEm = new Date(Date.now() - 2 * 3600 * 1000).toISOString();
+      const corpo = { itens: [{ produtoId: prod.id, qtd: 2 }], pagamentos: [{ meio: 'dinheiro', valor: 120 }], refCliente: 'off-abc12345', feitaEm };
+      let r = await api('POST', '/api/estoque/vendas', corpo, t);
+      assert.equal(r.status, 200, JSON.stringify(r.dados));
+      const v1 = r.dados.venda;
+      assert.equal(v1.offline, true);
+      assert.equal(new Date(v1.criadoEm).toISOString(), feitaEm);
+      r = await api('POST', '/api/estoque/vendas', corpo, t);
+      assert.equal(r.dados.repetida, true);
+      assert.equal(r.dados.venda.id, v1.id);
+      // dois envios simultâneos da mesma venda nova (duas abas sincronizando): uma venda só, os dois respondem 200
+      const dup = { itens: [{ produtoId: semNcm.id, qtd: 1 }], meio: 'pix', refCliente: 'off-simultanea-1' };
+      const [d1, d2] = await Promise.all([api('POST', '/api/estoque/vendas', dup, t), api('POST', '/api/estoque/vendas', dup, t)]);
+      assert.equal(d1.status, 200, JSON.stringify(d1.dados)); assert.equal(d2.status, 200, JSON.stringify(d2.dados));
+      assert.equal(d1.dados.venda.id, d2.dados.venda.id);
+      await api('POST', `/api/estoque/vendas/${d1.dados.venda.id}/cancelar`, {}, t);
+      assert.equal((await api('GET', '/api/estoque/produtos', undefined, t)).dados.produtos.find((p) => p.id === prod.id).estoque, 8, 'baixou o estoque uma vez só');
+      // configuração fiscal: token cifrado, nunca volta
+      assert.equal((await api('PUT', '/api/estoque/fiscal', { ativo: true, cnpj: '11.222.333/0001-81' }, t)).status, 400, 'sem token não liga');
+      assert.equal((await api('PUT', '/api/estoque/fiscal', { cnpj: '11.222.333/0001-82' }, t)).status, 400, 'CNPJ inválido');
+      assert.equal((await api('POST', `/api/estoque/vendas/${v1.id}/nfce`, {}, t)).status, 400, 'desligada');
+      r = await api('PUT', '/api/estoque/fiscal', { ativo: true, cnpj: '11.222.333/0001-81', token: 'tokenteste12345', emitir: 'sempre' }, t);
+      assert.equal(r.status, 200, JSON.stringify(r.dados));
+      assert.equal(r.dados.fiscal.temToken, true);
+      assert.equal(r.dados.fiscal.token, undefined);
+      assert.equal(r.dados.fiscal.ambiente, 'homologacao');
+      const linha = (await pool.query("SELECT fiscal_token FROM estoque_negocio WHERE fiscal_token IS NOT NULL ORDER BY updated_at DESC NULLS LAST LIMIT 1")).rows[0];
+      assert.ok(linha && !linha.fiscal_token.includes('tokenteste12345'), 'guardado cifrado');
+      assert.equal((await api('POST', '/api/estoque/fiscal/testar', {}, t)).dados.ok, true);
+      // emitir: troco, CPF, desconto rateado
+      const [e1, e2] = await Promise.all([api('POST', `/api/estoque/vendas/${v1.id}/nfce`, { cpf: '529.982.247-25' }, t), api('POST', `/api/estoque/vendas/${v1.id}/nfce`, { cpf: '529.982.247-25' }, t)]);
+      assert.equal(notas.size, 1, 'dois toques em Emitir: uma nota só');
+      r = [e1, e2].find((x) => x.dados.nfce && x.dados.nfce.status === 'autorizada') || e1;
+      assert.equal(r.status, 200, JSON.stringify(r.dados));
+      r = await api('GET', `/api/estoque/vendas/${v1.id}/nfce`, undefined, t);
+      assert.equal(r.dados.nfce.status, 'autorizada');
+      assert.match(r.dados.nfce.danfe, /^http:\/\/127\.0\.0\.1:\d+\/notas_fiscais_consumidor\//);
+      assert.equal(ultimoCorpo.cnpj_emitente, '11222333000181');
+      assert.equal(ultimoCorpo.cpf_destinatario, '52998224725');
+      assert.equal(ultimoCorpo.items[0].codigo_ncm, '61091000');
+      assert.equal(ultimoCorpo.items[0].icms_situacao_tributaria, '102');
+      assert.equal(ultimoCorpo.formas_pagamento[0].forma_pagamento, '01');
+      assert.equal(ultimoCorpo.formas_pagamento[0].valor_pagamento, 120);
+      assert.equal(ultimoCorpo.valor_troco, 10, '2 × 55 = 110, pagou 120');
+      assert.equal((await api('POST', `/api/estoque/vendas/${v1.id}/nfce`, {}, t)).status, 400, 'já autorizada');
+      assert.equal((await api('POST', `/api/estoque/vendas/${v1.id}/cancelar`, {}, t)).status, 400, 'venda com nota: cancela a nota antes');
+      assert.equal((await api('POST', `/api/estoque/vendas/${v1.id}/nfce/cancelar`, { justificativa: 'curto' }, t)).status, 400);
+      r = await api('POST', `/api/estoque/vendas/${v1.id}/nfce/cancelar`, { justificativa: 'Cliente desistiu da compra' }, t);
+      assert.equal(r.dados.nfce.status, 'cancelada');
+      assert.equal((await api('POST', `/api/estoque/vendas/${v1.id}/cancelar`, {}, t)).status, 200);
+      // produto sem NCM e sem NCM padrão: avisa antes de mandar
+      const v2 = (await api('POST', '/api/estoque/vendas', { itens: [{ produtoId: semNcm.id, qtd: 1 }, { produtoId: prod.id, qtd: 1 }], meio: 'pix', desconto: 8.5 }, t)).dados.venda;
+      r = await api('POST', `/api/estoque/vendas/${v2.id}/nfce`, {}, t);
+      assert.equal(r.status, 400); assert.match(r.dados.error, /NCM de: Boné/);
+      await api('PUT', '/api/estoque/fiscal', { ncm: '65050090' }, t);
+      r = await api('POST', `/api/estoque/vendas/${v2.id}/nfce`, {}, t);
+      assert.equal(r.dados.nfce.status, 'autorizada');
+      assert.equal(ultimoCorpo.items[0].valor_desconto + ultimoCorpo.items[1].valor_desconto, 8.5, 'desconto rateado');
+      assert.equal(ultimoCorpo.formas_pagamento[0].forma_pagamento, '17');
+      r = await api('GET', `/api/estoque/vendas/${v2.id}/nfce`, undefined, t);
+      assert.equal(r.dados.nfce.status, 'autorizada');
+      // rejeição da SEFAZ vira status "erro" com a mensagem
+      const rej = (await api('POST', '/api/estoque/produtos', { nome: 'REJEITA teste', preco: 10, custo: 1, controlaEstoque: false }, t)).dados.produto;
+      const v3 = (await api('POST', '/api/estoque/vendas', { itens: [{ produtoId: rej.id, qtd: 1 }], meio: 'pix' }, t)).dados.venda;
+      r = await api('POST', `/api/estoque/vendas/${v3.id}/nfce`, {}, t);
+      assert.equal(r.dados.nfce.status, 'erro'); assert.match(r.dados.nfce.mensagem, /NCM inexistente/);
+      // token errado
+      await api('PUT', '/api/estoque/fiscal', { token: 'outrotoken99999' }, t);
+      assert.equal((await api('POST', '/api/estoque/fiscal/testar', {}, t)).status, 400);
+    } finally { delete process.env.FOCUS_NFE_URL; focus.close(); }
   });
 
   test('sair de todos os aparelhos invalida o token antigo', async () => {

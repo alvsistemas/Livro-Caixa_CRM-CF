@@ -475,8 +475,11 @@ async function assinar(userId, { plano, ciclo = 'mensal', nome, cpfCnpj, email }
     const desligarAvisos = avisosProprios();
     let clienteId = linha.asaas_cliente_id;
     if (clienteId) {
-      await asaas.atualizarCliente(clienteId, { name: nomeLimpo, cpfCnpj: documento, email, notificationDisabled: desligarAvisos });
-    } else {
+      // cliente criado no sandbox não existe na produção (404): cria de novo no ambiente atual
+      try { await asaas.atualizarCliente(clienteId, { name: nomeLimpo, cpfCnpj: documento, email, notificationDisabled: desligarAvisos }); }
+      catch (err) { if (err.status !== 404) throw err; clienteId = null; }
+    }
+    if (!clienteId) {
       const cliente = await asaas.criarCliente({ name: nomeLimpo, cpfCnpj: documento, email, externalReference: String(userId), notificationDisabled: desligarAvisos });
       clienteId = cliente.id;
     }

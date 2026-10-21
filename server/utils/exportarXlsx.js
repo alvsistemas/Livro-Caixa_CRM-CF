@@ -56,7 +56,7 @@ async function gerarPlanilha(userId, mes, agora = new Date()) {
   const [ano, m] = mes.split('-').map(Number);
   const de = `${mes}-01`; const ate = `${mes}-${String(new Date(ano, m, 0).getDate()).padStart(2, '0')}`;
   const negocio = (await E.lerNegocio(userId)) || {};
-  const vendas = (await E.listarVendas(userId, { de, ate })).sort((a, b) => (a.data === b.data ? a.numero - b.numero : a.data < b.data ? -1 : 1));
+  const vendas = (await E.listarVendas(userId, { de, ate, limite: 200000 })).sort((a, b) => (a.data === b.data ? a.numero - b.numero : a.data < b.data ? -1 : 1));
   const validas = vendas.filter((v) => !v.cancelada);
   const comandas = new Set(validas.filter((v) => v.comandaId).map((v) => v.comandaId));
 
@@ -66,8 +66,8 @@ async function gerarPlanilha(userId, mes, agora = new Date()) {
   // ---------- Resumo ----------
   const soma = (f) => r2(validas.reduce((a, v) => a + f(v), 0));
   const fat = soma((v) => v.total); const cmv = soma((v) => v.cmv); const taxas = soma((v) => v.taxa);
-  const compras = (await E.listarCompras(userId)).filter((c) => c.data >= de && c.data <= ate);
-  const gastos = (await E.listarGastos(userId)).filter((g) => g.data >= de && g.data <= ate);
+  const compras = await E.listarCompras(userId, { de, ate, limite: 200000 });
+  const gastos = await E.listarGastos(userId, null, { de, ate, limite: 200000 });
   const fiado = await C.fiadoEmAberto(userId);
   const resumo = [
     ['Negócio', negocio.nome || ''],

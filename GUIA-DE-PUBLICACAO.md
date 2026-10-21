@@ -105,6 +105,7 @@ Não precisa liberar IP nem criar usuário: o Neon já aceita conexões com SSL 
    |---|---|
    | `DATABASE_URL` | o endereço copiado na etapa 3 |
    | `JWT_SECRET` | clique em **Generate** (o Render cria um texto aleatório) |
+   | `FISCAL_KEY` | (opcional) clique em **Generate**. Cifra os tokens da nota fiscal (NFC-e) dos clientes. Não troque depois de usar: os tokens salvos teriam de ser colados de novo |
 
 6. Clique em **Deploy Web Service**. Acompanhe os *Logs*: em 2 a 5 minutos devem aparecer as linhas `Migração aplicada: ...`, `Conectado ao PostgreSQL.` e `Servidor rodando…`.
 7. Copie o endereço que aparece no topo da página (ex.: `https://livro-caixa.onrender.com`). Vá em **Environment** → **Add Environment Variable** e crie:

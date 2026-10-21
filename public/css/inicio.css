@@ -1,5 +1,5 @@
 /* Tela de escolha de aplicativo (CRM ou Controle financeiro), logo depois do login */
-.inicio-body{ margin:0; min-height:100vh; background:var(--bg); color:var(--ink); font-family:'IBM Plex Sans',system-ui,sans-serif; display:flex; align-items:center; justify-content:center; }
+.inicio-body{ margin:0; min-height:calc(100vh / var(--zoom, 1)); background:var(--bg); color:var(--ink); font-family:'IBM Plex Sans',system-ui,sans-serif; display:flex; align-items:center; justify-content:center; }
 .inicio-wrap{ width:100%; max-width:1080px; padding:40px 20px; box-sizing:border-box; }
 .inicio-head{ margin-bottom:28px; }
 .inicio-marca{ font-family:'IBM Plex Mono',monospace; font-size:12px; font-weight:600; letter-spacing:.08em; text-transform:uppercase; color:var(--ink-soft); margin:0 0 10px; }
@@ -58,3 +58,10 @@
 
 .instalar-app.instalar-feito{ border-color:#2F6F4E; background:rgba(47,111,78,.08); }
 .instalar-app[hidden], .instalar-fundo[hidden], .inicio-assinatura[hidden]{ display:none !important; }
+
+/* Acessibilidade (js/acessibilidade.js) */
+.inicio-a11y{ margin:14px auto 0; max-width:440px; }
+.inicio-a11y summary{ cursor:pointer; text-align:center; color:var(--ink-soft); font-size:13px; padding:6px; list-style:none; }
+.inicio-a11y summary::-webkit-details-marker{ display:none; }
+.inicio-a11y[open] summary{ color:var(--ink); font-weight:600; }
+.inicio-a11y [data-a11y-painel]{ margin-top:8px; padding:16px; border:1px solid var(--line); border-radius:14px; background:var(--paper); }

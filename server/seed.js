@@ -6,7 +6,7 @@ const Funil = require('./models/Funil');
 async function seedColunasPadrao(userId) {
   const funil = await Funil.create({ userId, nome: 'Funil Principal', ordem: 0 });
   await Column.insertMany([
-    { userId, funilId: funil._id, nome: 'Leads', tipo: 'aberto', ordem: 0 },
+    { userId, funilId: funil._id, nome: 'Novos contatos', tipo: 'aberto', ordem: 0 },
     { userId, funilId: funil._id, nome: 'Qualificação', tipo: 'aberto', ordem: 1 },
     { userId, funilId: funil._id, nome: 'Negociação', tipo: 'aberto', ordem: 2 },
     { userId, funilId: funil._id, nome: 'Fechado — Vendido', tipo: 'ganho', ordem: 3 },

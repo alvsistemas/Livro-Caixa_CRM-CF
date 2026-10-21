@@ -81,9 +81,10 @@ function ligarGraficos() {
       const d = dados[+alvo.dataset.i];
       dica.innerHTML = `<b>${escapeHtml(d.t)}</b><span class="mono">${escapeHtml(d.v)}</span>${d.extra ? `<small>${escapeHtml(d.extra)}</small>` : ""}`;
       dica.hidden = false;
-      const escala = svg.getBoundingClientRect().width / 640;
+      const larguraSvg = svg.getBoundingClientRect().width / (window.zoomDaTela ? window.zoomDaTela() : 1);
+      const escala = larguraSvg / 640;
       const px = +alvo.dataset.x * escala;
-      dica.style.left = Math.min(Math.max(px, 70), svg.getBoundingClientRect().width - 70) + "px";
+      dica.style.left = Math.min(Math.max(px, 70), larguraSvg - 70) + "px";
       if (mira) { mira.setAttribute("x1", alvo.dataset.x); mira.setAttribute("x2", alvo.dataset.x); mira.style.display = ""; }
       g.querySelectorAll(".g-alvo").forEach((a) => a.classList.toggle("ativo", a === alvo));
     };
@@ -111,15 +112,15 @@ function evolucaoPatrimonio(meses) {
   }
   let acumulado = 0;
   const antes = Calculos.primeiroMes(state.txs);
-  if (antes) for (let m = antes; m < meses[0]; m = Calculos.somarMeses(m, 1)) acumulado += sumsFromOccurrences(occurrencesForMonth(m)).saldo;
-  return { titulo: "Quanto sobrou, somando mês a mês", pontos: meses.map((m) => { acumulado += sumsFromOccurrences(occurrencesForMonth(m)).saldo; return { mes: m, valor: acumulado }; }) };
+  if (antes) for (let m = antes; m < meses[0]; m = Calculos.somarMeses(m, 1)) acumulado += sumsFromOccurrences(resultadoDoMes(m)).saldo;
+  return { titulo: "Quanto sobrou, somando mês a mês", pontos: meses.map((m) => { acumulado += sumsFromOccurrences(resultadoDoMes(m)).saldo; return { mes: m, valor: acumulado }; }) };
 }
 function despesasPorMes(meses, categoria) {
-  return meses.map((m) => ({ mes: m, valor: occurrencesForMonth(m).filter((r) => r.tx.type === "Despesa" && (!categoria || r.tx.category === categoria)).reduce((a, r) => a + r.value, 0) }));
+  return meses.map((m) => ({ mes: m, valor: resultadoDoMes(m).filter((r) => r.tx.type === "Despesa" && (!categoria || r.tx.category === categoria)).reduce((a, r) => a + r.value, 0) }));
 }
 function resumoDoAno(ano) {
   const meses = Array.from({ length: 12 }, (_, i) => `${ano}-${String(i + 1).padStart(2, "0")}`);
-  const porMes = meses.map((m) => ({ mes: m, ...sumsFromOccurrences(occurrencesForMonth(m)) }));
+  const porMes = meses.map((m) => ({ mes: m, ...sumsFromOccurrences(resultadoDoMes(m)) }));
   const linhas = meses.flatMap((m) => occurrencesForMonth(m));
   const somarPor = (tipo) => { const mapa = {}; linhas.filter((r) => r.tx.type === tipo).forEach((r) => { mapa[r.tx.category] = (mapa[r.tx.category] || 0) + r.value; }); return Object.entries(mapa).sort((a, b) => b[1] - a[1]); };
   const dedutiveis = linhas.filter((r) => r.tx.type === "Despesa" && ehDedutivel(r.tx.category) && r.tx.scope !== "Empresa");

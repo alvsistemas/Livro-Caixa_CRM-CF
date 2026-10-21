@@ -49,7 +49,7 @@
 .assistente-input-row button{ width:36px; height:36px; border-radius:50%; border:none; background:var(--ai-cor); color:var(--ai-cor-texto); cursor:pointer; font-size:14px; flex-shrink:0; }
 .assistente-input-row button:disabled{ opacity:.5; cursor:default; }
 @media (max-width:480px){
-  .assistente-painel{ width:calc(100vw - 24px); height:min(460px, 70vh); }
+  .assistente-painel{ width:calc(calc(100vw / var(--zoom, 1)) - 24px); height:min(460px, calc(70vh / var(--zoom, 1))); }
 }
 .assistente-head-acoes{ display:inline-flex; align-items:center; gap:10px; }
 .assistente-painel-head button#assistente-limpar{ font-size:16px; line-height:1; }

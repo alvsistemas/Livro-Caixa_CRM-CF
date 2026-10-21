@@ -1,0 +1,57 @@
+/* Acessibilidade (ver js/acessibilidade.js). Usa só as variáveis que os três aplicativos têm (--ink, --bg). */
+
+/* ---- tamanho da letra: a tela inteira cresce ---- */
+html.a11y-zoom { zoom: var(--zoom, 1); }
+
+/* ---- alto contraste: só as cores "secundárias" (cinzas e bordas) ficam mais fortes ---- */
+html.a11y-contraste {
+  --ink-soft: #2B2B2B; --ink-muted: #2B2B2B; --muted: #2B2B2B;   /* textos secundários (CRM, financeiro, PDV) */
+  --line: #8A8A8A; --rule: #8A8A8A; --rule-soft: #C4C4C4;       /* bordas */
+  --cold: #4A4A4A; --warm: #2B2B2B;
+}
+html.a11y-contraste[data-theme="dark"] {
+  --ink-soft: #E4E4E4; --ink-muted: #E4E4E4; --muted: #E4E4E4;
+  --line: #8A8A8A; --rule: #8A8A8A; --rule-soft: #4A4A4A;
+  --cold: #CFCFCF; --warm: #E4E4E4;
+}
+html.a11y-contraste ::placeholder { color: #5A5A5A; opacity: 1; }
+html.a11y-contraste[data-theme="dark"] ::placeholder { color: #BDBDBD; }
+
+/* ---- menos animação (também quando o sistema pede) ---- */
+html.a11y-sem-movimento *, html.a11y-sem-movimento *::before, html.a11y-sem-movimento *::after {
+  animation-duration: 0.001ms !important; animation-iteration-count: 1 !important;
+  transition-duration: 0.001ms !important; scroll-behavior: auto !important;
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.001ms !important; animation-iteration-count: 1 !important; transition-duration: 0.001ms !important; scroll-behavior: auto !important; }
+}
+
+/* ---- foco visível sempre (teclado); mais forte com "Destacar links e botões" ---- */
+:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; }
+html.a11y-links a { text-decoration: underline !important; text-underline-offset: 3px; }
+html.a11y-links :focus-visible { outline: 3px solid #1F6FEB !important; outline-offset: 3px !important; box-shadow: 0 0 0 6px rgba(31, 111, 235, .25) !important; }
+html.a11y-links button:not(:disabled), html.a11y-links [role="button"] { text-underline-offset: 3px; }
+
+/* ---- o painel ---- */
+.a11y-painel { display: grid; gap: 10px; color: var(--ink, #141414); }
+.a11y-rotulo { font-size: 13px; font-weight: 600; }
+.a11y-letras { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.a11y-letra {
+  display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 10px 6px; min-height: 64px;
+  border: 1px solid var(--line, var(--rule, #D6D6D6)); border-radius: 12px; background: transparent; color: inherit;
+  font: inherit; font-size: 12.5px; cursor: pointer; justify-content: center;
+}
+.a11y-letra .a11y-aa { font-weight: 700; line-height: 1.1; }
+.a11y-letra.ativo { border-color: var(--ink, #141414); box-shadow: inset 0 0 0 1px var(--ink, #141414); font-weight: 600; }
+.a11y-opcao {
+  display: flex; align-items: center; justify-content: space-between; gap: 14px; width: 100%; text-align: left;
+  padding: 10px 0; border: 0; border-top: 1px solid var(--line, var(--rule, #E6E6E6)); background: transparent; color: inherit; font: inherit; cursor: pointer;
+}
+.a11y-texto { display: grid; gap: 2px; font-size: 14px; }
+.a11y-texto small { font-size: 12.5px; opacity: .75; line-height: 1.35; }
+.a11y-chave { flex: none; width: 40px; height: 22px; border-radius: 99px; background: var(--line, var(--rule, #D6D6D6)); position: relative; transition: background .15s; }
+.a11y-chave i { position: absolute; top: 3px; left: 3px; width: 16px; height: 16px; border-radius: 50%; background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,.25); transition: transform .15s; }
+.a11y-chave.ligada { background: var(--ink, #141414); }
+.a11y-chave.ligada i { transform: translateX(18px); }
+[data-theme="dark"] .a11y-chave.ligada i { background: #141414; }
+.a11y-nota { margin: 0; font-size: 12.5px; opacity: .75; }

@@ -233,9 +233,9 @@ let agendamentoPublicoForm = {
   colunaDestinoId: (currentUser && currentUser.agendamentoPublico && currentUser.agendamentoPublico.colunaDestinoId) || '',
 };
 const ROTULOS_EVENTOS_WEBHOOK = {
-  'lead.criado': 'Novo lead criado',
-  'lead.movido': 'Lead mudou de coluna',
-  'lead.ganho': 'Lead marcado como ganho',
+  'lead.criado': 'Novo contato criado',
+  'lead.movido': 'Contato mudou de coluna',
+  'lead.ganho': 'Contato marcado como ganho',
   'tarefa.criada': 'Nova tarefa criada',
 };
 let anexosDoCard = [];
@@ -605,8 +605,9 @@ function mostrarPopupRapido(elemento, texto){
   const el = document.createElement('div');
   el.className = 'popup-rapido';
   el.textContent = texto;
-  el.style.top = `${rect.top + rect.height/2}px`;
-  el.style.left = `${rect.left + rect.width/2}px`;
+  const z = (window.zoomDaTela ? window.zoomDaTela() : 1); // letra maior (acessibilidade): as medidas da tela são divididas pelo zoom
+  el.style.top = `${(rect.top + rect.height/2) / z}px`;
+  el.style.left = `${(rect.left + rect.width/2) / z}px`;
   root.appendChild(el);
   requestAnimationFrame(()=> el.classList.add('popup-rapido-visivel'));
   setTimeout(()=>{
@@ -1444,7 +1445,7 @@ async function abrirDashboardDeMembro(userId, nome){
     visualizandoDashboardDe = { userId, nome: data.nome || nome };
     goToPage('dashboard');
   }catch(e){
-    errorMsg = 'Não foi possível carregar o dashboard desse membro.';
+    errorMsg = 'Não foi possível carregar a visão geral desse membro.';
     renderApp();
   }
 }
@@ -1480,7 +1481,7 @@ async function salvarAutomacao(){
     }
     closeAutomacaoModal();
   }catch(e){
-    errorMsg = e.message || 'Não foi possível salvar a automação.';
+    errorMsg = e.message || 'Não foi possível salvar a ação automática.';
   }
   renderApp();
 }
@@ -1494,7 +1495,7 @@ async function toggleAutomacaoAtiva(id){
     await apiRequest('PUT', `/automacoes/${id}`, { ativa: a.ativa });
   }catch(e){
     a.ativa = anterior;
-    errorMsg = 'Não foi possível atualizar a automação.';
+    errorMsg = 'Não foi possível atualizar a ação automática.';
     renderApp();
   }
 }
@@ -1507,7 +1508,7 @@ async function excluirAutomacao(id){
     await apiRequest('DELETE', `/automacoes/${id}`);
   }catch(e){
     automacoes.splice(idx,0,removida);
-    errorMsg = 'Não foi possível excluir a automação.';
+    errorMsg = 'Não foi possível excluir a ação automática.';
     renderApp();
   }
 }
@@ -1539,7 +1540,7 @@ async function salvarFluxo(){
     }
     closeFluxoModal();
   }catch(e){
-    errorMsg = e.message || 'Não foi possível salvar o fluxo.';
+    errorMsg = e.message || 'Não foi possível salvar a sequência.';
   }
   renderApp();
 }
@@ -1553,7 +1554,7 @@ async function toggleFluxoAtivo(id){
     await apiRequest('PUT', `/fluxos/${id}`, { ativo: f.ativo });
   }catch(e){
     f.ativo = anterior;
-    errorMsg = 'Não foi possível atualizar o fluxo.';
+    errorMsg = 'Não foi possível atualizar a sequência.';
     renderApp();
   }
 }
@@ -1566,7 +1567,7 @@ async function excluirFluxo(id){
     await apiRequest('DELETE', `/fluxos/${id}`);
   }catch(e){
     fluxos.splice(idx,0,removido);
-    errorMsg = 'Não foi possível excluir o fluxo.';
+    errorMsg = 'Não foi possível excluir a sequência.';
     renderApp();
   }
 }
@@ -1623,7 +1624,7 @@ async function confirmarImportPlanilha(){
   renderApp();
   try{
     const data = await apiRequest('POST', '/possiveis-leads/importar', { linhas, origemArquivo: importPlanilhaNomeArquivo });
-    importPlanilhaMsg = { tipo:'ok', texto:`${data.total} possível lead(s) importado(s).` };
+    importPlanilhaMsg = { tipo:'ok', texto:`${data.total} possível(is) contato(s) importado(s).` };
     importPlanilhaLinhas = [];
     importPlanilhaColunas = [];
     importPlanilhaNomeArquivo = '';
@@ -1695,7 +1696,7 @@ async function salvarCompletarLead(){
     closeCompletarLeadModal();
     renderApp();
   }catch(e){
-    completarLeadMsg = { tipo:'erro', texto: e.message || 'Não foi possível adicionar aos Leads.' };
+    completarLeadMsg = { tipo:'erro', texto: e.message || 'Não foi possível adicionar aos Contatos.' };
     completarLeadSalvando = false;
     renderCompletarLeadModal();
   }
@@ -1708,7 +1709,7 @@ function renderCompletarLeadModal(){
     <div class="overlay" id="cl-lead-overlay">
       <div class="modal">
         <div class="modal-head">
-          <h3>Completar e adicionar aos Leads</h3>
+          <h3>Completar e adicionar aos Contatos</h3>
           <button id="cl-lead-close">✕</button>
         </div>
         <div class="modal-body">
@@ -1738,7 +1739,7 @@ function renderCompletarLeadModal(){
           <span></span>
           <div class="modal-foot-actions">
             <button class="btn-outline" id="cl-lead-cancel">Cancelar</button>
-            <button class="btn-save" id="cl-lead-salvar" ${completarLeadSalvando?'disabled':''}>${completarLeadSalvando?'Adicionando…':'Adicionar aos Leads'}</button>
+            <button class="btn-save" id="cl-lead-salvar" ${completarLeadSalvando?'disabled':''}>${completarLeadSalvando?'Adicionando…':'Adicionar aos Contatos'}</button>
           </div>
         </div>
       </div>
@@ -1890,7 +1891,7 @@ function computarNotificacoes(){
   const ontem = new Date(Date.now() - 24*60*60*1000);
   board.cards.forEach(c=>{
     if(c.createdAt && new Date(c.createdAt) >= ontem){
-      notifs.push({ texto:`Novo lead: ${c.cliente}`, timestamp:c.createdAt, cardId:c.id });
+      notifs.push({ texto:`Novo contato: ${c.cliente}`, timestamp:c.createdAt, cardId:c.id });
     }
   });
   return notifs.sort((a,b)=> new Date(b.timestamp) - new Date(a.timestamp));
@@ -2279,8 +2280,8 @@ async function baixarModeloLeads(){
   try{ await carregarBiblioteca('xlsx'); }catch(e){ errorMsg = e.message; renderApp(); return; }
   const ws = XLSX.utils.aoa_to_sheet([['Nome','Telefone','Serviço desejado','E-mail'],['Maria Silva','(11) 98888-7777','Consórcio de imóvel','maria@email.com'],['João Souza','(15) 99999-1234','Carta de crédito','']]);
   ws['!cols'] = [{wch:26},{wch:18},{wch:26},{wch:26}];
-  const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'Leads');
-  XLSX.writeFile(wb, 'modelo-importar-leads.xlsx');
+  const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'Contatos');
+  XLSX.writeFile(wb, 'modelo-importar-contatos.xlsx');
 }
 async function baixarPlanilhaLeads(cards, nomeBase, formato){
   if(formato === 'csv'){ baixarCsv(cards, `${nomeBase}.csv`); return; }
@@ -2292,7 +2293,7 @@ async function baixarPlanilhaLeads(cards, nomeBase, formato){
   for(let r=1; r<=rng.e.r; r++) for(const c of [3,4]){ const cel = ws[XLSX.utils.encode_cell({r, c})]; if(cel && typeof cel.v === 'number') cel.z = '"R$" #,##0.00'; }
   ws['!autofilter'] = { ref: ws['!ref'] };
   const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, 'Leads');
+  XLSX.utils.book_append_sheet(wb, ws, 'Contatos');
   XLSX.writeFile(wb, `${nomeBase}.xlsx`);
 }
 function baixarCsv(cards, nomeArquivo){
@@ -2320,7 +2321,7 @@ function baixarCsv(cards, nomeArquivo){
   URL.revokeObjectURL(url);
 }
 function exportarCsv(formato){
-  baixarPlanilhaLeads(cardsParaRelatorio(), `leads_${currentMonthKey()}`, formato === 'csv' ? 'csv' : 'xlsx');
+  baixarPlanilhaLeads(cardsParaRelatorio(), `contatos_${currentMonthKey()}`, formato === 'csv' ? 'csv' : 'xlsx');
 }
 async function exportarRelatorioPdf(){
   try{ await carregarBiblioteca('jspdf'); }catch(e){ errorMsg = e.message; renderApp(); return; }
@@ -2346,10 +2347,10 @@ async function exportarRelatorioPdf(){
   doc.setFontSize(11);
   doc.text(`Total ganho: ${fmtBRL(totalGanho)}`, 14, y); y += 6;
   doc.text(`Total perdido: ${fmtBRL(totalPerdido)}`, 14, y); y += 6;
-  doc.text(`Total de leads: ${cardsRel.length}`, 14, y); y += 12;
+  doc.text(`Total de contatos: ${cardsRel.length}`, 14, y); y += 12;
 
   doc.setFontSize(13);
-  doc.text('Novos leads por mês', 14, y); y += 8;
+  doc.text('Novos contatos por mês', 14, y); y += 8;
   doc.setFontSize(11);
   dados.forEach(d=>{
     doc.text(`${monthLabel(d.key)}: ${d.novos}`, 14, y); y += 6;
@@ -2357,7 +2358,7 @@ async function exportarRelatorioPdf(){
   y += 6;
 
   doc.setFontSize(13);
-  doc.text('Leads por qualificação', 14, y); y += 8;
+  doc.text('Contatos por qualificação', 14, y); y += 8;
   doc.setFontSize(11);
   porTemp.forEach(t=>{
     doc.text(`${TEMPS[t.temp].label}: ${t.count}`, 14, y); y += 6;
@@ -2521,10 +2522,10 @@ async function preencherMesInicioContatoAntigos(){
     // atualiza localmente também, sem precisar recarregar tudo do servidor de novo
     board.cards.forEach(c=>{ if(!c.mesInicioContato && c.mes) c.mesInicioContato = c.mes; });
     mesInicioContatoMsg = { tipo:'ok', texto: data.atualizados
-      ? `${data.atualizados} lead(s) atualizado(s).`
-      : 'Nenhum lead precisava de atualização — todos já tinham esse campo preenchido.' };
+      ? `${data.atualizados} contato(s) atualizado(s).`
+      : 'Nenhum contato precisava de atualização — todos já tinham esse campo preenchido.' };
   }catch(e){
-    mesInicioContatoMsg = { tipo:'erro', texto:'Não foi possível preencher os leads antigos agora.' };
+    mesInicioContatoMsg = { tipo:'erro', texto:'Não foi possível preencher os contatos antigos agora.' };
   }
   preenchendoMesInicioContato = false;
   renderApp();
@@ -2738,7 +2739,7 @@ function leadsPorPeriodoBuckets(){
 function renderLeadsChart(){
   const buckets = leadsPorPeriodoBuckets();
   if(!buckets.some(b=>b.count>0)){
-    return `<p class="chart-empty">Nenhum lead captado nesse período ainda.</p>`;
+    return `<p class="chart-empty">Nenhum contato novo nesse período ainda.</p>`;
   }
   const w=720, h=220, padL=32, padR=12, padT=12, padB=26;
   const innerW = w-padL-padR, innerH = h-padT-padB;
@@ -2786,8 +2787,8 @@ function mesIndependenteDoTipo(tipoProduto){
 }
 function textoNotaMesContrato(tipoProduto){
   return mesIndependenteDoTipo(tipoProduto)
-    ? 'Essa regra marca o mês como independente (pra pagamentos que podem demorar a acontecer) — mudar o mês aqui não altera o mês do lead.'
-    : 'Mudar o mês aqui também atualiza o mês do lead (e vice-versa) — a não ser que a regra desse tipo marque o mês como independente.';
+    ? 'Essa regra marca o mês como independente (pra pagamentos que podem demorar a acontecer) — mudar o mês aqui não altera o mês do contato.'
+    : 'Mudar o mês aqui também atualiza o mês do contato (e vice-versa) — a não ser que a regra desse tipo marque o mês como independente.';
 }
 // Produto/serviço que já vem escolhido num lead ou contrato novo: a 1ª regra de comissão
 // do usuário (na ordem da engrenagem) — ou "padrao" enquanto as regras não carregaram.
@@ -3114,8 +3115,9 @@ function animarComFlip(seletor, posicoesAntigas, idParaExcluir){
     const antiga = posicoesAntigas.get(chave);
     if(!antiga) return; // elemento novo (não existia antes) — nasce direto no lugar, sem animação
     const nova = el.getBoundingClientRect();
-    const dx = antiga.left - nova.left;
-    const dy = antiga.top - nova.top;
+    const z = (window.zoomDaTela ? window.zoomDaTela() : 1);
+    const dx = (antiga.left - nova.left) / z;
+    const dy = (antiga.top - nova.top) / z;
     if(Math.abs(dx) < 1 && Math.abs(dy) < 1) return; // não mudou de lugar de verdade
     el.style.transition = 'none';
     el.style.transform = `translate(${dx}px, ${dy}px)`;
@@ -3408,7 +3410,7 @@ async function saveCardFromModal(){
   const atribuindo = !!(__modoGestor && podeAtribuirLeads());
   if(atribuindo){
     if(!__atribuirParaId){
-      errorMsg = 'Escolha para quem vai o lead.';
+      errorMsg = 'Escolha para quem vai o contato.';
       renderModal();
       renderApp();
       return;
@@ -3442,7 +3444,7 @@ async function saveCardFromModal(){
       // mostra "Novo lead adicionado" por cima do botão (fade in, sobe um pouco, fade
       // out) antes de fechar — assim a pessoa vê claramente que salvou, em vez de só
       // sumir a tela de repente sem confirmação nenhuma.
-      mensagemSalvoCard = nomeDestino ? `Lead enviado para ${nomeDestino}` : 'Novo lead adicionado';
+      mensagemSalvoCard = nomeDestino ? `Contato enviado para ${nomeDestino}` : 'Novo contato adicionado';
       renderModal();
       await new Promise(resolve=> setTimeout(resolve, 1300));
       mensagemSalvoCard = null;
@@ -4152,17 +4154,24 @@ function renderApp(){
 }
 
 const NAV_PADRAO = [
-  ['dashboard', 'Dashboard', ICON_DASHBOARD],
-  ['pipeline', 'Pipeline', ICON_PIPELINE],
-  ['leads', 'Leads', ICON_LEADS],
-  ['automacoes', 'Automações', ICON_AUTOMACOES],
+  ['dashboard', 'Visão geral', ICON_DASHBOARD],
+  ['pipeline', 'Negociações', ICON_PIPELINE],
+  ['leads', 'Contatos', ICON_LEADS],
+  ['tarefas', 'Agenda/Tarefas', ICON_TASKS],
   ['comissoes', 'Comissões', ICON_COMISSOES],
   ['relatorios', 'Relatórios', ICON_RELATORIOS],
-  ['fluxos', 'Fluxos', ICON_FLUXOS],
+  ['automacoes', 'Ações automáticas', ICON_AUTOMACOES],
+  ['fluxos', 'Sequências', ICON_FLUXOS],
   ['import-export', 'Importar/Exportar', ICON_IMPORT_EXPORT],
   ['equipe', 'Equipe', ICON_CHAT_INTERNO],
-  ['tarefas', 'Agenda/Tarefas', ICON_TASKS],
 ];
+// As do dia a dia ficam sempre à mostra; as outras ficam no grupo "Mais" (abre e fecha)
+const NAV_PRINCIPAIS = ['dashboard', 'pipeline', 'leads', 'tarefas', 'comissoes'];
+const ICON_MAIS = '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="5" cy="12" r="1.3"/><circle cx="12" cy="12" r="1.3"/><circle cx="19" cy="12" r="1.3"/></svg>';
+function navMaisAberto(){
+  if(NAV_PADRAO.some(([k])=> k===currentPage && !NAV_PRINCIPAIS.includes(k))) return true; // está numa aba de "Mais"
+  try{ return localStorage.getItem('navMais') === '1'; }catch(e){ return false; }
+}
 function getOrdemNavSalva(){
   try{ return JSON.parse(localStorage.getItem('navOrdem') || 'null'); }catch(e){ return null; }
 }
@@ -4219,7 +4228,7 @@ function renderReordenarNavModal(){
           <button id="reordenar-nav-close">✕</button>
         </div>
         <div class="modal-body">
-          <p class="settings-page-note" style="margin-bottom:12px;">Use as setinhas pra mudar a ordem que as abas aparecem no menu.</p>
+          <p class="settings-page-note" style="margin-bottom:12px;">Use as setinhas pra mudar a ordem que as abas aparecem no menu. As do grupo “Mais” continuam dentro dele.</p>
           <div class="reordenar-nav-lista">
             ${reordenarNavOrdemTemp.map((chave, idx)=>{
               const item = porChave[chave];
@@ -4270,9 +4279,17 @@ function renderSidebar(){
         <span class="sidebar-greeting">Olá, <span class="sidebar-brand-name">${esc((currentUser && currentUser.nome) || 'visitante')}</span></span>
       </div>
       <nav class="sidebar-nav">
-        ${NAV.map(([key,label,icon])=>`
+        ${NAV.filter(([key])=> NAV_PRINCIPAIS.includes(key)).map(([key,label,icon])=>`
           <button class="nav-item ${currentPage===key?'active':''}" data-action="nav" data-page="${key}">${icon}<span>${label}</span></button>
         `).join('')}
+        <div class="nav-mais ${navMaisAberto()?'aberto':''}">
+          <button type="button" class="nav-item nav-mais-btn" data-action="nav-mais" aria-expanded="${navMaisAberto()}">${ICON_MAIS}<span>Mais</span><span class="nav-mais-seta" aria-hidden="true">▾</span></button>
+          <div class="nav-mais-lista">
+            ${NAV.filter(([key])=> !NAV_PRINCIPAIS.includes(key)).map(([key,label,icon])=>`
+              <button class="nav-item ${currentPage===key?'active':''}" data-action="nav" data-page="${key}">${icon}<span>${label}</span></button>
+            `).join('')}
+          </div>
+        </div>
       </nav>
       <div class="nav-reordenar-wrap">
         <button class="nav-item nav-reordenar-btn" data-action="abrir-reordenar-nav" title="Mudar a ordem das abas">${ICON_REORDER}<span>Reordenar abas</span></button>
@@ -4369,14 +4386,14 @@ function renderDashboardPage(){
   return `
     ${visualizandoDashboardDe ? `
       <div class="dashboard-readonly-banner">
-        <span>👁️ Você está vendo o dashboard de <b>${esc(visualizandoDashboardDe.nome)}</b> — somente leitura, nada aqui pode ser alterado.</span>
+        <span>👁️ Você está vendo a visão geral de <b>${esc(visualizandoDashboardDe.nome)}</b> — somente leitura, nada aqui pode ser alterado.</span>
         <button type="button" class="btn-outline" data-action="sair-dashboard-membro">← Voltar</button>
       </div>
     ` : ''}
     <div class="page-head">
       <div>
-        <h1>Dashboard</h1>
-        <p>Visão geral do seu funil de vendas</p>
+        <h1>Visão geral</h1>
+        <p>Como estão as suas vendas</p>
       </div>
       <div class="period-toggle">
         ${[['7dias','7 dias'],['mes','Mês'],['trimestre','Trimestre'],['ano','Ano']].map(([key,label])=>`
@@ -4387,7 +4404,7 @@ function renderDashboardPage(){
 
     <div class="metric-grid">
       <div class="metric-card">
-        <div class="metric-card-top"><span>Novos leads</span><span class="metric-icon">${ICON_USERS}</span></div>
+        <div class="metric-card-top"><span>Novos contatos</span><span class="metric-icon">${ICON_USERS}</span></div>
         <div class="metric-value">${m.novosLeads}</div>
         <div class="metric-sub">no período</div>
       </div>
@@ -4402,9 +4419,9 @@ function renderDashboardPage(){
         <div class="metric-sub">${m.ganhoCount} fechados</div>
       </div>
       <div class="metric-card">
-        <div class="metric-card-top"><span>Conversão</span><span class="metric-icon">${ICON_TREND}</span></div>
+        <div class="metric-card-top"><span>Aproveitamento</span><span class="metric-icon">${ICON_TREND}</span></div>
         <div class="metric-value">${m.conversao}%</div>
-        <div class="metric-sub">ganhos / fechados</div>
+        <div class="metric-sub">das negociações encerradas viraram venda</div>
       </div>
     </div>
 
@@ -4439,11 +4456,11 @@ function renderDashboardPage(){
 
     <div class="dash-grid">
       <div class="dash-panel">
-        ${renderCabecalhoPainelDashboard('leads-captados', 'Leads captados')}
+        ${renderCabecalhoPainelDashboard('leads-captados', 'Novos contatos')}
         ${envolverConteudoPainel('leads-captados', renderLeadsChart())}
       </div>
       <div class="dash-panel">
-        ${renderCabecalhoPainelDashboard('pipeline-etapa', 'Pipeline por etapa')}
+        ${renderCabecalhoPainelDashboard('pipeline-etapa', 'Negociações por etapa')}
         ${envolverConteudoPainel('pipeline-etapa', `
         <div class="stage-list">
           ${stages.length ? stages.map(s=>`
@@ -4459,10 +4476,10 @@ function renderDashboardPage(){
 
     <div class="dash-grid">
       <div class="dash-panel">
-        ${renderCabecalhoPainelDashboard('ultimos-leads', 'Últimos leads')}
+        ${renderCabecalhoPainelDashboard('ultimos-leads', 'Últimos contatos')}
         ${envolverConteudoPainel('ultimos-leads', recentes.length ? `<div class="recent-list">${recentes.map(c=>`
           <div class="recent-item"><span class="recent-name">${esc(c.cliente) || 'Sem nome'}</span><span class="recent-value">${fmtBRL(c.valor)}</span></div>
-        `).join('')}</div>` : '<p class="dash-empty">Nenhum lead neste período.</p>')}
+        `).join('')}</div>` : '<p class="dash-empty">Nenhum contato neste período.</p>')}
       </div>
       <div class="dash-panel">
         ${renderCabecalhoPainelDashboard('tarefas-abertas', 'Tarefas abertas')}
@@ -4484,7 +4501,7 @@ function renderDashboardPage(){
 /* ---------- página: Pipeline (o quadro kanban, como já era) ---------- */
 function renderPipelinePage(){
   if(!funisLoaded){
-    return `<div class="page-head"><div><h1>Pipeline</h1><p>Carregando…</p></div></div>`;
+    return `<div class="page-head"><div><h1>Negociações</h1><p>Carregando…</p></div></div>`;
   }
   const months = monthsList();
   const funilAtual = funis.find(f=>f.id===funilAtualId);
@@ -4492,7 +4509,7 @@ function renderPipelinePage(){
   return `
     <div class="page-head">
       <div>
-        <h1>Pipeline</h1>
+        <h1>Negociações</h1>
         <p>Arraste os clientes para mudar de coluna</p>
       </div>
     </div>
@@ -4534,7 +4551,7 @@ function renderPipelinePage(){
           </div>
         ` : ''}
       </div>
-      <button class="tab-btn ${filtroEsfriando?'active':''}" data-action="toggle-esfriando" title="Leads em aberto sem atividade há mais de 7 dias">🧊 Esfriando</button>
+      <button class="tab-btn ${filtroEsfriando?'active':''}" data-action="toggle-esfriando" title="Contatos em aberto sem atividade há mais de 7 dias">🧊 Esfriando</button>
     </div>
 
     <div class="stats-wrap-fixo">
@@ -4545,7 +4562,7 @@ function renderPipelinePage(){
             ${renderStatItem('aberto', 'Em negociação', fmtBRL(sumByTipo('aberto')), `${countByTipo('aberto')} ${countByTipo('aberto')===1?'cliente':'clientes'}`)}
             ${renderStatItem('ganho', 'Vendido', fmtBRL(sumByTipo('ganho')), `${countByTipo('ganho')} ${countByTipo('ganho')===1?'cliente':'clientes'}`)}
             ${renderStatItem('perdido', 'Perdido', fmtBRL(sumByTipo('perdido')), `${countByTipo('perdido')} ${countByTipo('perdido')===1?'cliente':'clientes'}`, 'rgba(255,255,255,.45)')}
-            ${renderStatItem('quentes', 'Leads quentes', quentesAtivos())}
+            ${renderStatItem('quentes', 'Contatos quentes', quentesAtivos())}
             ${renderStatItem('ticket', 'Ticket médio', fmtBRL(ticketMedioFunil()))}
           </div>
         </div>
@@ -4682,7 +4699,7 @@ function ajustarLargurasStatsPadrao(){
   const chavesNaoCustomizadas = STAT_KEYS.filter(k => statsLargura[k] === undefined);
   if(!chavesNaoCustomizadas.length) return; // tudo já foi ajustado manualmente, respeita a escolha do usuário
   const larguraTotalCustomizada = STAT_KEYS.reduce((s,k)=> s + (statsLargura[k] || 0), 0);
-  const larguraDisponivel = statsEl.getBoundingClientRect().width - larguraTotalCustomizada;
+  const larguraDisponivel = statsEl.getBoundingClientRect().width / (window.zoomDaTela ? window.zoomDaTela() : 1) - larguraTotalCustomizada;
   const larguraIdeal = Math.max(STAT_LARGURA_PADRAO, Math.floor(larguraDisponivel / chavesNaoCustomizadas.length));
   chavesNaoCustomizadas.forEach(chave=>{
     const statEl = document.querySelector(`.stat[data-stat-key="${chave}"]`);
@@ -4704,7 +4721,7 @@ let resizeStatState = null;
 document.addEventListener('mousemove', (e)=>{
   if(!resizeStatState) return;
   e.preventDefault();
-  const delta = e.pageX - resizeStatState.startX;
+  const delta = (e.pageX - resizeStatState.startX) / (window.zoomDaTela ? window.zoomDaTela() : 1);
   const novaLargura = Math.max(STAT_LARGURA_MIN, Math.round(resizeStatState.startWidth + delta));
   statsLargura[resizeStatState.key] = novaLargura;
   const statEl = document.querySelector(`.stat[data-stat-key="${resizeStatState.key}"]`);
@@ -4721,7 +4738,7 @@ function ativarRedimensionarStats(){
       e.preventDefault();
       e.stopPropagation();
       const statEl = handle.closest('.stat');
-      resizeStatState = { key: handle.dataset.statKey, startX: e.pageX, startWidth: statEl.getBoundingClientRect().width };
+      resizeStatState = { key: handle.dataset.statKey, startX: e.pageX, startWidth: statEl.getBoundingClientRect().width / (window.zoomDaTela ? window.zoomDaTela() : 1) };
     });
   });
 }
@@ -4732,7 +4749,7 @@ function ajustarAlturaColunasPipeline(){
   if(!resumoFixo) return;
   const alturaResumo = resumoFixo.getBoundingClientRect().height;
   const margemExtra = 12; // respiro entre o resumo e o topo das colunas + a barra de rolagem horizontal
-  document.documentElement.style.setProperty('--altura-coluna-pipeline', `calc(100vh - ${Math.ceil(alturaResumo + margemExtra)}px)`);
+  document.documentElement.style.setProperty('--altura-coluna-pipeline', `calc((100vh - ${Math.ceil(alturaResumo + margemExtra)}px) / var(--zoom, 1))`);
 }
 window.addEventListener('resize', ()=>{ ajustarAlturaColunasPipeline(); ajustarLargurasStatsPadrao(); });
 
@@ -4804,12 +4821,12 @@ function renderLeadsPage(){
   return `
     <div class="page-head">
       <div>
-        <h1>Leads</h1>
+        <h1>Contatos</h1>
         <p>${board.cards.length} ${board.cards.length===1?'contato':'contatos'} na sua base</p>
       </div>
       <div class="page-head-actions">
         <button class="btn-outline ${mostrarArquivados?'active':''}" data-action="toggle-mostrar-arquivados" style="display:inline-flex; align-items:center; gap:6px;">${ICON_BAU} ${mostrarArquivados?'Voltar aos ativos':'Ver arquivados'}</button>
-        <button class="btn-primary" data-action="open-new-lead">+ Novo lead</button>
+        <button class="btn-primary" data-action="open-new-lead">+ Novo contato</button>
       </div>
     </div>
 
@@ -4868,7 +4885,7 @@ function renderLeadsPage(){
                 </td>
               </tr>
             `;
-          }).join('') : `<tr class="leads-empty-row"><td colspan="6">Nenhum lead encontrado. Cadastre o primeiro no botão "Novo lead".</td></tr>`}
+          }).join('') : `<tr class="leads-empty-row"><td colspan="6">Nenhum contato encontrado. Cadastre o primeiro no botão "Novo contato".</td></tr>`}
         </tbody>
       </table>
     </div>
@@ -5353,7 +5370,7 @@ function renderContratoCard(c){
           <p class="contrato-card-note">
             <span class="badge" style="color:${escopo.color};background:${escopo.bg}">${escopo.label}</span>
             <span>· ${c.parcelas}x parcelas · Valor da venda: ${fmtBRL(c.valorVenda)}</span>
-            ${c.geradoAutomaticamente ? `<span class="badge badge-neutral" title="Criada automaticamente quando o cliente entrou numa coluna de fechamento no Pipeline">⚡ Gerada pelo Pipeline</span>` : ''}
+            ${c.geradoAutomaticamente ? `<span class="badge badge-neutral" title="Criada automaticamente quando o cliente entrou numa coluna de fechamento em Negociações">⚡ Gerada pelas Negociações</span>` : ''}
             ${c.canceladoNoMes ? `<span class="badge" style="color:var(--danger);background:var(--danger-soft)">Cancelado</span>` : ''}
           </p>
         </div>
@@ -5382,7 +5399,7 @@ const CONFIG_CATEGORIAS = [
     ['perfil', 'Seu perfil'],
     ['assinatura', 'Assinatura'],
     ['seguranca', 'Login e segurança'],
-    ['aparencia', 'Aparência'],
+    ['aparencia', 'Aparência e acessibilidade'],
     ['notificacoes', 'Notificações'],
   ]},
   { grupo: 'Integrações', itens: [
@@ -5392,7 +5409,7 @@ const CONFIG_CATEGORIAS = [
   ]},
   { grupo: 'Dados', itens: [
     ['campos', 'Campos personalizados'],
-    ['importar', 'Importar leads'],
+    ['importar', 'Importar contatos'],
   ]},
   { grupo: 'Sistema', itens: [
     ['manutencao', 'Manutenção'],
@@ -5540,6 +5557,10 @@ function renderConfigAparencia(){
         <input type="color" id="theme-custom-input" value="${getAccentColor()}" />
       </label>
     </div>
+    <div class="settings-page-section">
+      <h3>Acessibilidade</h3>
+      <div data-a11y-painel></div>
+    </div>
   `;
 }
 
@@ -5609,7 +5630,7 @@ function renderConfigWebhooks(){
       </div>
       <div class="field">
         <label>Nome (só pra identificar)</label>
-        <input type="text" id="novo-webhook-nome" placeholder="Ex: Zapier - novo lead" />
+        <input type="text" id="novo-webhook-nome" placeholder="Ex: Zapier - novo contato" />
       </div>
       <div class="field">
         <label>URL de destino</label>
@@ -5712,7 +5733,7 @@ function renderConfigCampos(){
 function renderConfigImportar(){
   return `
     <div class="settings-page-section">
-      <h3>Importar leads</h3>
+      <h3>Importar contatos</h3>
       <p class="settings-page-note">Envie uma planilha (.xlsx) ou CSV com as colunas <b>Nome, Telefone, Valor</b> (nessa ordem, cabeçalho na primeira linha). Para escolher as colunas de qualquer planilha, use a aba Importar/Exportar.</p>
       <div class="field">
         <label>Coluna de destino</label>
@@ -5725,7 +5746,7 @@ function renderConfigImportar(){
         <label class="btn-outline btn-arquivo" style="align-self:flex-start">Escolher arquivo<input type="file" id="import-arquivo" accept=".csv,.xlsx,.xls,text/csv" hidden /></label>
         <span class="arquivo-nome" id="import-arquivo-nome">Nenhum arquivo escolhido</span>
       </div>
-      ${importResultado ? `<p class="settings-page-msg ok">${importResultado.sucesso} lead(s) importado(s)${importResultado.falha ? `, ${importResultado.falha} falharam` : ''}.</p>` : ''}
+      ${importResultado ? `<p class="settings-page-msg ok">${importResultado.sucesso} contato(s) importado(s)${importResultado.falha ? `, ${importResultado.falha} falharam` : ''}.</p>` : ''}
       <button class="btn-primary" id="import-btn" ${importando?'disabled':''}>${importando?'Importando…':'Importar'}</button>
     </div>
   `;
@@ -5896,8 +5917,8 @@ function renderConfigManutencao(){
     </div>
     ${renderBlocoBackupAuto()}
     <div class="settings-page-section">
-      <h3>Início de contato nos leads antigos</h3>
-      <p class="settings-page-note">Preenche automaticamente o "mês de início de contato" dos seus leads que ainda não têm esse campo, usando o mês de venda que já estava cadastrado como ponto de partida. Não altera leads que você já preencheu manualmente, e pode ser usado quantas vezes quiser.</p>
+      <h3>Início de contato nos contatos antigos</h3>
+      <p class="settings-page-note">Preenche automaticamente o "mês de início de contato" dos seus contatos que ainda não têm esse campo, usando o mês de venda que já estava cadastrado como ponto de partida. Não altera leads que você já preencheu manualmente, e pode ser usado quantas vezes quiser.</p>
       ${mesInicioContatoMsg ? `<p class="settings-page-msg ${mesInicioContatoMsg.tipo}">${esc(mesInicioContatoMsg.texto)}</p>` : ''}
       <button class="btn-outline" data-action="preencher-mes-inicio-contato" ${preenchendoMesInicioContato?'disabled':''}>${preenchendoMesInicioContato?'Preenchendo…':'Preencher automaticamente'}</button>
     </div>
@@ -5969,6 +5990,15 @@ function bindAppEvents(){
   const reordenarNavBtn = app.querySelector('[data-action="abrir-reordenar-nav"]');
   if(reordenarNavBtn) reordenarNavBtn.addEventListener('click', abrirReordenarNav);
 
+  app.querySelectorAll('[data-action="nav-mais"]').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      const grupo = btn.closest('.nav-mais');
+      const abrir = !grupo.classList.contains('aberto');
+      grupo.classList.toggle('aberto', abrir);
+      btn.setAttribute('aria-expanded', String(abrir));
+      try{ localStorage.setItem('navMais', abrir ? '1' : '0'); }catch(e){}
+    });
+  });
   app.querySelectorAll('[data-action="nav"]').forEach(btn=>{
     btn.addEventListener('click', ()=> goToPage(btn.dataset.page));
   });
@@ -6182,7 +6212,7 @@ function bindAppEvents(){
     btn.addEventListener('click', ()=>{
       const id = btn.dataset.automacaoId;
       showConfirm({
-        message: 'Excluir esta automação? Ela para de rodar imediatamente.',
+        message: 'Excluir esta ação automática? Ela para de rodar imediatamente.',
         onConfirm: ()=>{ excluirAutomacao(id); closeConfirm(); },
       });
     });
@@ -6205,7 +6235,7 @@ function bindAppEvents(){
     btn.addEventListener('click', ()=>{
       const id = btn.dataset.fluxoId;
       showConfirm({
-        message: 'Excluir este fluxo? As execuções em andamento pra clientes atuais são interrompidas.',
+        message: 'Excluir esta sequência? As que estão em andamento para clientes atuais são interrompidas.',
         onConfirm: ()=>{ excluirFluxo(id); closeConfirm(); },
       });
     });
@@ -6236,7 +6266,7 @@ function bindAppEvents(){
     btn.addEventListener('click', ()=>{
       const id = btn.dataset.leadId;
       showConfirm({
-        message: 'Descartar esse possível lead? Ele não vira cliente.',
+        message: 'Descartar esse possível contato? Ele não vira cliente.',
         confirmLabel: 'Descartar',
         onConfirm: ()=>{ descartarPossivelLead(id); closeConfirm(); },
       });
@@ -6821,9 +6851,10 @@ function iniciarArrastoDeCard(x, y){
   const fantasma = document.createElement('div');
   fantasma.id = 'card-touch-fantasma';
   fantasma.className = 'card-touch-fantasma';
-  fantasma.style.width = rect.width + 'px';
-  fantasma.style.left = (x - rect.width/2) + 'px';
-  fantasma.style.top = (y - 24) + 'px';
+  const z = (window.zoomDaTela ? window.zoomDaTela() : 1);
+  fantasma.style.width = rect.width / z + 'px';
+  fantasma.style.left = (x - rect.width/2) / z + 'px';
+  fantasma.style.top = (y - 24) / z + 'px';
   fantasma.innerHTML = cardTouchDrag.cardEl.querySelector('.card-body') ? cardTouchDrag.cardEl.querySelector('.card-body').innerHTML : cardTouchDrag.cardEl.innerHTML;
   document.body.appendChild(fantasma);
   cardTouchDrag.fantasmaEl = fantasma;
@@ -6833,8 +6864,9 @@ function iniciarArrastoDeCard(x, y){
 function atualizarArrastoDeCard(x, y){
   if(!cardTouchDrag || !cardTouchDrag.fantasmaEl) return;
   // isso aqui é barato — atualiza sempre na hora, o fantasma nunca fica atrasado atrás do dedo
-  cardTouchDrag.fantasmaEl.style.left = (x - cardTouchDrag.fantasmaEl.offsetWidth/2) + 'px';
-  cardTouchDrag.fantasmaEl.style.top = (y - 24) + 'px';
+  const z = (window.zoomDaTela ? window.zoomDaTela() : 1);
+  cardTouchDrag.fantasmaEl.style.left = (x / z - cardTouchDrag.fantasmaEl.offsetWidth/2) + 'px';
+  cardTouchDrag.fantasmaEl.style.top = (y - 24) / z + 'px';
   cardTouchDrag.ultimoXCalculo = x;
   cardTouchDrag.ultimoYCalculo = y;
   // isso aqui é caro (olha a posição de TODOS os cards da coluna, toda vez) — segurando
@@ -6957,7 +6989,7 @@ function renderFloatingMoveMenu(){
   const left = Math.min(rect.left, window.innerWidth - 200); // não deixa vazar pela direita da tela
 
   root.innerHTML = `
-    <div class="col-menu card-move-menu" style="position:fixed; top:${Math.max(4,top)}px; left:${Math.max(4,left)}px;">
+    <div class="col-menu card-move-menu" style="position:fixed; top:${Math.max(4,top) / (window.zoomDaTela ? window.zoomDaTela() : 1)}px; left:${Math.max(4,left) / (window.zoomDaTela ? window.zoomDaTela() : 1)}px;">
       <div class="col-menu-title">Mover para</div>
       ${colunasDoMesmoFunil.map(c=>`
         <button class="col-menu-item" data-action="mover-para-coluna" data-card-id="${card.id}" data-col-id="${c.id}" ${c.id===card.columnId?'disabled':''}>
@@ -7012,7 +7044,7 @@ function renderEscolhaTipoPessoaModal(){
     <div class="overlay" id="escolha-tipo-overlay">
       <div class="modal" style="max-width:380px;">
         <div class="modal-head">
-          <h3>Novo lead</h3>
+          <h3>Novo contato</h3>
           <button id="escolha-tipo-close">✕</button>
         </div>
         <div class="modal-body" style="display:flex; flex-direction:column; gap:10px;">
@@ -7236,7 +7268,7 @@ function renderExtrasOverlayHtml(f){
           </button>
         `).join('')}
       </div>
-    ` : '<p class="dash-empty">Nenhuma tarefa ainda pra esse lead.</p>';
+    ` : '<p class="dash-empty">Nenhuma tarefa ainda pra esse contato.</p>';
   } else if(extrasTela === 'historico'){
     titulo = 'Histórico de contato';
     voltarPara = 'menu';
@@ -7421,12 +7453,12 @@ function renderModal(){
               <button type="button" class="modo-gestor-btn ${f.__modoGestor?'ativo':''}" data-modo-gestor="1">⭐ Gestor</button>
             </div>
             ${f.__modoGestor ? `
-              <label style="margin-top:10px">${f.__isNew ? 'Adicionar este lead para' : 'Passar este lead para'}</label>
+              <label style="margin-top:10px">${f.__isNew ? 'Adicionar este contato para' : 'Passar este contato para'}</label>
               <select id="f-atribuir-para">
                 <option value="">Selecione uma pessoa…</option>
                 ${equipe.membros.filter(m=>!m.souEu).map(m=>`<option value="${m.id}" ${f.__atribuirParaId===m.id?'selected':''}>${esc(m.nome||m.email)}${m.papel==='supervisor'?' ⭐':''}</option>`).join('')}
               </select>
-              <p class="settings-page-note" style="margin:6px 0 0">${f.__isNew ? 'O lead vai direto para o pipeline da pessoa escolhida, na coluna de mesmo nome (ou na primeira em aberto).' : 'O lead sai do seu pipeline e vai para o da pessoa escolhida, junto com conversas, anexos, tarefas e histórico.'}</p>
+              <p class="settings-page-note" style="margin:6px 0 0">${f.__isNew ? 'O contato vai direto para as negociações da pessoa escolhida, na coluna de mesmo nome (ou na primeira em aberto).' : 'O contato sai das suas negociações e vai para o da pessoa escolhida, junto com conversas, anexos, tarefas e histórico.'}</p>
             ` : ''}
           </div>` : ''}
           <div class="field">
@@ -8006,9 +8038,9 @@ function renderEventoGoogleModal(){
             </div>
           </div>
           <div class="field">
-            <label>Lead relacionado</label>
+            <label>Contato relacionado</label>
             <select id="eg-lead">
-              <option value="">Sem lead</option>
+              <option value="">Sem contato</option>
               ${board.cards.map(c=>`<option value="${c.id}" ${f.leadId===c.id?'selected':''}>${esc(c.cliente) || 'Sem nome'}</option>`).join('')}
             </select>
           </div>
@@ -8016,7 +8048,7 @@ function renderEventoGoogleModal(){
             <label>Descrição</label>
             <textarea id="eg-descricao" rows="3" placeholder="Detalhes do evento...">${esc(f.descricao||'')}</textarea>
           </div>
-          <p class="settings-page-note">Título, data, hora e descrição mudam o evento de verdade, direto no seu Google Agenda. Prioridade e lead relacionado são exclusivos daqui do CRM — o Google não tem esses campos, então ficam guardados só aqui, amarrados a esse evento.</p>
+          <p class="settings-page-note">Título, data, hora e descrição mudam o evento de verdade, direto no seu Google Agenda. Prioridade e contato relacionado são exclusivos daqui do CRM — o Google não tem esses campos, então ficam guardados só aqui, amarrados a esse evento.</p>
         </div>
         <div class="modal-foot">
           <button class="delete-link" id="eg-delete">🗑 Excluir</button>
@@ -8075,9 +8107,9 @@ function renderTaskModal(){
             </div>
           </div>
           <div class="field">
-            <label>Lead relacionado</label>
+            <label>Contato relacionado</label>
             <select id="t-lead">
-              <option value="">Sem lead</option>
+              <option value="">Sem contato</option>
               ${board.cards.map(c=>`<option value="${c.id}" ${f.leadId===c.id?'selected':''}>${esc(c.cliente) || 'Sem nome'}</option>`).join('')}
             </select>
           </div>
@@ -8156,7 +8188,7 @@ function renderRelatoriosPage(){
     <div class="metric-grid">
       <div class="metric-card"><div class="metric-card-top"><span>Total ganho</span></div><div class="metric-value">${fmtBRL(totalGanho)}</div></div>
       <div class="metric-card"><div class="metric-card-top"><span>Total perdido</span></div><div class="metric-value">${fmtBRL(totalPerdido)}</div></div>
-      <div class="metric-card"><div class="metric-card-top"><span>Total de leads</span></div><div class="metric-value">${cardsRel.length}</div></div>
+      <div class="metric-card"><div class="metric-card-top"><span>Total de contatos</span></div><div class="metric-value">${cardsRel.length}</div></div>
     </div>
 
     <div class="dash-panel">
@@ -8172,7 +8204,7 @@ function renderRelatoriosPage(){
     </div>
 
     <div class="dash-panel">
-      <div class="dash-panel-title">Novos leads por mês</div>
+      <div class="dash-panel-title">Novos contatos por mês</div>
       <div class="stage-list">
         ${dados.map(d=>`
           <div class="stage-row">
@@ -8184,7 +8216,7 @@ function renderRelatoriosPage(){
     </div>
 
     <div class="dash-panel">
-      <div class="dash-panel-title">Leads por qualificação</div>
+      <div class="dash-panel-title">Contatos por qualificação</div>
       <div class="stage-list">
         ${porTemp.map(t=>`
           <div class="stage-row">
@@ -8385,7 +8417,7 @@ function renderSupervisaoConteudo(){
       ${!supervisaoLoaded ? `<p class="settings-page-note">Carregando…</p>` : `
         <div class="leads-table-wrap" style="border:none;">
           <table class="leads-table">
-            <thead><tr><th>Nome</th><th>Leads</th><th>Em negociação</th><th>Ganho</th><th>Perdido</th></tr></thead>
+            <thead><tr><th>Nome</th><th>Contatos</th><th>Em negociação</th><th>Ganho</th><th>Perdido</th></tr></thead>
             <tbody>
               ${membrosOrdenados(supervisaoMembros).map(m=>`
                 <tr class="${m.papel==='supervisor'?'membro-supervisor-destaque':''}">
@@ -8432,15 +8464,15 @@ function renderMonitoramentoConteudo(){
 /* ---------- página: Automações ---------- */
 function renderAutomacoesPage(){
   if(!automacoesLoaded){
-    return `<div class="page-head"><div><h1>Automações</h1><p>Carregando…</p></div></div>`;
+    return `<div class="page-head"><div><h1>Ações automáticas</h1><p>Carregando…</p></div></div>`;
   }
   return `
     <div class="page-head">
       <div>
-        <h1>Automações</h1>
-        <p>Ações automáticas quando um cliente entra numa coluna</p>
+        <h1>Ações automáticas</h1>
+        <p>Tarefas e movimentos que acontecem sozinhos quando um cliente entra numa coluna</p>
       </div>
-      <button class="btn-primary" data-action="open-new-automacao">+ Nova automação</button>
+      <button class="btn-primary" data-action="open-new-automacao">+ Nova ação automática</button>
     </div>
     ${automacoes.length ? `
       <div class="automacoes-list">
@@ -8469,22 +8501,22 @@ function renderAutomacoesPage(){
           `;
         }).join('')}
       </div>
-    ` : `<div class="tasks-empty">Nenhuma automação criada ainda.</div>`}
+    ` : `<div class="tasks-empty">Nenhuma ação automática criada ainda.</div>`}
   `;
 }
 
 /* ---------- página: Fluxos ---------- */
 function renderFluxosPage(){
   if(!fluxosLoaded){
-    return `<div class="page-head"><div><h1>Fluxos</h1><p>Carregando…</p></div></div>`;
+    return `<div class="page-head"><div><h1>Sequências</h1><p>Carregando…</p></div></div>`;
   }
   return `
     <div class="page-head">
       <div>
-        <h1>Fluxos</h1>
-        <p>Sequências de etapas ao longo do tempo, a partir de quando o cliente entra numa coluna</p>
+        <h1>Sequências</h1>
+        <p>Passos que acontecem ao longo dos dias, a partir de quando o cliente entra numa coluna</p>
       </div>
-      <button class="btn-primary" data-action="open-new-fluxo">+ Novo fluxo</button>
+      <button class="btn-primary" data-action="open-new-fluxo">+ Nova sequência</button>
     </div>
     ${fluxos.length ? `
       <div class="automacoes-list">
@@ -8511,7 +8543,7 @@ function renderFluxosPage(){
           `;
         }).join('')}
       </div>
-    ` : `<div class="tasks-empty">Nenhum fluxo criado ainda.</div>`}
+    ` : `<div class="tasks-empty">Nenhuma sequência criada ainda.</div>`}
   `;
 }
 
@@ -8522,7 +8554,7 @@ function renderImportExportPage(){
     <div class="page-head">
       <div>
         <h1>Importar/Exportar</h1>
-        <p>Importe uma planilha (.csv ou .xlsx) — os dados viram "possíveis leads" até você completar e confirmar cada um.</p>
+        <p>Importe uma planilha (.csv ou .xlsx) — os dados viram "possíveis contatos" até você completar e confirmar cada um.</p>
       </div>
     </div>
 
@@ -8564,8 +8596,8 @@ function renderImportExportPage(){
     </div>
 
     <div class="settings-page-section">
-      <h3>2. Possíveis leads (${possiveisLeads.length})</h3>
-      <p class="settings-page-note">Complete as informações de cada um pra adicioná-lo de vez aos Leads.</p>
+      <h3>2. Possíveis contatos (${possiveisLeads.length})</h3>
+      <p class="settings-page-note">Complete as informações de cada um pra adicioná-lo de vez aos Contatos.</p>
       ${!possiveisLeadsCarregados ? `<p class="settings-page-note">Carregando…</p>` : (possiveisLeads.length ? `
         <div class="leads-table-wrap">
           <table class="leads-table">
@@ -8585,15 +8617,15 @@ function renderImportExportPage(){
             </tbody>
           </table>
         </div>
-      ` : `<div class="tasks-empty">Nenhum possível lead pendente.</div>`)}
+      ` : `<div class="tasks-empty">Nenhum possível contato pendente.</div>`)}
     </div>
 
     <div class="settings-page-section">
       <h3>3. Exportar</h3>
-      <p class="settings-page-note">Baixa todos os clientes já confirmados (que estão na aba Leads) em Excel (.xlsx) ou CSV.</p>
+      <p class="settings-page-note">Baixa todos os clientes já confirmados (que estão na aba Contatos) em Excel (.xlsx) ou CSV.</p>
       <div class="arquivo-linha">
-        <button class="btn-outline" data-action="exportar-leads">Exportar Leads (.xlsx)</button>
-        <button class="btn-outline" data-action="exportar-leads" data-formato="csv">Exportar Leads (CSV)</button>
+        <button class="btn-outline" data-action="exportar-leads">Exportar contatos (.xlsx)</button>
+        <button class="btn-outline" data-action="exportar-leads" data-formato="csv">Exportar contatos (CSV)</button>
       </div>
     </div>
   `;
@@ -8611,7 +8643,8 @@ function renderSuportePage(){
     <div class="settings-page-grid">
       <div class="settings-page-section">
         <h3>Perguntas frequentes</h3>
-        <p class="settings-page-note"><b>Como mudo a cor do painel?</b><br/>Configurações → Aparência.</p>
+        <p class="settings-page-note"><b>Como mudo a cor do painel?</b><br/>Configurações → Aparência e acessibilidade.</p>
+        <p class="settings-page-note"><b>Como deixo a letra maior?</b><br/>Configurações → Aparência e acessibilidade → Tamanho da letra. Lá também tem alto contraste e menos animação.</p>
         <p class="settings-page-note"><b>Como conecto a Google Agenda?</b><br/>Configurações → Integrações → Google Agenda.</p>
       </div>
       <div class="settings-page-section">
@@ -8832,7 +8865,7 @@ function htmlRegrasLista(){
               ${regrasComissao.map(r=>`
                 <div class="regra-row">
                   <div class="regra-row-info">
-                    <div class="regra-row-nome">${esc(r.nome)} ${r.mesIndependente?'<span class="badge badge-neutral" title="O mês da comissão pode ser editado sem alterar o mês do lead">Mês independente</span>':''}</div>
+                    <div class="regra-row-nome">${esc(r.nome)} ${r.mesIndependente?'<span class="badge badge-neutral" title="O mês da comissão pode ser editado sem alterar o mês do contato">Mês independente</span>':''}</div>
                     <div class="regra-row-blocos">${(r.blocos||[]).map(b=>`${b.parcelas}x ${(b.percentual*100).toLocaleString('pt-BR',{maximumFractionDigits:6})}%`).join(' · ')}</div>
                   </div>
                   <div class="regra-row-actions">
@@ -8870,7 +8903,7 @@ function htmlRegraEditor(){
             <input type="text" id="re-nome" value="${esc(f.nome)}" placeholder="Ex: Plano mensal" />
           </div>
           <div class="field">
-            <label class="checkbox-item"><input type="checkbox" id="re-mes-independente" ${f.mesIndependente?'checked':''} /> Mês da comissão independente do mês do lead (pra pagamentos que demoram a acontecer de verdade)</label>
+            <label class="checkbox-item"><input type="checkbox" id="re-mes-independente" ${f.mesIndependente?'checked':''} /> Mês da comissão independente do mês do contato (pra pagamentos que demoram a acontecer de verdade)</label>
           </div>
           <div class="field">
             <label for="re-base">Calcular sobre</label>
@@ -8927,7 +8960,7 @@ function ligarBindingsRegrasModal(){
         const id = btn.dataset.regraId;
         const r = regrasComissao.find(x=>x.id===id);
         showConfirm({
-          message: `Excluir a regra "${r?r.nome:''}"? Comissões já lançadas com ela continuam iguais, mas ela deixa de aparecer como opção pra novos contratos e leads.`,
+          message: `Excluir a regra "${r?r.nome:''}"? Comissões já lançadas com ela continuam iguais, mas ela deixa de aparecer como opção pra novos contratos e contatos.`,
           confirmLabel: 'Excluir',
           onConfirm: async ()=>{
             closeConfirm();
@@ -8980,7 +9013,7 @@ function ligarBindingsRegrasModal(){
     document.getElementById('re-delete').addEventListener('click', ()=>{
       const f = regraEditForm;
       showConfirm({
-        message: `Excluir a regra "${f.nome}"? Comissões já lançadas com ela continuam iguais, mas ela deixa de aparecer como opção pra novos contratos e leads.`,
+        message: `Excluir a regra "${f.nome}"? Comissões já lançadas com ela continuam iguais, mas ela deixa de aparecer como opção pra novos contratos e contatos.`,
         confirmLabel: 'Excluir',
         onConfirm: async ()=>{
           closeConfirm();
@@ -9091,7 +9124,7 @@ function renderAutomacaoModal(){
     <div class="overlay" id="automacao-modal-overlay">
       <div class="modal">
         <div class="modal-head">
-          <h3>${f.__isNew ? 'Nova automação' : 'Editar automação'}</h3>
+          <h3>${f.__isNew ? 'Nova ação automática' : 'Editar ação automática'}</h3>
           <button id="automacao-modal-close">✕</button>
         </div>
         <div class="modal-body">
@@ -9163,7 +9196,7 @@ function renderAutomacaoModal(){
   if(!f.__isNew){
     document.getElementById('am-delete').addEventListener('click', ()=>{
       showConfirm({
-        message: 'Excluir esta automação? Ela para de rodar imediatamente.',
+        message: 'Excluir esta ação automática? Ela para de rodar imediatamente.',
         onConfirm: ()=>{ excluirAutomacao(f.id); closeAutomacaoModal(); closeConfirm(); },
       });
     });
@@ -9275,7 +9308,7 @@ function renderColunaLeadsPickerModal(){
     <div class="overlay" id="cl-picker-overlay">
       <div class="modal modal-lg">
         <div class="modal-head">
-          <h3>${copiando ? 'Copiar' : 'Transferir'} leads pra "${esc(coluna?coluna.nome:'')}"</h3>
+          <h3>${copiando ? 'Copiar' : 'Transferir'} contatos pra "${esc(coluna?coluna.nome:'')}"</h3>
           <button id="cl-picker-close">✕</button>
         </div>
         <div class="modal-body">
@@ -9295,14 +9328,14 @@ function renderColunaLeadsPickerModal(){
                   <span>${esc(c.cliente)||'Sem nome'} <span class="settings-page-note">${colAtual?esc(colAtual.nome):''}</span></span>
                 </label>
               `;
-            }).join('') : '<p class="dash-empty">Nenhum outro lead cadastrado ainda.</p>'}
+            }).join('') : '<p class="dash-empty">Nenhum outro contato cadastrado ainda.</p>'}
           </div>
         </div>
         <div class="modal-foot">
           <span></span>
           <div class="modal-foot-actions">
             <button class="btn-outline" id="cl-pular">Pular por agora</button>
-            <button class="btn-save" id="cl-confirmar" ${colunaLeadsMovendo?'disabled':''}>${colunaLeadsMovendo ? (copiando?'Copiando…':'Movendo…') : `${copiando?'Copiar':'Mover'} ${colunaLeadsSelecionados.size} lead(s)`}</button>
+            <button class="btn-save" id="cl-confirmar" ${colunaLeadsMovendo?'disabled':''}>${colunaLeadsMovendo ? (copiando?'Copiando…':'Movendo…') : `${copiando?'Copiar':'Mover'} ${colunaLeadsSelecionados.size} contato(s)`}</button>
           </div>
         </div>
       </div>
@@ -9435,7 +9468,7 @@ function bindFluxoModalEvents(){
   if(!fluxoModalForm.__isNew){
     document.getElementById('fx-delete').addEventListener('click', ()=>{
       showConfirm({
-        message: 'Excluir este fluxo? As execuções em andamento pra clientes atuais são interrompidas.',
+        message: 'Excluir esta sequência? As que estão em andamento para clientes atuais são interrompidas.',
         onConfirm: ()=>{ excluirFluxo(fluxoModalForm.id); closeFluxoModal(); closeConfirm(); },
       });
     });
@@ -9451,7 +9484,7 @@ function renderFluxoModal(){
     <div class="overlay" id="fluxo-modal-overlay">
       <div class="modal modal-lg">
         <div class="modal-head">
-          <h3>${f.__isNew ? 'Novo fluxo' : 'Editar fluxo'}</h3>
+          <h3>${f.__isNew ? 'Nova sequência' : 'Editar sequência'}</h3>
           <button id="fluxo-modal-close">✕</button>
         </div>
         <div class="modal-body">
@@ -9517,8 +9550,8 @@ if(getToken()){
       { texto:'Tarefas atrasadas', pergunta:'Quais tarefas estão atrasadas ou vencem hoje?' },
       { texto:'Comissões do mês', pergunta:'Quanto vou receber de comissão este mês?' },
       { texto:'Buscar um cliente', preencher:'Me mostra os dados do cliente ' },
-      { texto:'Criar um fluxo', pergunta:'Como eu crio um fluxo automático de mensagens?' },
-      { texto:'Importar planilha', pergunta:'Como importo meus leads de uma planilha?' },
+      { texto:'Criar uma sequência', pergunta:'Como eu crio uma sequência automática?' },
+      { texto:'Importar planilha', pergunta:'Como importo meus contatos de uma planilha?' },
       { texto:'Ver meu lucro', pergunta:'Qual foi meu lucro este mês no Controle financeiro?' },
     ],
     // sininho do painel: as mesmas notificações do sino do topo

@@ -24,6 +24,7 @@ function partesBR(ts) {
 
 async function analisar(userId, { de, ate, base = 'lucro', agruparVariacoes = true } = {}) {
   if (!DATA_RE.test(String(de)) || !DATA_RE.test(String(ate)) || de > ate) throw new E.ErroEstoque('Período inválido.');
+  if ((Date.parse(ate) - Date.parse(de)) / 86400000 > 1100) throw new E.ErroEstoque('Escolha um período de até 3 anos.');
   const { rows } = await query(`SELECT data, criado_em, itens, subtotal, desconto, cashback_usado, premio_valor, total, acrescimo, cmv, taxa
     FROM estoque_vendas WHERE user_id = $1::uuid AND NOT cancelada AND data BETWEEN $2 AND $3 ORDER BY data LIMIT 20000`, [userId, de, ate]);
   const catalogo = await E.listarProdutos(userId);

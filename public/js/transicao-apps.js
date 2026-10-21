@@ -15,7 +15,7 @@
   const CHAVE = 'transicao-app';
   const DURACAO_ABRIR = 460;
   const DURACAO_FECHAR = 420;
-  const reduzMovimento = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const reduzMovimento = (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) || document.documentElement.classList.contains('a11y-sem-movimento');
   const raiz = document.documentElement;
   // a tela de escolha abre na raiz do site (/); /inicio.html é o endereço antigo
   const naTelaDeEscolha = location.pathname === '/' || /\/inicio\.html$/.test(location.pathname);
@@ -75,8 +75,9 @@
     document.body.appendChild(el);
     return el;
   }
-  const telaCheia = () => ({ top: '0px', left: '0px', width: window.innerWidth + 'px', height: window.innerHeight + 'px', borderRadius: '0px' });
-  const doRetangulo = (r, raio) => ({ top: r.top + 'px', left: r.left + 'px', width: r.width + 'px', height: r.height + 'px', borderRadius: raio });
+  const zt = () => (window.zoomDaTela ? window.zoomDaTela() : 1); // letra maior (acessibilidade): medidas da tela ÷ zoom
+  const telaCheia = () => ({ top: '0px', left: '0px', width: window.innerWidth / zt() + 'px', height: window.innerHeight / zt() + 'px', borderRadius: '0px' });
+  const doRetangulo = (r, raio) => ({ top: r.top / zt() + 'px', left: r.left / zt() + 'px', width: r.width / zt() + 'px', height: r.height / zt() + 'px', borderRadius: raio });
 
   /* ---------- 1) Cobre a tela já no <head>, se viemos de uma transição ---------- */
   const chegada = reduzMovimento ? null : lerTransicao();

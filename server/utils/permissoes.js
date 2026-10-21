@@ -9,12 +9,12 @@ const Equipe = require('../models/Equipe');
 const { comoSistema } = require('../db/contexto');
 
 const ABAS = [
-  { chave: 'dashboard', nome: 'Dashboard' },
-  { chave: 'leads', nome: 'Leads' },
-  { chave: 'automacoes', nome: 'Automações' },
+  { chave: 'dashboard', nome: 'Visão geral' },
+  { chave: 'leads', nome: 'Contatos' },
+  { chave: 'automacoes', nome: 'Ações automáticas' },
   { chave: 'comissoes', nome: 'Comissões' },
   { chave: 'relatorios', nome: 'Relatórios' },
-  { chave: 'fluxos', nome: 'Fluxos' },
+  { chave: 'fluxos', nome: 'Sequências' },
   { chave: 'import-export', nome: 'Importar/Exportar' },
   { chave: 'tarefas', nome: 'Agenda/Tarefas' },
   { chave: 'financeiro', nome: 'Controle financeiro', dica: 'O aplicativo financeiro da própria pessoa' },

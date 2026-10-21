@@ -707,6 +707,33 @@ estiver ativa. Rotas do app: `/api/estoque/*` (`server/routes/estoque.js`, regra
 Servidor: `server/utils/caixa.js`, rotas `/api/estoque/caixa*`, `/api/estoque/operadores*`,
 `/api/estoque/clientes/:id/fiado*`, migração `012_pdv_caixa.sql`.
 
+### Nomes mais simples no CRM e acessibilidade (versão 20261145)
+
+- **CRM com nomes do dia a dia:** Dashboard → **Visão geral**, Pipeline → **Negociações**, Leads → **Contatos**,
+  Automações → **Ações automáticas**, Fluxos → **Sequências**, Conversão → **Aproveitamento**. A primeira coluna
+  do funil de quem se cadastra agora é "Novos contatos" (contas antigas continuam com os nomes que têm).
+- **Menu do CRM:** à mostra ficam Visão geral, Negociações, Contatos, Agenda/Tarefas e Comissões; o resto
+  (Relatórios, Ações automáticas, Sequências, Importar/Exportar e Equipe) fica no grupo **Mais**, que abre e fecha.
+- **Acessibilidade** (CRM: Configurações → Aparência e acessibilidade; Controle financeiro: Meu perfil;
+  PDV: Configurações; tela de escolha: link embaixo): tamanho da letra (Normal, Grande, Muito grande), alto
+  contraste, menos animação e destacar links e botões. Vale nos três aplicativos, neste aparelho.
+
+### Nota fiscal (NFC-e) e venda sem internet (versão 20261140)
+
+- **Sem internet:** o PDV abre e vende no balcão mesmo sem conexão; as vendas ficam guardadas no
+  aparelho e vão para o estoque e o financeiro sozinhas quando a internet volta, sem duplicar.
+- **PIN sem internet (versão 20261143):** quem já entrou com o PIN neste aparelho com internet (nos
+  últimos 7 dias) consegue entrar sem internet. O PIN nunca fica salvo: o aparelho guarda só uma
+  credencial que serve apenas para registrar vendas feitas sem internet, cifrada (AES-GCM) com uma
+  chave tirada do PIN (PBKDF2, 210 mil rodadas). 5 erros travam por 5 minutos. Quando a internet
+  volta, essa sessão acaba e o PIN é conferido de novo pelo servidor; a venda guardada fica no nome
+  de quem a fez.
+- **NFC-e (opcional):** pelo parceiro emissor Focus NFe. O comerciante contrata o plano, cadastra
+  lá o certificado A1 e o CSC, e cola o token em Configurações → Nota fiscal (fica cifrado).
+  Começa em homologação. Emite, consulta e cancela pela venda; Simples Nacional/MEI.
+- Variável opcional no Render: `FISCAL_KEY` (chave para cifrar os tokens; sem ela usa o `JWT_SECRET`
+  — se trocar depois, os tokens salvos precisam ser colados de novo).
+
 ### Excel em todo o site e relatórios do PDV (versão 20261139)
 
 - **Planilhas:** CRM (importar leads de .xlsx/.csv, exportar em .xlsx ou CSV), Controle financeiro

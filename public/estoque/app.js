@@ -38,10 +38,16 @@
 
   async function api(metodo, caminho, corpo, tentativa = 0) {
     const opts = { method: metodo, headers: { Authorization: "Bearer " + token } };
-    const tokOp = lerOperador(); if (tokOp) opts.headers["x-operador"] = tokOp.token;
+    const tokOp = lerOperador(); if (tokOp && tokOp.token) opts.headers["x-operador"] = tokOp.token;
+    if (cabecalhoExtra) Object.assign(opts.headers, cabecalhoExtra);
     if (corpo !== undefined) { opts.headers["Content-Type"] = "application/json"; opts.body = JSON.stringify(corpo); }
     let res;
-    try { res = await fetch(API + caminho, opts); } catch (e) { throw new Error("Sem conexão com o servidor. Confira sua internet."); }
+    try { res = await fetch(API + caminho, opts); } catch (e) {
+      if (S.negocio && !S.offline) { S.offline = true; setTimeout(desenharFaixaOffline, 0); }
+      throw new Error("Sem conexão com o servidor. Confira sua internet.");
+    }
+    if (S.offline && res.status < 500) { S.offline = false; setTimeout(() => { desenharFaixaOffline(); sincronizarFila(); }, 0); }
+    if (res.status < 500 && tokOp && tokOp.local) setTimeout(encerrarSessaoLocal, 0); // o servidor respondeu: volta a valer o PIN online
     if (res.status === 401) { sair(); throw new Error("Sessão expirada."); }
     if (res.status === 402) { window.location.href = "../assinatura.html?de=estoque"; throw new Error("Sua assinatura não está ativa."); }
     let dados = null;
@@ -57,8 +63,10 @@
 
   // operador do caixa neste aparelho (o token do PIN)
   const CHAVE_OP = "pdv-operador";
-  function lerOperador() { try { const o = JSON.parse(localStorage.getItem(CHAVE_OP) || "null"); return o && o.token && o.ate > Date.now() ? o : null; } catch (e) { return null; } }
-  function guardarOperador(r) { try { localStorage.setItem(CHAVE_OP, JSON.stringify({ token: r.token, operador: r.operador, ate: Date.now() + 13.5 * 3600 * 1000 })); } catch (e) { /* sem armazenamento */ } }
+  // (sessão "local" = entrou com o PIN sem internet: não tem token do servidor, só a credencial de venda offline)
+  function lerOperador() { try { const o = JSON.parse(localStorage.getItem(CHAVE_OP) || "null"); return o && (o.token || o.local) && o.ate > Date.now() ? o : null; } catch (e) { return null; } }
+  function guardarOperador(r) { try { localStorage.setItem(CHAVE_OP, JSON.stringify({ token: r.token, offline: r.offline || null, operador: r.operador, ate: Date.now() + 13.5 * 3600 * 1000 })); } catch (e) { /* sem armazenamento */ } }
+  let cabecalhoExtra = null; // usado só ao enviar a fila (a credencial de quem fez a venda sem internet)
   function esquecerOperador() { try { localStorage.removeItem(CHAVE_OP); } catch (e) { /* nada */ } }
 
   function toast(html, tipo = "") {
@@ -75,6 +83,7 @@
     tab: "caixa", resumo: null,
     pdv: {}, operadores: [], caixa: null, caixas: null, relAba: "vendas", caixaDetalhe: null,
     anPer: "mes", anBase: "lucro", anVar: false, analise: null, // análises (curva ABC, horários)
+    fiscal: null, offline: false, // NFC-e e venda sem internet
     vendas: null, mesVendas: hoje().slice(0, 7),
     compras: null, gastos: null, pedidos: null,
     // balcão
@@ -223,7 +232,7 @@
       else return;
       if (S.tab === tab && !modalAberto()) render();
       else if (S.tab === tab) render();
-    } catch (e) { toast(esc(e.message), "erro"); }
+    } catch (e) { if (S.offline && ehErroDeRede(e)) return; toast(esc(e.message), "erro"); }
   }
   async function carregarVendas() {
     const [a, m] = S.mesVendas.split("-").map(Number);
@@ -509,12 +518,82 @@
   async function entrarComPin() {
     const t = TR; if (t.entrando || t.pin.length < 4) return;
     t.entrando = true;
+    const semRede = S.offline || !navigator.onLine;
     try {
-      const r = await api("POST", "/estoque/operadores/entrar", { id: t.id, pin: t.pin });
-      guardarOperador(r); TR = null; const el = $("#trava"); if (el) el.remove();
-      atualizarChipOperador(); desenharNavCelular(); toast(`Olá, ${esc(r.operador.nome)}!`, "ok");
-      if (r.operador.papel === "garcom" && restaurante() && !["mesas", "cozinha", "pedidos", "clientes"].includes(S.tab)) irPara("mesas"); else irPara(S.tab);
+      if (semRede) { await entrarSemInternet(t.id, t.pin); return; }
+      let r;
+      try { r = await api("POST", "/estoque/operadores/entrar", { id: t.id, pin: t.pin }); }
+      catch (e) { if (ehErroDeRede(e)) { await entrarSemInternet(t.id, t.pin); return; } throw e; }
+      guardarOperador(r);
+      guardarPinCofre(t.id, t.pin, r).catch(() => {}); // para poder entrar sem internet depois
+      depoisDeEntrar(r.operador, "");
     } catch (e) { t.entrando = false; t.pin = ""; t.erro = e.message; desenharTrava(); }
+  }
+  function depoisDeEntrar(op, aviso) {
+    TR = null; const el = $("#trava"); if (el) el.remove();
+    atualizarChipOperador(); desenharNavCelular(); toast(`Olá, ${esc(op.nome)}!${aviso}`, "ok");
+    if (op.papel === "garcom" && restaurante() && !["mesas", "cozinha", "pedidos", "clientes"].includes(S.tab)) irPara("mesas"); else irPara(S.tab);
+  }
+
+  /* PIN sem internet: o PIN NUNCA fica salvo. Ao entrar com internet, o servidor devolve uma credencial
+     que só serve para registrar vendas feitas sem internet (vale 7 dias e é conferida de novo no servidor).
+     Ela é guardada cifrada (AES-GCM) com uma chave tirada do próprio PIN (PBKDF2, 210 mil rodadas):
+     sem o PIN certo não dá para abrir. Com internet de volta, a sessão local acaba e o PIN volta a ser
+     conferido pelo servidor. 5 erros seguidos travam o PIN neste aparelho por 5 minutos. */
+  const CHAVE_COFRE = () => `pdv-pins-${uidLocal()}`;
+  const RODADAS = 210000;
+  function lerCofre() { try { return JSON.parse(localStorage.getItem(CHAVE_COFRE()) || "{}") || {}; } catch (e) { return {}; } }
+  function gravarCofre(c) { try { localStorage.setItem(CHAVE_COFRE(), JSON.stringify(c)); } catch (e) { /* sem espaço */ } }
+  const b64 = (u8) => btoa(String.fromCharCode(...new Uint8Array(u8)));
+  const deB64 = (s) => Uint8Array.from(atob(s), (c) => c.charCodeAt(0));
+  async function chaveDoPin(pin, sal, opId) {
+    const base = await crypto.subtle.importKey("raw", new TextEncoder().encode(`${opId}:${pin}`), "PBKDF2", false, ["deriveKey"]);
+    return crypto.subtle.deriveKey({ name: "PBKDF2", salt: sal, iterations: RODADAS, hash: "SHA-256" }, base, { name: "AES-GCM", length: 256 }, false, ["encrypt", "decrypt"]);
+  }
+  const fimDoJwt = (t) => { try { return JSON.parse(atob(t.split(".")[1].replace(/-/g, "+").replace(/_/g, "/"))).exp * 1000; } catch (e) { return 0; } };
+  async function guardarPinCofre(opId, pin, r) {
+    if (!r.offline || !(window.crypto && crypto.subtle)) return;
+    const sal = crypto.getRandomValues(new Uint8Array(16)); const iv = crypto.getRandomValues(new Uint8Array(12));
+    const chave = await chaveDoPin(pin, sal, opId);
+    const dados = await crypto.subtle.encrypt({ name: "AES-GCM", iv }, chave, new TextEncoder().encode(JSON.stringify({ c: r.offline, op: r.operador })));
+    const cofre = lerCofre();
+    cofre[opId] = { sal: b64(sal), iv: b64(iv), dados: b64(dados), ate: fimDoJwt(r.offline) || Date.now() + 7 * 864e5, falhas: 0, travadoAte: 0 };
+    gravarCofre(cofre);
+  }
+  async function entrarSemInternet(opId, pin) {
+    const cofre = lerCofre(); const e = cofre[opId];
+    if (!e || e.ate <= Date.now()) throw new Error("Sem internet, só entra quem já usou o PIN neste aparelho com internet nos últimos 7 dias.");
+    if (!(window.crypto && crypto.subtle)) throw new Error("Este navegador não permite entrar com o PIN sem internet.");
+    if (e.travadoAte > Date.now()) throw new Error(`Muitas tentativas. Tente de novo em ${Math.ceil((e.travadoAte - Date.now()) / 60000)} min.`);
+    let aberto = null;
+    try {
+      const chave = await chaveDoPin(pin, deB64(e.sal), opId);
+      aberto = JSON.parse(new TextDecoder().decode(await crypto.subtle.decrypt({ name: "AES-GCM", iv: deB64(e.iv) }, chave, deB64(e.dados))));
+    } catch (x) { aberto = null; }
+    const c2 = lerCofre(); const e2 = c2[opId] || e;
+    if (!aberto) {
+      e2.falhas = (e2.falhas || 0) + 1;
+      if (e2.falhas >= 5) { e2.falhas = 0; e2.travadoAte = Date.now() + 5 * 60000; }
+      c2[opId] = e2; gravarCofre(c2);
+      throw new Error(e2.travadoAte > Date.now() ? "PIN errado. Muitas tentativas: espere 5 minutos." : "PIN errado.");
+    }
+    e2.falhas = 0; e2.travadoAte = 0; c2[opId] = e2; gravarCofre(c2);
+    const op = aberto.op;
+    try { localStorage.setItem(CHAVE_OP, JSON.stringify({ token: null, local: true, offline: aberto.c, operador: op, ate: Math.min(e.ate, Date.now() + 13.5 * 3600 * 1000) })); } catch (x) { /* sem armazenamento */ }
+    depoisDeEntrar(op, " (sem internet)");
+  }
+  // internet de volta: a sessão feita sem internet acaba e o PIN passa a ser conferido pelo servidor
+  function encerrarSessaoLocal() {
+    const o = lerOperador(); if (!o || !o.local) return;
+    esquecerOperador(); atualizarChipOperador(); desenharNavCelular();
+    if (S.pdv && S.pdv.exigirOperador) mostrarTrava("A internet voltou: entre de novo com o seu PIN.");
+  }
+  // tira do cofre quem foi desativado ou removido
+  function limparCofre() {
+    const ativos = new Set((S.operadores || []).filter((o) => o.ativo).map((o) => o.id));
+    const c = lerCofre(); let mudou = false;
+    for (const id of Object.keys(c)) if (!ativos.has(id) || c[id].ate <= Date.now()) { delete c[id]; mudou = true; }
+    if (mudou) gravarCofre(c);
   }
   function atualizarChipOperador() {
     const el = $("#chip-operador"); if (!el) return;
@@ -784,17 +863,23 @@
     const t = totaisCarrinho();
     c.salvando = true; S.vendendo = true; corpoModal(cobrancaHtml());
     try {
-      const r = await api("POST", "/estoque/vendas", {
+      const corpoVenda = {
         pagamentos: c.total > 0 ? pagamentos : undefined, meio: c.total > 0 ? undefined : "dinheiro", desconto: t.desc, data: S.cartOutraData ? (S.cartData || hoje()) : undefined,
         ...(S.cartCli ? { clienteId: S.cartCli.id, usarCashback: !!(t.benef && programa().modelo === "cashback"), usarPremio: !!(t.benef && programa().modelo === "selos") } : { cliente: S.cartCliente }),
         itens: S.carrinho.map((i) => (i.avulso ? { nome: i.nome, qtd: numOu(i.qtd), unit: numOu(i.unit) } : { produtoId: i.produtoId, variacaoId: i.variacaoId, qtd: numOu(i.qtd), unit: numOu(i.unit) })),
-      });
+      };
+      // código da venda criado aqui: se a internet cair no meio, reenviar não duplica
+      corpoVenda.refCliente = c.ref || (c.ref = novaRef());
+      let r;
+      try { r = await api("POST", "/estoque/vendas", corpoVenda); }
+      catch (e2) { if (!ehErroDeRede(e2)) throw e2; S.offline = true; r = guardarVendaOffline(corpoVenda, c, t); }
       const cliTel = S.cartCli ? S.cartCli.telefone : "";
       S.carrinho = []; S.cartDescValor = ""; S.cartCliente = ""; S.cartOutraData = false; S.cartData = ""; S.cartCli = null; S.cartUsarBenef = false;
       if (S.negocio.checklist) S.negocio.checklist.venda = true;
       S.vendendo = false; CB = null;
       vendaConcluida(r, cliTel);
-      recarregarProdutos().then(() => { if (S.tab === "vender") { const g = $("#grade-pdv"); if (g) g.innerHTML = gradePdvHtml(); } });
+      if (r.venda.offline) { const g = $("#grade-pdv"); if (g) g.innerHTML = gradePdvHtml(); guardarCache(); }
+      else recarregarProdutos().then(() => { if (S.tab === "vender") { const g = $("#grade-pdv"); if (g) g.innerHTML = gradePdvHtml(); } guardarCache(); }).catch(() => {});
       api("GET", "/estoque/caixa").then((x) => { S.caixa = x.aberto; }).catch(() => {});
     } catch (e) { S.vendendo = false; c.salvando = false; c.erro = e.message; corpoModal(cobrancaHtml()); }
     if (S.tab === "vender") redesenharCarrinho();
@@ -805,19 +890,22 @@
     S.ultimaVenda = { venda: v, tel: cliTel };
     const ganhou = v.cashbackGanho ? `🎁 ${esc(v.cliente)} ganhou ${fmt(v.cashbackGanho)} de cashback.` : v.selosGanhos ? `🎁 +1 compra no cartão fidelidade de ${esc(v.cliente)}.` : "";
     const depois = rotuloFim === "Pronto" ? { aoFechar: () => { if (S.tab === "mesas") render(); } } : {};
-    abrirModal(`Venda #${v.numero} registrada`, `<div class="venda-ok">
+    abrirModal(v.offline && !v.id ? "Venda guardada neste aparelho" : `Venda #${v.numero} registrada`, `<div class="venda-ok">
         <div class="ok-icone" aria-hidden="true">✓</div>
         <p class="kpi-valor">${fmt(v.total)}</p>
         <p class="sub">${(v.pagamentos || []).map((p) => `${meioCurto(p.meio)} ${fmt(p.valor)}`).join(" + ")}</p>
         ${v.troco ? `<div class="troco-grande"><span>Troco</span><b class="num">${fmt(v.troco)}</b></div>` : ""}
         ${ganhou ? `<p class="aviso info">${ganhou}</p>` : ""}
         ${r.alertas.length ? `<p class="aviso">⚠ ${r.alertas.map(esc).join("<br/>⚠ ")}</p>` : ""}
+        ${v.offline ? `<p class="aviso">Sem internet: a venda ficou guardada neste aparelho e vai para o estoque e o financeiro quando a conexão voltar.</p>` : ""}
       </div>
+      ${notaFiscalHtml(v)}
       <div class="venda-ok-acoes">
         <button class="btn claro" data-a="recibo-imprimir">Imprimir recibo</button>
         <button class="btn claro" data-a="recibo-whats">Recibo no WhatsApp</button>
         <button class="btn acento grande" data-a="fechar-modal">${rotuloFim}</button>
       </div>`, depois);
+    if (fiscalLigado() && S.fiscal.emitir === "sempre" && v.id && !(v.nfce && v.nfce.status)) setTimeout(() => acaoNota("emitir", v.id, document.querySelector('[data-a="nfce-emitir"]')), 50);
   }
   // recibo (não fiscal) para impressora térmica de 58/80 mm ou WhatsApp
   function reciboTexto(v) {
@@ -887,7 +975,7 @@
   function abrirProduto(p) {
     const novo = !p;
     PF = novo
-      ? { id: null, nome: "", categoria: "", descricao: "", codigo: "", unidade: "un", preco: "", custo: "", controlaEstoque: S.negocio.controlaEstoque !== false, estoqueInicial: "", estoqueMinimo: "", noCardapio: true, destaque: false, ativo: true, cozinha: true, opcoes: [], variacoes: [], foto: "", fotoNova: null, comVariacoes: false, erro: "" }
+      ? { id: null, nome: "", categoria: "", descricao: "", codigo: "", unidade: "un", preco: "", custo: "", controlaEstoque: S.negocio.controlaEstoque !== false, estoqueInicial: "", estoqueMinimo: "", noCardapio: true, destaque: false, ativo: true, cozinha: true, fiscal: {}, opcoes: [], variacoes: [], foto: "", fotoNova: null, comVariacoes: false, erro: "" }
       : { ...JSON.parse(JSON.stringify(p)), preco: br(p.preco), custo: br(p.custo), estoqueMinimo: p.estoqueMinimo ? String(p.estoqueMinimo).replace(".", ",") : "", fotoNova: null, comVariacoes: p.variacoes.length > 0, erro: "",
         variacoes: p.variacoes.map((v) => ({ ...v, preco: v.preco === null ? "" : br(v.preco), custo: v.custo === null ? "" : br(v.custo), estoqueMinimo: v.estoqueMinimo ? String(v.estoqueMinimo).replace(".", ",") : "" })) };
     abrirModal(novo ? "Novo produto" : "Editar produto", formProdutoHtml(), { largo: true, aoFechar: () => { PF = null; } });
@@ -956,6 +1044,14 @@
         <div class="linhas">${gruposHtml}</div>
         <button class="btn claro mini" data-a="add-grupo" style="margin-top:8px">+ Grupo de adicionais</button>
       </div>` : `<div class="bloco"><label class="campo"><span>Descrição (opcional)</span><textarea data-pf="descricao" maxlength="400">${esc(f.descricao)}</textarea></label></div>`}
+      <details class="bloco pf-fiscal" ${f.fiscal && f.fiscal.ncm ? "" : fiscalLigado() ? "open" : ""}><summary class="bloco-titulo">Dados fiscais (para a NFC-e)${f.fiscal && f.fiscal.ncm ? ` · NCM ${esc(f.fiscal.ncm)}` : ""}</summary>
+        <div class="campos" style="margin-top:8px">
+          <label class="campo"><span>NCM</span><input data-pf-fiscal="ncm" value="${esc((f.fiscal || {}).ncm || "")}" inputmode="numeric" maxlength="10" placeholder="8 números" /><small>Está na nota do fornecedor</small></label>
+          <label class="campo"><span>CFOP</span><input data-pf-fiscal="cfop" value="${esc((f.fiscal || {}).cfop || "")}" inputmode="numeric" maxlength="4" placeholder="${esc((S.fiscal && S.fiscal.cfop) || "5102")}" /></label>
+          <label class="campo"><span>CSOSN</span><input data-pf-fiscal="csosn" value="${esc((f.fiscal || {}).csosn || "")}" inputmode="numeric" maxlength="3" placeholder="${esc((S.fiscal && S.fiscal.csosn) || "102")}" /></label>
+          <label class="campo"><span>CEST</span><input data-pf-fiscal="cest" value="${esc((f.fiscal || {}).cest || "")}" inputmode="numeric" maxlength="9" placeholder="se tiver" /></label>
+        </div><p class="bloco-sub">Em branco = o padrão de Configurações → Nota fiscal. Confira com o seu contador.</p>
+      </details>
       ${novo ? "" : `<div class="bloco"><label class="check"><input type="checkbox" data-pf="ativo" ${f.ativo ? "checked" : ""} /><span>Produto ativo <small>Desmarque para esconder das vendas sem apagar o histórico.</small></span></label></div>`}
       ${f.erro ? `<p class="erro-form">${esc(f.erro)}</p>` : ""}
       <div class="modal-rodape">
@@ -973,7 +1069,7 @@
     const corpo = {
       nome: f.nome, categoria: f.categoria, descricao: f.descricao, codigo: f.codigo, unidade: f.unidade,
       preco: numOu(f.preco), custo: numOu(f.custo), controlaEstoque: f.controlaEstoque, estoqueMinimo: numOu(f.estoqueMinimo),
-      estoqueInicial: numOu(f.estoqueInicial), noCardapio: f.noCardapio, destaque: f.destaque, ativo: f.ativo, cozinha: f.cozinha !== false,
+      estoqueInicial: numOu(f.estoqueInicial), noCardapio: f.noCardapio, destaque: f.destaque, ativo: f.ativo, cozinha: f.cozinha !== false, fiscal: Object.fromEntries(Object.entries(f.fiscal || {}).filter(([, v]) => String(v || "").trim())),
       opcoes: f.opcoes.map((g) => ({ ...g, escolhas: g.escolhas.filter((e) => e.nome.trim()).map((e) => ({ nome: e.nome, preco: numOu(e.preco) })) })).filter((g) => g.nome.trim() || g.escolhas.length),
       variacoes: f.comVariacoes ? f.variacoes.filter((v) => v.nome.trim() || v.id).map((v) => ({ id: v.id || undefined, nome: v.nome, codigo: v.codigo || "", preco: v.preco === "" ? null : numOu(v.preco), custo: v.custo === "" ? null : numOu(v.custo), estoqueMinimo: numOu(v.estoqueMinimo), estoqueInicial: numOu(v.estoqueInicial), ativo: v.ativo !== false })) : [],
     };
@@ -1242,6 +1338,8 @@
       ${v.cashbackGanho || v.selosGanhos ? `<p class="aviso info">🎁 ${esc(v.cliente)} ${v.cashbackGanho ? `ganhou ${fmt(v.cashbackGanho)} de cashback` : "ganhou +1 compra no cartão fidelidade"} nesta venda.</p>` : ""}
       ${v.clienteId ? `<p style="margin-top:10px"><button class="link" data-a="cli-ficha" data-id="${v.clienteId}">Ver a ficha de ${esc(v.cliente)}</button></p>` : ""}
       ${v.obs ? `<p class="aviso info">${esc(v.obs)}</p>` : ""}
+      ${v.offline ? `<p class="bloco-sub" style="margin-top:8px">Feita sem internet e enviada depois.</p>` : ""}
+      ${notaFiscalHtml(v)}
       <div class="modal-rodape">${v.cancelada ? "" : `<button class="btn perigo esq" data-a="cancelar-venda" data-id="${v.id}">Cancelar venda</button>`}${v.cancelada ? "" : `<button class="btn claro" data-a="recibo-imprimir">Recibo</button>`}<button class="btn claro" data-a="fechar-modal">Fechar</button></div>`);
   }
 
@@ -1495,6 +1593,11 @@
         <div class="modal-rodape"><button class="btn acento" data-a="salvar-config">Salvar</button></div>
       </div>
       ${caixaConfigHtml()}
+      <div class="card">
+        <h2 class="secao">Acessibilidade</h2>
+        <div data-a11y-painel></div>
+      </div>
+      ${fiscalCardHtml()}
       ${restaurante() ? `<div class="card">
         <h2 class="secao">Mesas e cozinha</h2>
         <p class="sub">${S.mapa ? `${S.mapa.mesas.length} ${S.mapa.mesas.length === 1 ? "mesa" : "mesas"}. ` : ""}Taxa de serviço ${String(S.pdv.taxaServico ?? 10).replace(".", ",")}%. Os produtos marcados “vai para a cozinha” aparecem na tela da Cozinha quando o garçom manda o pedido.</p>
@@ -2474,6 +2577,232 @@
     else if (t.matches("[data-nf-preco]")) item("nfPreco").novo.preco = t.value;
   });
 
+  /* =====================================================================
+     Fase 4: nota fiscal (NFC-e) e venda sem internet
+     ===================================================================== */
+  const fiscalLigado = () => !!(S.fiscal && S.fiscal.ativo);
+
+  /* ---------- NFC-e: o quadro da nota na venda ---------- */
+  function notaFiscalHtml(v) {
+    if (!fiscalLigado() && !(v.nfce && v.nfce.status)) return "";
+    const n = v.nfce || {};
+    if (v.offline && !v.id) return `<div class="nf-box" id="nf-box"><p class="sub">Venda guardada sem internet. A NFC-e pode ser emitida quando ela for enviada.</p></div>`;
+    const homolog = n.ambiente === "homologacao" ? ` <span class="selo baixo">homologação · sem valor fiscal</span>` : "";
+    let corpo;
+    if (n.status === "autorizada") {
+      corpo = `<div class="linha entre"><span><span class="selo ok">NFC-e autorizada</span>${homolog}</span><span class="sub">nº ${esc(n.numero)} · série ${esc(n.serie)}</span></div>
+        ${n.chave ? `<p class="prod-cat nf-chave">${esc(String(n.chave).replace(/^NFe/, "").replace(/(\d{4})(?=\d)/g, "$1 "))}</p>` : ""}
+        <div class="linha" style="margin-top:8px">${n.danfe ? `<a class="btn mini acento" href="${esc(n.danfe)}" target="_blank" rel="noopener">Ver / imprimir a nota</a>` : ""}<button class="btn mini claro" data-a="nfce-cancelar" data-id="${v.id}">Cancelar a nota</button></div>`;
+    } else if (n.status === "processando") {
+      corpo = `<div class="linha entre"><span><span class="selo acento">NFC-e em processamento</span>${homolog}</span><button class="btn mini claro" data-a="nfce-consultar" data-id="${v.id}">Atualizar</button></div><p class="bloco-sub">A SEFAZ ainda não respondeu. Toque em Atualizar em alguns segundos.</p>`;
+    } else if (n.status === "cancelada") {
+      corpo = `<div class="linha entre"><span><span class="selo neutro">NFC-e cancelada</span>${homolog}</span><span class="sub">nº ${esc(n.numero || "")}</span></div>`;
+    } else {
+      corpo = `${n.status === "erro" ? `<p class="aviso" style="margin-top:0">A nota não saiu: ${esc(n.mensagem || "erro no emissor")}</p>` : ""}
+        ${v.cancelada ? "" : `<div class="nf-emitir"><input class="inp" id="nfce-cpf" inputmode="numeric" maxlength="18" placeholder="CPF na nota (opcional)" value="${esc(n.cpf || "")}" />
+        <button class="btn acento" data-a="nfce-emitir" data-id="${v.id}">${n.status === "erro" ? "Tentar de novo" : "Emitir NFC-e"}</button></div>
+        <p class="bloco-sub">${S.fiscal.ambiente === "producao" ? "Nota de verdade (produção)." : "Ambiente de homologação: nota de teste, sem valor fiscal."}</p>`}`;
+    }
+    return `<div class="nf-box" id="nf-box"><p class="bloco-titulo" style="margin:0 0 8px">Nota fiscal do consumidor</p>${corpo}</div>`;
+  }
+  function atualizarNotaNaTela(vendaId, nfce) {
+    const listas = [S.vendas || [], S.ultimaVenda ? [S.ultimaVenda.venda] : []];
+    let v = null;
+    listas.forEach((l) => l.forEach((x) => { if (x.id === vendaId) { x.nfce = nfce; v = x; } }));
+    const box = $("#nf-box");
+    if (box && v) box.outerHTML = notaFiscalHtml(v);
+  }
+  async function acaoNota(tipo, vendaId, botao) {
+    if (botao) { botao.disabled = true; botao.textContent = tipo === "emitir" ? "Emitindo…" : tipo === "cancelar" ? "Cancelando…" : "Consultando…"; }
+    try {
+      let r;
+      if (tipo === "emitir") r = await api("POST", `/estoque/vendas/${vendaId}/nfce`, { cpf: ($("#nfce-cpf") || {}).value || "" });
+      else if (tipo === "consultar") r = await api("GET", `/estoque/vendas/${vendaId}/nfce`);
+      else {
+        const j = window.prompt("Motivo do cancelamento da nota (mínimo 15 letras). A SEFAZ costuma aceitar até 30 minutos depois da emissão.", "Cliente desistiu da compra");
+        if (j === null) { if (botao) { botao.disabled = false; botao.textContent = "Cancelar a nota"; } return; }
+        r = await api("POST", `/estoque/vendas/${vendaId}/nfce/cancelar`, { justificativa: j });
+      }
+      atualizarNotaNaTela(vendaId, r.nfce);
+      if (r.nfce.status === "autorizada" && tipo === "emitir") toast("NFC-e autorizada.", "ok");
+      if (r.nfce.status === "processando") setTimeout(() => { if ($("#nf-box")) acaoNota("consultar", vendaId, null); }, 4000);
+    } catch (e) {
+      toast(esc(e.message), "erro");
+      const box = $("#nf-box"); const v = [...(S.vendas || []), ...(S.ultimaVenda ? [S.ultimaVenda.venda] : [])].find((x) => x.id === vendaId);
+      if (box && v) box.outerHTML = notaFiscalHtml(v);
+    }
+  }
+
+  /* ---------- Configurações → Nota fiscal ---------- */
+  let FS = null;
+  function fiscalCardHtml() {
+    const f = S.fiscal || {};
+    if (!FS) FS = { ativo: !!f.ativo, ambiente: f.ambiente || "homologacao", cnpj: f.cnpj || "", csosn: f.csosn || "102", cfop: f.cfop || "5102", ncm: f.ncm || "", pisCofins: f.pisCofins || "49", emitir: f.emitir || "perguntar", infoAdicional: f.infoAdicional || "", token: "", erro: "", msg: "", salvando: false };
+    const cnpjFmt = (c) => String(c || "").replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, "$1.$2.$3/$4-$5");
+    return `<div class="card fiscal-card">
+      <h2 class="secao">Nota fiscal (NFC-e)</h2>
+      <p class="sub">Opcional. MEI que vende para pessoa física normalmente não é obrigado a emitir. Para emitir, você precisa de um <b>parceiro emissor</b> (ex.: Focus NFe, plano de varejo), do <b>certificado digital A1</b> e do <b>CSC</b> da SEFAZ do seu estado — tudo cadastrado no painel do parceiro. Aqui você só cola o token da API.</p>
+      <div class="campos" style="margin-top:12px">
+        <label class="campo"><span>CNPJ do emitente</span><input data-fs="cnpj" value="${esc(cnpjFmt(FS.cnpj))}" inputmode="numeric" placeholder="00.000.000/0000-00" /></label>
+        <label class="campo"><span>Token da API do parceiro ${f.temToken ? `<span class="selo ok">salvo</span>` : ""}</span><input data-fs="token" type="password" autocomplete="off" value="${esc(FS.token)}" placeholder="${f.temToken ? "•••••• (deixe em branco para manter)" : "cole aqui"}" /><small>Fica guardado cifrado e nunca aparece de novo.</small></label>
+      </div>
+      <div class="campo" style="margin-top:10px"><span>Ambiente</span><div class="chips"><button class="chip ${FS.ambiente === "homologacao" ? "ativo" : ""}" data-a="fs-amb" data-v="homologacao">Homologação (teste)</button><button class="chip ${FS.ambiente === "producao" ? "ativo" : ""}" data-a="fs-amb" data-v="producao">Produção (nota de verdade)</button></div></div>
+      <details class="fs-avancado"><summary>Padrões fiscais (Simples Nacional / MEI)</summary>
+        <div class="campos" style="margin-top:10px">
+          <label class="campo"><span>CSOSN</span><input data-fs="csosn" value="${esc(FS.csosn)}" inputmode="numeric" maxlength="3" /><small>102 = sem permissão de crédito (o mais comum)</small></label>
+          <label class="campo"><span>CFOP</span><input data-fs="cfop" value="${esc(FS.cfop)}" inputmode="numeric" maxlength="4" /><small>5102 = venda de mercadoria de terceiros</small></label>
+          <label class="campo"><span>NCM padrão</span><input data-fs="ncm" value="${esc(FS.ncm)}" inputmode="numeric" maxlength="10" placeholder="opcional" /><small>Usado nos produtos sem NCM</small></label>
+          <label class="campo"><span>CST PIS/COFINS</span><input data-fs="pisCofins" value="${esc(FS.pisCofins)}" inputmode="numeric" maxlength="2" /><small>49 é o usual no Simples</small></label>
+        </div>
+        <label class="campo" style="margin-top:10px"><span>Informação adicional na nota</span><input data-fs="infoAdicional" value="${esc(FS.infoAdicional)}" maxlength="300" placeholder="Ex.: Documento emitido por ME ou EPP optante pelo Simples Nacional" /></label>
+        <p class="bloco-sub">Confirme esses códigos com o seu contador. Regime normal (Lucro Presumido/Real) ainda não é atendido.</p>
+      </details>
+      <div class="campo" style="margin-top:10px"><span>Quando emitir</span><div class="chips"><button class="chip ${FS.emitir === "perguntar" ? "ativo" : ""}" data-a="fs-emitir" data-v="perguntar">Quando eu tocar em “Emitir”</button><button class="chip ${FS.emitir === "sempre" ? "ativo" : ""}" data-a="fs-emitir" data-v="sempre">Em toda venda</button></div></div>
+      <label class="check" style="margin-top:12px"><input type="checkbox" data-fs="ativo" ${FS.ativo ? "checked" : ""} /><span><b>Emitir NFC-e pelo PDV</b><small>Aparece o botão “Emitir NFC-e” depois de cada venda e no detalhe da venda.</small></span></label>
+      ${FS.erro ? `<p class="erro-form">${esc(FS.erro)}</p>` : ""}${FS.msg ? `<p class="aviso info">${esc(FS.msg)}</p>` : ""}
+      <div class="modal-rodape">${f.temToken ? `<button class="btn claro" data-a="fs-testar">Testar conexão</button>` : ""}<button class="btn acento" data-a="fs-salvar" ${FS.salvando ? "disabled" : ""}>${FS.salvando ? "Salvando…" : "Salvar"}</button></div>
+    </div>`;
+  }
+  async function salvarFiscalTela() {
+    const f = FS; f.erro = ""; f.msg = ""; f.salvando = true; render();
+    try {
+      const corpo = { ativo: f.ativo, ambiente: f.ambiente, cnpj: f.cnpj, csosn: f.csosn, cfop: f.cfop, ncm: f.ncm, pisCofins: f.pisCofins, emitir: f.emitir, infoAdicional: f.infoAdicional };
+      if (f.token.trim()) corpo.token = f.token.trim();
+      if (f.ambiente === "producao" && !(S.fiscal && S.fiscal.ambiente === "producao") && f.ativo && !confirm("Produção emite nota fiscal de verdade, com valor para a SEFAZ. Confirma que já testou em homologação e que o seu contador conferiu os códigos?")) { f.salvando = false; render(); return; }
+      S.fiscal = (await api("PUT", "/estoque/fiscal", corpo)).fiscal;
+      FS = null; toast("Configuração fiscal salva.", "ok");
+    } catch (e) { f.erro = e.message; f.salvando = false; }
+    render();
+  }
+
+  /* ---------- venda sem internet ---------- */
+  // Guarda neste aparelho: o cadastro (para abrir o PDV sem internet) e a fila de vendas a enviar
+  // de quem é a fila: o id da conta dentro do token (assim a venda guardada nunca vai para outra conta no mesmo aparelho)
+  const uidLocal = () => {
+    try { const p = JSON.parse(atob(token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/"))); if (p.id || p.userId || p.sub) return String(p.id || p.userId || p.sub); } catch (e) { /* segue */ }
+    try { const u = JSON.parse(localStorage.getItem("user") || "{}"); return String(u.id || u._id || "sem-conta"); } catch (e) { return "sem-conta"; }
+  };
+  const CHAVE_FILA = () => `pdv-fila-${uidLocal()}`;
+  const CHAVE_CACHE = () => `pdv-cache-${uidLocal()}`;
+  function lerFila() { try { return JSON.parse(localStorage.getItem(CHAVE_FILA()) || "[]"); } catch (e) { return []; } }
+  function gravarFila(f) { try { localStorage.setItem(CHAVE_FILA(), JSON.stringify(f)); } catch (e) { toast("Não deu para guardar a venda neste aparelho (memória cheia).", "erro"); } desenharFaixaOffline(); }
+  function guardarCache() {
+    if (!S.offline) limparCofre();
+    try {
+      localStorage.setItem(CHAVE_CACHE(), JSON.stringify({ em: Date.now(), negocio: S.negocio, produtos: S.produtos.map((p) => ({ ...p, foto: "" })), meios: S.meios, unidades: S.unidades, pdv: S.pdv, operadores: S.operadores, caixa: S.caixa, fiscal: S.fiscal }));
+    } catch (e) { /* sem espaço: abre só com internet */ }
+  }
+  function lerCache() { try { return JSON.parse(localStorage.getItem(CHAVE_CACHE()) || "null"); } catch (e) { return null; } }
+  const novaRef = () => `off-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+  const ehErroDeRede = (e) => /Sem conexão com o servidor/.test((e && e.message) || "");
+  // a venda vai para a fila (mostra o troco e o recibo normalmente; o número sai quando enviar)
+  function guardarVendaOffline(corpo, cobr, t) {
+    const fila = lerFila();
+    const agora = new Date();
+    const sessao = lerOperador();
+    const item = { ref: corpo.refCliente, corpo: { ...corpo, feitaEm: agora.toISOString(), data: corpo.data || hoje() }, total: cobr.total, criadoEm: agora.toISOString(), erro: "",
+      opOff: sessao && sessao.offline ? sessao.offline : null, operador: sessao ? sessao.operador.nome : "" };
+    fila.push(item); gravarFila(fila);
+    // baixa o estoque só na tela (o servidor baixa de verdade ao receber)
+    corpo.itens.forEach((i) => {
+      const p = i.produtoId && S.produtos.find((x) => x.id === i.produtoId); if (!p || !p.controlaEstoque) return;
+      const v = i.variacaoId && p.variacoes.find((x) => x.id === i.variacaoId);
+      if (v) v.estoque -= i.qtd; else p.estoque -= i.qtd;
+    });
+    const totC = Math.round(cobr.total * 100);
+    const pagos = corpo.pagamentos || [{ meio: corpo.meio, valor: cobr.total }];
+    const dinheiro = pagos.filter((p) => p.meio === "dinheiro").reduce((a, p) => a + Math.round(p.valor * 100), 0);
+    const somaC = pagos.reduce((a, p) => a + Math.round(p.valor * 100), 0);
+    const trocoC = Math.max(0, somaC - totC);
+    return { venda: {
+      id: null, offline: true, numero: `—`, data: item.corpo.data, criadoEm: item.criadoEm, total: cobr.total, subtotal: t.sub, desconto: t.desc, acrescimo: 0, cashbackUsado: 0, premioValor: 0,
+      itens: corpo.itens.map((i) => ({ ...i, nome: i.nome || (S.carrinho.find((c) => c.produtoId === i.produtoId && c.variacaoId === i.variacaoId) || {}).nome || "Item" })),
+      pagamentos: pagos.map((p) => ({ meio: p.meio, valor: p.meio === "dinheiro" && trocoC ? r2(p.valor - trocoC / 100) : p.valor })), troco: trocoC / 100, recebido: dinheiro / 100, cliente: S.cartCli ? S.cartCli.nome : (S.cartCliente || ""),
+    }, alertas: [] };
+  }
+  let sincronizando = false;
+  async function sincronizarFila(manual = false) {
+    if (sincronizando) return;
+    const fila = lerFila();
+    if (!fila.some((x) => !x.erro || manual)) { desenharFaixaOffline(); return; }
+    if (!navigator.onLine && !manual) return;
+    sincronizando = true; desenharFaixaOffline();
+    let enviadas = 0; const notas = [];
+    for (const item of fila.slice()) {
+      if (item.erro && !manual) continue;
+      try {
+        cabecalhoExtra = item.opOff ? { "x-operador-offline": item.opOff } : null;
+        let r;
+        try { r = await api("POST", "/estoque/vendas", { ...item.corpo, refCliente: item.ref }); } finally { cabecalhoExtra = null; }
+        const atual = lerFila().filter((x) => x.ref !== item.ref); gravarFila(atual);
+        enviadas += 1; S.offline = false;
+        if (fiscalLigado() && S.fiscal.emitir === "sempre" && r.venda && !r.repetida) notas.push(r.venda.id);
+      } catch (e) {
+        if (ehErroDeRede(e)) { S.offline = true; break; }
+        const atual = lerFila(); const x = atual.find((y) => y.ref === item.ref); if (x) { x.erro = e.message; gravarFila(atual); }
+      }
+    }
+    sincronizando = false; desenharFaixaOffline();
+    if (enviadas) {
+      toast(`${enviadas === 1 ? "1 venda feita sem internet foi enviada" : `${enviadas} vendas feitas sem internet foram enviadas`}: estoque e financeiro atualizados.`, "ok");
+      recarregarProdutos().then(() => { if (S.tab === "vender") { const g = $("#grade-pdv"); if (g) g.innerHTML = gradePdvHtml(); } guardarCache(); }).catch(() => {});
+      api("GET", "/estoque/caixa").then((x) => { S.caixa = x.aberto; if (S.tab === "caixa" && !modalAberto()) carregarDaAba("caixa"); }).catch(() => {});
+      for (const id of notas) { try { await api("POST", `/estoque/vendas/${id}/nfce`, {}); } catch (e) { /* fica para emitir no detalhe da venda */ } }
+    }
+  }
+  function desenharFaixaOffline() {
+    let el = $("#faixa-offline");
+    const fila = lerFila(); const comErro = fila.filter((x) => x.erro).length; const pendentes = fila.length - comErro;
+    const offline = S.offline || !navigator.onLine;
+    if (!offline && !fila.length) { if (el) el.remove(); document.body.classList.remove("com-faixa-offline"); return; }
+    if (!el) { el = document.createElement("div"); el.id = "faixa-offline"; document.body.appendChild(el); }
+    document.body.classList.add("com-faixa-offline");
+    el.className = `faixa-offline ${offline ? "sem-rede" : comErro ? "com-erro" : "enviando"}`;
+    el.innerHTML = offline
+      ? `<span><b>Sem internet.</b> Pode continuar vendendo no balcão: ${pendentes ? `${pendentes === 1 ? "1 venda guardada" : `${pendentes} vendas guardadas`} neste aparelho` : "as vendas ficam guardadas neste aparelho"} e são enviadas quando a conexão voltar.</span>${fila.length ? `<button class="btn mini claro" data-a="off-ver">Ver</button>` : ""}`
+      : `<span>${sincronizando ? "Enviando as vendas feitas sem internet…" : pendentes ? `${pendentes === 1 ? "1 venda" : `${pendentes} vendas`} feita${pendentes === 1 ? "" : "s"} sem internet para enviar.` : ""}${comErro ? ` <b>${comErro === 1 ? "1 venda não foi aceita" : `${comErro} vendas não foram aceitas`}</b> pelo servidor.` : ""}</span><button class="btn mini claro" data-a="off-ver">Ver</button>${pendentes && !sincronizando ? `<button class="btn mini acento" data-a="off-enviar">Enviar agora</button>` : ""}`;
+  }
+  function abrirFilaOffline() {
+    const fila = lerFila();
+    abrirModal("Vendas feitas sem internet", fila.length ? `<p class="sub" style="margin-bottom:10px">Ficam neste aparelho até chegarem ao servidor. Não feche a conta do navegador nem limpe os dados do site antes de enviar.</p>
+      <ul class="lista-simples">${fila.map((x) => `<li><span>${new Date(x.criadoEm).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })} · ${x.corpo.itens.length} ${x.corpo.itens.length === 1 ? "item" : "itens"}${x.operador ? ` · ${esc(x.operador)}` : ""}${x.erro ? `<small class="negativo" style="display:block">${esc(x.erro)}</small>` : `<small class="sub" style="display:block">aguardando internet</small>`}</span>
+        <span class="linha"><b class="num">${fmt(x.total)}</b>${x.erro ? `<button class="btn mini perigo" data-a="off-descartar" data-ref="${esc(x.ref)}">Descartar</button>` : ""}</span></li>`).join("")}</ul>
+      <div class="modal-rodape"><button class="btn claro" data-a="fechar-modal">Fechar</button><button class="btn acento" data-a="off-enviar">Tentar enviar agora</button></div>`
+      : `<p class="sub">Nenhuma venda esperando para ser enviada.</p>`);
+  }
+  window.addEventListener("online", () => { S.offline = false; desenharFaixaOffline(); sincronizarFila(); });
+  window.addEventListener("offline", () => { S.offline = true; desenharFaixaOffline(); });
+  setInterval(() => { if (lerFila().some((x) => !x.erro)) sincronizarFila(); }, 20000);
+
+  document.addEventListener("click", async (ev) => {
+    const el = ev.target.closest("[data-a]");
+    if (!el) return;
+    const a = el.dataset.a;
+    if (!/^(nfce-|fs-|off-)/.test(a)) return;
+    switch (a) {
+      case "nfce-emitir": acaoNota("emitir", el.dataset.id, el); break;
+      case "nfce-consultar": acaoNota("consultar", el.dataset.id, el); break;
+      case "nfce-cancelar": acaoNota("cancelar", el.dataset.id, el); break;
+      case "fs-amb": FS.ambiente = el.dataset.v; render(); break;
+      case "fs-emitir": FS.emitir = el.dataset.v; render(); break;
+      case "fs-salvar": salvarFiscalTela(); break;
+      case "fs-testar": {
+        el.disabled = true;
+        try { const r = await api("POST", "/estoque/fiscal/testar"); FS.msg = r.mensagem; FS.erro = ""; } catch (e) { FS.erro = e.message; FS.msg = ""; }
+        render(); break;
+      }
+      case "off-ver": abrirFilaOffline(); break;
+      case "off-enviar": { await sincronizarFila(true); if (modalAberto() && $(".modal-titulo") && /sem internet/.test($(".modal-titulo").textContent)) abrirFilaOffline(); break; }
+      case "off-descartar": {
+        if (!confirm("Descartar esta venda? Ela não vai para o financeiro nem baixa o estoque.")) break;
+        gravarFila(lerFila().filter((x) => x.ref !== el.dataset.ref)); abrirFilaOffline(); break;
+      }
+      default: break;
+    }
+  });
+  document.addEventListener("input", (ev) => { const t = ev.target; if (FS && t.matches("[data-fs]") && t.type !== "checkbox") FS[t.dataset.fs] = t.dataset.fs === "cnpj" ? t.value.replace(/\D/g, "") : t.value; });
+  document.addEventListener("change", (ev) => { const t = ev.target; if (FS && t.matches('[data-fs="ativo"]')) FS.ativo = t.checked; });
+
   /* ---------- teclados na tela ---------- */
   function teclar(alvo, k) {
     if (alvo === "pin") {
@@ -2792,6 +3121,7 @@
       if (t.dataset.pf === "preco" || t.dataset.pf === "custo") { const m = numOu(PF.preco) > 0 ? Math.round((numOu(PF.preco) - numOu(PF.custo)) / numOu(PF.preco) * 100) : null; const el = $("#pf-margem"); if (el) el.textContent = m === null ? "Quanto você paga por ele" : `Margem: ${m}%`; }
       return;
     }
+    if (PF && t.matches("[data-pf-fiscal]")) { PF.fiscal = { ...(PF.fiscal || {}), [t.dataset.pfFiscal]: t.value.replace(/\D/g, "") }; return; }
     if (PF && t.matches("[data-var]")) { PF.variacoes[Number(t.dataset.var)][t.dataset.campo] = t.value; return; }
     if (PF && t.matches("[data-op]") && t.tagName === "INPUT") { PF.opcoes[Number(t.dataset.op)][t.dataset.campo] = t.value; return; }
     if (PF && t.matches("[data-esc]")) { const [g, e] = t.dataset.esc.split(":").map(Number); PF.opcoes[g].escolhas[e][t.dataset.campo] = t.value; return; }
@@ -2900,8 +3230,19 @@
       const d = await api("GET", "/estoque");
       S.negocio = d.negocio; S.produtos = d.produtos; S.meios = d.meios; S.unidades = d.unidades;
       S.pdv = d.pdv || {}; S.operadores = d.operadores || []; S.caixa = d.caixa ? d.caixa.aberto : null;
+      S.fiscal = d.fiscal || null;
       if (S.caixa) S.ultimoTroco = 0;
+      guardarCache();
     } catch (e) {
+      // sem internet: abre com o cadastro guardado neste aparelho (só para vender no balcão)
+      const cache = ehErroDeRede(e) ? lerCache() : null;
+      if (cache && cache.negocio && cache.negocio.checklist && cache.negocio.checklist.configurado) {
+        Object.assign(S, { negocio: cache.negocio, produtos: cache.produtos || [], meios: cache.meios || [], unidades: cache.unidades || [], pdv: cache.pdv || {}, operadores: cache.operadores || [], caixa: cache.caixa || null, fiscal: cache.fiscal || null, offline: true });
+        $("#boas-vindas").innerHTML = "";
+        abrirApp(); irPara("vender"); desenharFaixaOffline();
+        if (S.pdv.exigirOperador && !lerOperador()) mostrarTrava();
+        return;
+      }
       const semPermissao = /^O gestor da sua equipe/.test(e.message || "");
       $("#boas-vindas").innerHTML = `<div class="carregando"><p>${esc(e.message)}</p>${semPermissao ? `<p>Peça para o gestor liberar em Equipe → Permissões, no CRM.</p>` : `<button class="btn" id="de-novo">Tentar de novo</button>`}<p><a href="/">Voltar</a></p></div>`;
       const b = $("#de-novo"); if (b) b.addEventListener("click", iniciar);
@@ -2911,6 +3252,7 @@
     $("#boas-vindas").innerHTML = "";
     abrirApp();
     if (S.pdv.exigirOperador && !lerOperador()) mostrarTrava();
+    desenharFaixaOffline(); sincronizarFila();
   }
   iniciar();
 })();

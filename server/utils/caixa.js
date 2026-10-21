@@ -115,10 +115,33 @@ async function entrarOperador(userId, d = {}) {
   const o = rows[0];
   if (!o || !(await bcrypt.compare(String(d.pin || ''), o.pin_hash))) throw erro('PIN incorreto.');
   const token = jwt.sign({ u: String(userId), op: o.id, nome: o.nome, papel: o.papel }, SEGREDO(), { expiresIn: '14h' });
-  return { token, operador: operadorObj(o) };
+  // credencial para vender sem internet neste aparelho (7 dias). O aparelho guarda ela cifrada com
+  // uma chave tirada do PIN — o PIN em si nunca é guardado. Só vale para registrar venda feita sem
+  // internet (ver operadorDoPedido).
+  const offline = jwt.sign({ u: String(userId), op: o.id, off: 1 }, SEGREDO_OFF(), { expiresIn: '7d' });
+  return { token, offline, operador: operadorObj(o) };
+}
+const SEGREDO_OFF = () => `${SEGREDO()}:offline`;
+// Venda feita sem internet chegando agora: quem vendeu foi quem entrou com o PIN no aparelho, sem
+// internet. A credencial só serve para POST /vendas com refCliente e feitaEm, e a venda precisa ter
+// acontecido enquanto ela valia.
+async function operadorOffline(req) {
+  const t = req.headers['x-operador-offline'];
+  const b = req.body || {};
+  if (!t || req.method !== 'POST' || req.path !== '/vendas' || !b.refCliente || !b.feitaEm) return null;
+  try {
+    const p = jwt.verify(String(t), SEGREDO_OFF());
+    if (p.u !== String(req.userId) || p.off !== 1) return null;
+    const feita = new Date(b.feitaEm).getTime();
+    if (!(feita >= p.iat * 1000 - 5 * 60000 && feita <= p.exp * 1000)) return null;
+    const { rows } = await query('SELECT * FROM estoque_operadores WHERE user_id = $1::uuid AND id = $2::uuid AND ativo', [req.userId, p.op]);
+    return rows[0] ? operadorObj(rows[0]) : null;
+  } catch (e) { return null; }
 }
 // Operador do cabeçalho x-operador (null se não houver ou não valer)
 async function operadorDoPedido(req) {
+  const off = await operadorOffline(req);
+  if (off) return off;
   const t = req.headers['x-operador'];
   if (!t) return null;
   try {
