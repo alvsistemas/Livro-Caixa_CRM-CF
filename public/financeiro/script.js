@@ -428,6 +428,37 @@ function dadosParaCalculo() { return { transacoes: state.txs, cartoes: state.car
   render();
   window.scrollTo(0, 0);
 }));
+/* Menu em dois grupos (igual ao CRM): as do dia a dia à mostra e o resto em "Mais".
+   O perfil do personagem traz uma aba a mais para cima (quem está saindo das dívidas vê Dívidas, etc.). */
+const NAV_PRINCIPAIS = ["dashboard", "lucro", "lancamentos", "apagar", "contas", "cartoes"];
+const NAV_DO_PERFIL = { recomeco: "dividas", investidora: "investimentos", consumista: "orcamento", organizadora: "objetivos" };
+function organizarMenu() {
+  const nav = document.getElementById("nav"), lista = document.querySelector("#nav-mais .nav-mais-lista");
+  if (!nav || !lista) return;
+  const char = typeof getCharacter === "function" ? getCharacter() : null;
+  const extra = char ? NAV_DO_PERFIL[char.profile] : null;
+  const principais = extra ? [...NAV_PRINCIPAIS, extra] : NAV_PRINCIPAIS;
+  const grupo = document.getElementById("nav-mais");
+  const ordem = ["dashboard", "lucro", "lancamentos", "apagar", "contas", "cartoes", "orcamento", "dividas", "investimentos", "empresa", "objetivos", "relatorios"];
+  ordem.forEach((tab) => {
+    const b = document.querySelector(`#nav .nav-item[data-tab="${tab}"]`); if (!b) return;
+    if (principais.includes(tab)) nav.insertBefore(b, grupo); else lista.appendChild(b);
+  });
+  grupo.hidden = !lista.children.length;
+  let aberto = false; try { aberto = localStorage.getItem("navMaisFin") === "1"; } catch (e) { /* ignora */ }
+  if (lista.querySelector(".nav-item.active")) aberto = true; // está numa aba de "Mais"
+  grupo.classList.toggle("aberto", aberto);
+  document.getElementById("nav-mais-btn").setAttribute("aria-expanded", String(aberto));
+}
+document.getElementById("nav-mais-btn").addEventListener("click", () => {
+  const g = document.getElementById("nav-mais"); const abrir = !g.classList.contains("aberto");
+  // abre com as abas descendo uma a uma; fecha subindo rapidinho
+  clearTimeout(g._t); g.classList.remove("animar", "fechando");
+  if (abrir) { g.classList.add("aberto"); void g.offsetWidth; g.classList.add("animar"); g._t = setTimeout(() => g.classList.remove("animar"), 700); }
+  else { g.classList.add("fechando"); g._t = setTimeout(() => g.classList.remove("aberto", "fechando"), 170); } document.getElementById("nav-mais-btn").setAttribute("aria-expanded", String(abrir));
+  try { localStorage.setItem("navMaisFin", abrir ? "1" : "0"); } catch (e) { /* ignora */ }
+});
+
 // No celular a barra lateral vira uma gaveta aberta pelo botão de menu (igual ao CRM)
 function fecharMenu() { document.getElementById("app-root").classList.remove("sidebar-open"); }
 document.getElementById("abrir-menu").addEventListener("click", () => document.getElementById("app-root").classList.add("sidebar-open"));
@@ -446,6 +477,7 @@ function atualizarCabecalho() {
 // registram aqui: TELAS.nome = { render, ligar }
 const TELAS = {};
 function render() {
+  organizarMenu();
   if (state.tab === "assistente") state.tab = "dashboard"; // a aba Assistente virou só a bolinha
   applyTheme();
   atualizarCabecalho();

@@ -4173,6 +4173,18 @@ const NAV_PADRAO = [
 // As do dia a dia ficam sempre à mostra; as outras ficam no grupo "Mais" (abre e fecha)
 const NAV_PRINCIPAIS = ['dashboard', 'pipeline', 'leads', 'tarefas', 'comissoes'];
 const ICON_MAIS = '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="5" cy="12" r="1.3"/><circle cx="12" cy="12" r="1.3"/><circle cx="19" cy="12" r="1.3"/></svg>';
+// abre com as abas descendo uma a uma; fecha subindo rapidinho
+function animarGrupoMais(grupo, abrir){
+  clearTimeout(grupo._t);
+  grupo.classList.remove('animar', 'fechando');
+  if(abrir){ grupo.classList.add('aberto'); void grupo.offsetWidth; grupo.classList.add('animar'); grupo._t = setTimeout(()=> grupo.classList.remove('animar'), 700); }
+  else { grupo.classList.add('fechando'); grupo._t = setTimeout(()=> grupo.classList.remove('aberto', 'fechando'), 170); }
+}
+// recursos do plano (o Essencial não tem ações automáticas, sequências nem criar equipe)
+function temRecurso(r){ const rec = assinaturaInfo && assinaturaInfo.recursos; return !rec || rec[r] !== false; }
+function avisoPlanoCompleto(titulo, texto){
+  return `<div class="plano-completo-aviso"><span class="selo-completo">Plano Completo</span><b>${esc(titulo)}</b><p>${esc(texto)} O que você já criou fica guardado e volta a funcionar quando mudar de plano.</p><a class="btn-primary" href="assinatura.html?de=crm">Ver planos</a></div>`;
+}
 function navMaisAberto(){
   if(NAV_PADRAO.some(([k])=> k===currentPage && !NAV_PRINCIPAIS.includes(k))) return true; // está numa aba de "Mais"
   try{ return localStorage.getItem('navMais') === '1'; }catch(e){ return false; }
@@ -4291,7 +4303,7 @@ function renderSidebar(){
           <button type="button" class="nav-item nav-mais-btn" data-action="nav-mais" aria-expanded="${navMaisAberto()}">${ICON_MAIS}<span>Mais</span><span class="nav-mais-seta" aria-hidden="true">▾</span></button>
           <div class="nav-mais-lista">
             ${NAV.filter(([key])=> !NAV_PRINCIPAIS.includes(key)).map(([key,label,icon])=>`
-              <button class="nav-item ${currentPage===key?'active':''}" data-action="nav" data-page="${key}">${icon}<span>${label}</span></button>
+              <button class="nav-item ${currentPage===key?'active':''}" data-action="nav" data-page="${key}">${icon}<span>${label}</span>${(key==='automacoes'||key==='fluxos') && !temRecurso('automacoes') ? '<span class="selo-completo mini">Completo</span>' : ''}</button>
             `).join('')}
           </div>
         </div>
@@ -5999,7 +6011,7 @@ function bindAppEvents(){
     btn.addEventListener('click', ()=>{
       const grupo = btn.closest('.nav-mais');
       const abrir = !grupo.classList.contains('aberto');
-      grupo.classList.toggle('aberto', abrir);
+      animarGrupoMais(grupo, abrir);
       btn.setAttribute('aria-expanded', String(abrir));
       try{ localStorage.setItem('navMais', abrir ? '1' : '0'); }catch(e){}
     });
@@ -8246,11 +8258,11 @@ function renderEquipeSetup(tituloPagina, subtitulo){
     <div class="settings-page-grid">
       <div class="settings-page-section">
         <h3>Criar uma equipe</h3>
-        <p class="settings-page-note">Você vira supervisor(a) automaticamente e ganha um código pra convidar outras pessoas. O funil de cada um continua separado — só o chat e a supervisão são compartilhados.</p>
+        ${temRecurso('equipe') ? `<p class="settings-page-note">Você vira supervisor(a) automaticamente e ganha um código pra convidar outras pessoas. O funil de cada um continua separado — só o chat e a supervisão são compartilhados.</p>
         <div class="field">
           <input type="text" id="equipe-nome-novo" placeholder="Nome da equipe" value="${esc(equipeNomeNovo)}" />
         </div>
-        <button class="btn-primary" data-action="criar-equipe">Criar equipe</button>
+        <button class="btn-primary" data-action="criar-equipe">Criar equipe</button>` : avisoPlanoCompleto('Criar e supervisionar uma equipe é do plano Completo', 'Convide pessoas, acompanhe o desempenho de cada uma e converse pelo chat interno.')}
       </div>
       <div class="settings-page-section">
         <h3>Entrar numa equipe existente</h3>
@@ -8477,8 +8489,9 @@ function renderAutomacoesPage(){
         <h1>Ações automáticas</h1>
         <p>Tarefas e movimentos que acontecem sozinhos quando um cliente entra numa coluna</p>
       </div>
-      <button class="btn-primary" data-action="open-new-automacao">+ Nova ação automática</button>
+      ${temRecurso('automacoes') ? `<button class="btn-primary" data-action="open-new-automacao">+ Nova ação automática</button>` : ''}
     </div>
+    ${temRecurso('automacoes') ? '' : avisoPlanoCompleto('Ações automáticas fazem parte do plano Completo', 'Crie tarefas e mova clientes sozinho quando eles entram numa coluna ou ficam parados.')}
     ${automacoes.length ? `
       <div class="automacoes-list">
         ${automacoes.map(a=>{
@@ -8521,8 +8534,9 @@ function renderFluxosPage(){
         <h1>Sequências</h1>
         <p>Passos que acontecem ao longo dos dias, a partir de quando o cliente entra numa coluna</p>
       </div>
-      <button class="btn-primary" data-action="open-new-fluxo">+ Nova sequência</button>
+      ${temRecurso('automacoes') ? `<button class="btn-primary" data-action="open-new-fluxo">+ Nova sequência</button>` : ''}
     </div>
+    ${temRecurso('automacoes') ? '' : avisoPlanoCompleto('Sequências fazem parte do plano Completo', 'Programe tarefas e movimentos para acontecerem ao longo dos dias depois que o cliente entra numa coluna.')}
     ${fluxos.length ? `
       <div class="automacoes-list">
         ${fluxos.map(f=>{

@@ -65,4 +65,15 @@
     .then((res)=> res.ok ? res.json() : null)
     .then((r)=>{ if(r && r.dono) document.getElementById('inicio-dono').hidden = false; })
     .catch(()=>{});
+
+  // Acessibilidade: abre numa janela por cima (a tela de trás não mexe)
+  const janela = document.getElementById('a11y-janela');
+  const abrirA11y = document.getElementById('a11y-abrir');
+  if(janela && abrirA11y){
+    abrirA11y.addEventListener('click', ()=>{ if(janela.showModal) janela.showModal(); else janela.setAttribute('open', ''); });
+    janela.addEventListener('click', (e)=>{
+      if(e.target.closest('[data-a11y-fechar]') || e.target === janela){ if(janela.close) janela.close(); else janela.removeAttribute('open'); }
+    });
+    janela.addEventListener('close', ()=> abrirA11y.focus());
+  }
 })();

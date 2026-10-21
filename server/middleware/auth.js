@@ -8,15 +8,28 @@ const { permissoesDe, regraDoCaminho, NOMES } = require('../utils/permissoes');
 // assinatura, exportar os dados (os dados são da pessoa, sempre) e desligar notificações.
 const LIVRES_SEM_ASSINATURA = ['/api/auth', '/api/assinatura', '/api/backup/exportar-tudo', '/api/push', '/api/config'];
 
-// Recursos que só o plano Completo tem
-function recursoDoCaminho(caminho) {
+// Recursos que só o plano Completo tem (ler continua aberto onde faz sentido: a pessoa vê o que já tinha)
+function recursoDoCaminho(caminho, metodo = 'GET') {
+  const grava = metodo !== 'GET';
   if (caminho.startsWith('/api/ai/')) return 'ia';
+  // PDV
+  if (/^\/api\/estoque\/(mesas|comandas|cozinha|pedidos)(\/|$)/.test(caminho)) return 'restaurante';
+  if (/^\/api\/estoque\/(fiscal|compras\/nfe)(\/|$)/.test(caminho) || /^\/api\/estoque\/vendas\/[^/]+\/nfce/.test(caminho)) return 'nfce';
+  if (/^\/api\/estoque\/operadores(\/|$)/.test(caminho) && grava) return 'equipe';
+  if (/^\/api\/estoque\/analises(\/|$)/.test(caminho)) return 'relatorios';
+  // CRM
+  if (/^\/api\/(automacoes|fluxos)(\/|$)/.test(caminho) && grava) return 'automacoes';
+  if (/^\/api\/equipe\/?$/.test(caminho) && metodo === 'POST') return 'equipe'; // criar uma equipe (entrar numa é livre)
+  if (/^\/api\/equipe\/(supervisao|permissoes|regenerar-codigo)(\/|$)/.test(caminho)) return 'equipe';
   // agenda-mes fica aberta (traz as tarefas do calendário); lá dentro os eventos do Google
   // só entram se o plano tiver a integração
   if (/^\/api\/calendar\/(connect-url|eventos)/.test(caminho)) return 'googleAgenda';
   return null;
 }
-const NOME_DO_RECURSO = { ia: 'O assistente com IA', googleAgenda: 'A integração com o Google Agenda' };
+const NOME_DO_RECURSO = {
+  ia: 'O assistente com IA', googleAgenda: 'A integração com o Google Agenda', restaurante: 'O cardápio digital, as mesas e a cozinha',
+  nfce: 'A nota fiscal (NFC-e e NF-e)', equipe: 'A equipe (operadores com PIN, membros e supervisão)', relatorios: 'Os relatórios avançados', automacoes: 'As ações automáticas e sequências',
+};
 
 const JWT_SECRET = process.env.JWT_SECRET || 'troque-este-segredo-no-env';
 
@@ -57,9 +70,9 @@ module.exports = async function auth(req, res, next) {
     if (!assinatura.liberado && !LIVRES_SEM_ASSINATURA.some((p) => caminho.startsWith(p))) {
       return res.status(402).json({ error: 'Sua assinatura não está ativa.', assinatura: true, motivo: assinatura.motivo });
     }
-    const recurso = recursoDoCaminho(caminho);
+    const recurso = recursoDoCaminho(caminho, req.method);
     if (recurso && !assinatura.recursos[recurso]) {
-      return res.status(403).json({ error: `${NOME_DO_RECURSO[recurso]} faz parte do plano Completo.`, recurso, planoNecessario: 'completo' });
+      return res.status(403).json({ error: `${NOME_DO_RECURSO[recurso]} ${/^(As|Os) /.test(NOME_DO_RECURSO[recurso]) ? 'fazem' : 'faz'} parte do plano Completo.`, recurso, planoNecessario: 'completo' });
     }
     // Permissões da equipe: o gestor pode tirar abas e funções dos membros
     const regra = regraDoCaminho(req.method, caminho);
@@ -81,3 +94,5 @@ module.exports = async function auth(req, res, next) {
 };
 
 module.exports.JWT_SECRET = JWT_SECRET;
+
+module.exports.recursoDoCaminho = recursoDoCaminho;

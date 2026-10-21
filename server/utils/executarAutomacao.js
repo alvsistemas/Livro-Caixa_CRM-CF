@@ -6,6 +6,8 @@ const { gerarComissaoAutomaticaSeGanho } = require('./comissaoAutomatica');
 // Usado tanto pelo disparo automático (quando o card entra na coluna gatilho) quanto
 // pelo botão "Executar agora" na tela de Conversas — mesma lógica nos dois casos.
 async function executarAcaoDeAutomacao(userId, auto, card) {
+  // ações automáticas são do plano Completo: no Essencial ficam guardadas, mas não rodam
+  if (!(await require('./assinatura').temRecurso(userId, 'automacoes'))) return;
   if (auto.acaoTipo === 'criar_tarefa') {
     const dias = (auto.acaoParams && auto.acaoParams.diasParaVencimento) || 3;
     const venc = new Date();

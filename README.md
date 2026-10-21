@@ -707,11 +707,25 @@ estiver ativa. Rotas do app: `/api/estoque/*` (`server/routes/estoque.js`, regra
 Servidor: `server/utils/caixa.js`, rotas `/api/estoque/caixa*`, `/api/estoque/operadores*`,
 `/api/estoque/clientes/:id/fiado*`, migração `012_pdv_caixa.sql`.
 
+### O que é de cada plano (versão 20261150)
+
+- **Essencial:** CRM (contatos, negociações, agenda, comissões), Controle financeiro completo e PDV básico
+  (balcão, caixa, estoque, clientes, fiado, fidelidade, venda sem internet, planilhas).
+- **Completo:** tudo do Essencial + assistente com IA, Google Agenda, restaurante (cardápio digital, mesas,
+  cozinha, pedidos), nota fiscal (NFC-e e compra pelo XML), equipe (operadores com PIN no PDV; criar e
+  supervisionar equipe no CRM), relatórios avançados do PDV e ações automáticas/sequências do CRM.
+- No teste grátis tudo fica liberado. No Essencial, o que é do Completo aparece com o selo "Completo" e uma
+  tela explicando, com o botão "Ver planos"; o que a pessoa já tinha criado fica guardado (as ações
+  automáticas param, o cardápio público sai do ar e o PIN deixa de ser pedido) e volta ao mudar de plano.
+
 ### Botões maiores no celular (versão 20261147)
 
 - Em tela de toque, tudo que se toca tem pelo menos 40px (setas do mês, lápis/lixeira, alça e nome das
   colunas, bolinhas de seleção, caixinhas de marcar, filtros, links-botão, ✕ das janelas, partes que abrem
   e fecham). No computador nada muda.
+- **Menu do Controle financeiro** igual ao do CRM: à mostra Painel, Lucro, Lançamentos, A pagar e receber,
+  Contas e saldo e Cartões, mais uma aba do perfil do personagem (Dívidas, Investimentos, Orçamento ou
+  Objetivos); o resto fica em **Mais**.
 - **Lançamentos no celular:** cada lançamento vira um cartão (nome e valor em cima, data, seletores e
   lápis/lixeira embaixo), sem tabela rolando para o lado.
 

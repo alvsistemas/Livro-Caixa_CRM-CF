@@ -96,6 +96,20 @@
     gasto: { descricao: "", valor: "", categoria: "", data: "", meio: "dinheiro", pago: true },
   };
   const restaurante = () => S.negocio && S.negocio.tipo === "restaurante";
+  // recursos do plano (o Essencial não tem restaurante, nota fiscal, equipe nem relatórios avançados)
+  const tem = (r) => !S.recursos || S.recursos[r] !== false;
+  const NOME_COMPLETO = {
+    restaurante: ["Cardápio digital, mesas e cozinha", "O cliente pede pelo cardápio no celular, o garçom lança nas mesas e a cozinha vê tudo numa tela."],
+    nfce: ["Nota fiscal (NFC-e)", "Emita a nota da venda e dê entrada nas compras pelo XML da nota do fornecedor."],
+    equipe: ["Operadores com PIN", "Cada funcionário entra no caixa com o próprio PIN, e o sistema guarda quem vendeu, quem abriu e quem fechou o caixa."],
+    relatorios: ["Relatórios avançados", "Veja quais produtos dão mais lucro, a margem de cada um e os dias e horários mais fortes."],
+  };
+  function completoHtml(r, compacto = false) {
+    const [t, d] = NOME_COMPLETO[r];
+    return `<div class="card plano-completo ${compacto ? "compacto" : ""}"><span class="selo-completo">Plano Completo</span><h2 class="secao" style="margin:8px 0 4px">${t}</h2><p class="sub">${d}</p>
+      <p class="sub" style="margin-top:6px">Faz parte do plano Completo. O que você já cadastrou fica guardado e volta a aparecer quando mudar de plano.</p>
+      <a class="btn acento" style="margin-top:12px" href="../assinatura.html?de=estoque">Ver planos</a></div>`;
+  }
   const nomeMeio = (id) => (S.meios.find((m) => m.id === id) || { nome: id }).nome;
   const CURTO = { dinheiro: "Dinheiro", pix: "Pix", debito: "Débito", credito: "Crédito", transferencia: "Transferência", boleto: "Boleto", fiado: "Fiado", outro: "Outro" };
   const meioCurto = (id) => CURTO[id] || nomeMeio(id);
@@ -186,6 +200,7 @@
     $("#app").hidden = false;
     $("#nome-negocio").textContent = S.negocio.nome || "PDV";
     document.querySelectorAll("[data-so-restaurante]").forEach((el) => { el.hidden = !restaurante(); });
+    if (!tem("restaurante")) document.querySelectorAll('.nav-item[data-tab="mesas"], .nav-item[data-tab="cozinha"], .nav-item[data-tab="pedidos"], .nav-item[data-tab="cardapio"]').forEach((el) => { if (!el.querySelector(".selo-completo")) el.insertAdjacentHTML("beforeend", '<span class="selo-completo mini">Completo</span>'); });
     const doHash = (location.hash || "").replace("#", "");
     const ALIAS = { inicio: "caixa", vendas: "relatorios", gastos: "relatorios" };
     if (doHash === "gastos") S.relAba = "despesas";
@@ -193,7 +208,7 @@
     const alvo = ALIAS[doHash] || doHash;
     desenharNavCelular();
     atualizarChipOperador();
-    irPara(validas.includes(alvo) ? alvo : ehGarcom() ? "mesas" : (S.pdv.exigirCaixa && !S.caixa ? "caixa" : restaurante() ? "mesas" : "vender"));
+    irPara(validas.includes(alvo) ? alvo : ehGarcom() ? "mesas" : (S.pdv.exigirCaixa && !S.caixa ? "caixa" : restaurante() && tem("restaurante") ? "mesas" : "vender"));
     atualizarSelos();
     if (restaurante()) setInterval(atualizarSelos, 60000);
   }
@@ -209,6 +224,7 @@
     carregarDaAba(tab);
   }
   async function carregarDaAba(tab) {
+    if (["pedidos", "mesas", "cozinha", "cardapio"].includes(tab) && !tem("restaurante")) return;
     try {
       if (tab === "caixa") { const [r, c] = await Promise.all([api("GET", "/estoque/resumo"), api("GET", "/estoque/caixa")]); S.resumo = r; S.caixa = c.aberto; }
       else if (tab === "relatorios") {
@@ -246,7 +262,7 @@
   }
   async function atualizarSelos() {
     atualizarSeloEstoque();
-    if (!restaurante()) return;
+    if (!restaurante() || !tem("restaurante")) return;
     try {
       const r = await api("GET", "/estoque/resumo");
       const b = $("#badge-pedidos"); b.hidden = !r.pedidosNovos; b.textContent = r.pedidosNovos;
@@ -258,6 +274,7 @@
 
   function render() {
     const fn = { caixa: telaCaixa, vender: telaVender, pedidos: telaPedidos, mesas: telaMesas, cozinha: telaCozinha, produtos: telaProdutos, compras: telaCompras, relatorios: telaRelatorios, clientes: telaClientes, cardapio: telaCardapio, config: telaConfig }[S.tab] || telaCaixa;
+    if (["pedidos", "mesas", "cozinha", "cardapio"].includes(S.tab) && !tem("restaurante")) { $("#main").innerHTML = completoHtml("restaurante"); return; }
     $("#main").innerHTML = fn();
     if (S.tab === "cardapio") desenharQr();
   }
@@ -1275,7 +1292,7 @@
     const abas = [["vendas", "Vendas"], ["produtos", "Produtos (ABC e margem)"], ["horarios", "Dias e horários"], ["caixas", "Fechamentos de caixa"], ["despesas", "Despesas"]];
     const chips = `<div class="chips rel-abas" style="margin:0">${abas.map(([k, t]) => `<button class="chip ${S.relAba === k ? "ativo" : ""}" data-a="rel-aba" data-v="${k}">${t}</button>`).join("")}</div>`;
     const excel = `<button class="btn claro mini rel-excel" data-a="baixar-xlsx" title="Planilha do mês com vendas, itens, pagamentos, caixas, despesas, estoque e clientes"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> Excel (.xlsx) de ${MESES[Number(S.mesVendas.slice(5, 7)) - 1]}</button>`;
-    return `<h1 class="so-cel titulo-cel">Relatórios</h1><div class="linha entre rel-topo">${chips}${excel}</div>` + (S.relAba === "caixas" ? telaCaixasHist() : S.relAba === "despesas" ? telaGastos() : S.relAba === "produtos" ? telaAnaliseProdutos() : S.relAba === "horarios" ? telaAnaliseHorarios() : telaVendas());
+    return `<h1 class="so-cel titulo-cel">Relatórios</h1><div class="linha entre rel-topo">${chips}${excel}</div>` + (S.relAba === "caixas" ? telaCaixasHist() : S.relAba === "despesas" ? telaGastos() : S.relAba === "produtos" ? (tem("relatorios") ? telaAnaliseProdutos() : completoHtml("relatorios")) : S.relAba === "horarios" ? (tem("relatorios") ? telaAnaliseHorarios() : completoHtml("relatorios")) : telaVendas());
   }
   function telaCaixasHist() {
     let html = topo("Fechamentos de caixa", "Cada abertura e fechamento, com o que deveria ter e o que foi contado.");
@@ -1631,11 +1648,11 @@
         <label class="campo"><span>Mensagem no fim do recibo</span><input data-pc="reciboRodape" value="${esc(PC.reciboRodape)}" maxlength="140" placeholder="Obrigado pela preferência!" /></label>
       </div>
       <div class="bloco">
-        <div class="linha entre"><p class="bloco-titulo" style="margin:0">Operadores (funcionários)</p><button class="btn mini claro" data-a="op-novo">+ Operador</button></div>
+        ${!tem("equipe") ? `<p class="bloco-titulo" style="margin:0">Operadores (funcionários)</p><p class="bloco-sub" style="margin-top:4px">Cada funcionário entrar com o próprio PIN faz parte do <b>plano Completo</b>. <a href="../assinatura.html?de=estoque">Ver planos</a></p>` : `<div class="linha entre"><p class="bloco-titulo" style="margin:0">Operadores (funcionários)</p><button class="btn mini claro" data-a="op-novo">+ Operador</button></div>
         <p class="bloco-sub" style="margin-top:4px">Cada pessoa entra no caixa com um PIN. O sistema guarda quem vendeu e quem abriu e fechou o caixa. Gerente cancela vendas e mexe em produtos e configurações; caixa vende e cuida do caixa${restaurante() ? "; garçom lança os pedidos nas mesas" : ""}.</p>
         ${ops.length ? `<ul class="lista-simples">${ops.map((o) => `<li><span><b>${esc(o.nome)}</b> <span class="selo ${o.papel === "gerente" ? "acento" : "neutro"}">${NOME_PAPEL[o.papel] || o.papel}</span>${o.ativo ? "" : ` <span class="selo neutro">inativo</span>`}</span><button class="btn mini claro" data-a="op-editar" data-id="${o.id}">Editar</button></li>`).join("")}</ul>` : `<p class="sub">Nenhum operador. Sem operadores, quem está logado na conta usa o caixa.</p>`}
         ${ops.length ? `<label class="check" style="margin-top:10px"><input type="checkbox" data-pc="exigirOperador" ${PC.exigirOperador ? "checked" : ""} /><span><b>Pedir o PIN para usar o caixa</b><small>Ninguém vende, cancela ou muda nada sem entrar com o PIN.</small></span></label>
-        <label class="campo" style="margin-top:10px;max-width:220px"><span>Desconto máximo do caixa (%)</span><input data-pc="descontoMaxCaixa" value="${esc(PC.descontoMaxCaixa)}" inputmode="decimal" /><small>Acima disso, só o gerente.</small></label>` : ""}
+        <label class="campo" style="margin-top:10px;max-width:220px"><span>Desconto máximo do caixa (%)</span><input data-pc="descontoMaxCaixa" value="${esc(PC.descontoMaxCaixa)}" inputmode="decimal" /><small>Acima disso, só o gerente.</small></label>` : ""}`}
       </div>
       ${PC.erro ? `<p class="erro-form">${esc(PC.erro)}</p>` : ""}
       <div class="modal-rodape"><button class="btn acento" data-a="salvar-pc">Salvar</button></div>
@@ -2093,7 +2110,7 @@
   }, 1000);
   let vivoRodando = false;
   async function atualizarAoVivo() {
-    if (vivoRodando || document.hidden || !S.negocio || !restaurante()) return;
+    if (vivoRodando || document.hidden || !S.negocio || !restaurante() || !tem("restaurante")) return;
     vivoRodando = true;
     try {
       if (S.tab === "cozinha") await carregarCozinha();
@@ -2272,6 +2289,7 @@
     return { de: `${S.mesVendas}-01`, ate: `${S.mesVendas}-${String(new Date(a, m, 0).getDate()).padStart(2, "0")}`, rotulo: `${MESES[m - 1]} de ${a}` };
   }
   async function carregarAnalise() {
+    if (!tem("relatorios")) return;
     const p = periodoAnalise();
     const chave = `${p.de}|${p.ate}|${S.anBase}|${S.anVar ? 1 : 0}`;
     if (S.analise && S.analise._chave === chave) return;
@@ -2533,7 +2551,7 @@
     switch (a) {
       case "an-per": S.anPer = el.dataset.v; S.analise = null; render(); carregarDaAba("relatorios"); break;
       case "an-base": S.anBase = el.dataset.v; S.analise = null; render(); carregarDaAba("relatorios"); break;
-      case "nfe-abrir": abrirNFe(); break;
+      case "nfe-abrir": if (!tem("nfce")) { abrirModal("Plano Completo", completoHtml("nfce", true)); break; } abrirNFe(); break;
       case "nf-meio": NF.meio = el.dataset.v; corpoModal(nfeHtml()); break;
       case "nf-ok": confirmarNFe(); break;
       case "exportar-prod": baixarArquivo("/estoque/exportar/produtos.xlsx", "produtos.xlsx", el); break;
@@ -2637,6 +2655,7 @@
   /* ---------- Configurações → Nota fiscal ---------- */
   let FS = null;
   function fiscalCardHtml() {
+    if (!tem("nfce")) return completoHtml("nfce", true);
     const f = S.fiscal || {};
     if (!FS) FS = { ativo: !!f.ativo, ambiente: f.ambiente || "homologacao", cnpj: f.cnpj || "", csosn: f.csosn || "102", cfop: f.cfop || "5102", ncm: f.ncm || "", pisCofins: f.pisCofins || "49", emitir: f.emitir || "perguntar", infoAdicional: f.infoAdicional || "", token: "", erro: "", msg: "", salvando: false };
     const cnpjFmt = (c) => String(c || "").replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, "$1.$2.$3/$4-$5");
@@ -2690,7 +2709,7 @@
   function guardarCache() {
     if (!S.offline) limparCofre();
     try {
-      localStorage.setItem(CHAVE_CACHE(), JSON.stringify({ em: Date.now(), negocio: S.negocio, produtos: S.produtos.map((p) => ({ ...p, foto: "" })), meios: S.meios, unidades: S.unidades, pdv: S.pdv, operadores: S.operadores, caixa: S.caixa, fiscal: S.fiscal }));
+      localStorage.setItem(CHAVE_CACHE(), JSON.stringify({ em: Date.now(), negocio: S.negocio, produtos: S.produtos.map((p) => ({ ...p, foto: "" })), meios: S.meios, unidades: S.unidades, pdv: S.pdv, operadores: S.operadores, caixa: S.caixa, fiscal: S.fiscal, recursos: S.recursos }));
     } catch (e) { /* sem espaço: abre só com internet */ }
   }
   function lerCache() { try { return JSON.parse(localStorage.getItem(CHAVE_CACHE()) || "null"); } catch (e) { return null; } }
@@ -3230,7 +3249,7 @@
     try {
       const d = await api("GET", "/estoque");
       S.negocio = d.negocio; S.produtos = d.produtos; S.meios = d.meios; S.unidades = d.unidades;
-      S.pdv = d.pdv || {}; S.operadores = d.operadores || []; S.caixa = d.caixa ? d.caixa.aberto : null;
+      S.pdv = d.pdv || {}; S.recursos = d.recursos || null; S.operadores = tem("equipe") ? (d.operadores || []) : []; S.caixa = d.caixa ? d.caixa.aberto : null;
       S.fiscal = d.fiscal || null;
       if (S.caixa) S.ultimoTroco = 0;
       guardarCache();
@@ -3238,7 +3257,8 @@
       // sem internet: abre com o cadastro guardado neste aparelho (só para vender no balcão)
       const cache = ehErroDeRede(e) ? lerCache() : null;
       if (cache && cache.negocio && cache.negocio.checklist && cache.negocio.checklist.configurado) {
-        Object.assign(S, { negocio: cache.negocio, produtos: cache.produtos || [], meios: cache.meios || [], unidades: cache.unidades || [], pdv: cache.pdv || {}, operadores: cache.operadores || [], caixa: cache.caixa || null, fiscal: cache.fiscal || null, offline: true });
+        Object.assign(S, { negocio: cache.negocio, produtos: cache.produtos || [], meios: cache.meios || [], unidades: cache.unidades || [], pdv: cache.pdv || {}, operadores: cache.operadores || [], caixa: cache.caixa || null, fiscal: cache.fiscal || null, recursos: cache.recursos || null, offline: true });
+        if (!tem("equipe")) S.operadores = [];
         $("#boas-vindas").innerHTML = "";
         abrirApp(); irPara("vender"); desenharFaixaOffline();
         if (S.pdv.exigirOperador && !lerOperador()) mostrarTrava();

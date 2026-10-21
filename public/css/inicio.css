@@ -59,9 +59,18 @@
 .instalar-app.instalar-feito{ border-color:#2F6F4E; background:rgba(47,111,78,.08); }
 .instalar-app[hidden], .instalar-fundo[hidden], .inicio-assinatura[hidden]{ display:none !important; }
 
-/* Acessibilidade (js/acessibilidade.js) */
-.inicio-a11y{ margin:14px auto 0; max-width:440px; }
-.inicio-a11y summary{ cursor:pointer; text-align:center; color:var(--ink-soft); font-size:13px; padding:6px; list-style:none; }
-.inicio-a11y summary::-webkit-details-marker{ display:none; }
-.inicio-a11y[open] summary{ color:var(--ink); font-weight:600; }
-.inicio-a11y [data-a11y-painel]{ margin-top:8px; padding:16px; border:1px solid var(--line); border-radius:14px; background:var(--paper); }
+/* Acessibilidade (js/acessibilidade.js): link embaixo abre uma janela por cima */
+.inicio-a11y{ margin:14px auto 0; text-align:center; }
+.inicio-a11y-abrir{ border:none; background:none; color:var(--ink-soft); font:inherit; font-size:13px; padding:12px 8px; cursor:pointer; }
+.inicio-a11y-abrir:hover{ color:var(--ink); text-decoration:underline; text-underline-offset:3px; }
+.a11y-janela{ width:min(440px, calc(100vw / var(--zoom, 1) - 32px)); max-height:calc(100vh / var(--zoom, 1) - 32px); padding:0; border:1px solid var(--line); border-radius:16px; background:var(--paper); color:var(--ink); box-shadow:0 24px 60px rgba(0,0,0,.28); overflow:auto; }
+.a11y-janela::backdrop{ background:rgba(0,0,0,.45); }
+.a11y-janela[open]{ animation:a11yJanela .18s ease-out; }
+@keyframes a11yJanela{ from{ opacity:0; transform:translateY(8px) scale(.98); } to{ opacity:1; transform:none; } }
+.a11y-janela-topo{ display:flex; align-items:center; justify-content:space-between; padding:16px 16px 4px 20px; }
+.a11y-janela-topo h2{ margin:0; font-family:'Fraunces', Georgia, serif; font-size:20px; }
+.a11y-janela-fechar{ width:40px; height:40px; border:none; border-radius:10px; background:none; color:var(--ink-soft); font-size:18px; cursor:pointer; }
+.a11y-janela-fechar:hover{ background:var(--hover-tint); color:var(--ink); }
+.a11y-janela [data-a11y-painel]{ padding:8px 20px 4px; }
+.a11y-janela-rodape{ display:flex; justify-content:flex-end; padding:8px 20px 18px; }
+.a11y-janela-pronto{ min-height:44px; padding:0 22px; border:none; border-radius:10px; background:var(--ink); color:var(--paper, #fff); font:inherit; font-weight:700; cursor:pointer; }

@@ -17,6 +17,7 @@ async function processarFluxos() {
       try {
         const fluxo = await Fluxo.findById(exec.fluxoId);
         if (!fluxo || !fluxo.ativo) continue;
+        if (!(await require('./assinatura').temRecurso(exec.userId, 'automacoes'))) continue; // plano Essencial: fica parada
 
         const etapa = fluxo.etapas[exec.etapaAtual];
         if (!etapa) {

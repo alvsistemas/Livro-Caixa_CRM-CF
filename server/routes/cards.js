@@ -25,6 +25,7 @@ router.use(auth); // todas as rotas de card exigem login
 // Roda depois que um card entra numa coluna que tem fluxo(s) ativo(s) — inicia a
 // execução do zero pra esse cliente (se já não tiver uma rodando pra esse mesmo fluxo).
 async function iniciarFluxosDaColuna(userId, colunaId, card) {
+  if (!(await require('../utils/assinatura').temRecurso(userId, 'automacoes'))) return; // sequências: plano Completo
   try {
     const fluxos = await Fluxo.find({ userId, colunaGatilhoId: colunaId, ativo: true });
     for (const fluxo of fluxos) {

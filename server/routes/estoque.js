@@ -27,7 +27,9 @@ class ErroPermissao extends Error {}
 router.use(async (req, res, next) => {
   try {
     req.pdv = await C.lerPdv(req.userId);
-    req.op = await C.operadorDoPedido(req);
+    const rec = (req.assinatura && req.assinatura.recursos) || {};
+    if (rec.equipe === false) req.pdv = { ...req.pdv, exigirOperador: false }; // operadores: plano Completo
+    req.op = rec.equipe === false ? null : await C.operadorDoPedido(req);
     next();
   } catch (err) { next(err); }
 });
@@ -59,6 +61,7 @@ router.get('/', rota(async (req) => ({
   meios: E.MEIOS_VENDA.map((id) => ({ id, nome: E.NOME_MEIO[id] })),
   unidades: E.UNIDADES,
   pdv: req.pdv,
+  recursos: (req.assinatura && req.assinatura.recursos) || {},
   operadores: await C.listarOperadores(req.userId),
   operador: req.op,
   caixa: await C.situacaoCaixa(req.userId),
@@ -68,7 +71,14 @@ router.get('/', rota(async (req) => ({
 router.get('/resumo', rota(async (req) => ({ ...(await E.resumo(req.userId)), fiado: await C.fiadoEmAberto(req.userId) }), 'Erro ao carregar o resumo'));
 
 router.put('/negocio', rota(async (req) => ({ negocio: await E.salvarNegocio(req.userId, req.body || {}) }), 'Erro ao salvar', 'gerente'));
-router.put('/pdv', rota(async (req) => ({ pdv: await C.salvarPdv(req.userId, req.body || {}) }), 'Erro ao salvar', 'gerente'));
+router.put('/pdv', rota(async (req) => {
+  const semEquipe = ((req.assinatura && req.assinatura.recursos) || {}).equipe === false;
+  const corpo = { ...(req.body || {}) };
+  if (semEquipe && corpo.exigirOperador) throw new C.ErroCaixa('Pedir o PIN dos operadores faz parte do plano Completo.');
+  if (semEquipe) delete corpo.exigirOperador;
+  const pdv = await C.salvarPdv(req.userId, corpo);
+  return { pdv: semEquipe ? { ...pdv, exigirOperador: false } : pdv };
+}, 'Erro ao salvar', 'gerente'));
 
 // Operadores (PIN)
 router.get('/operadores', rota(async (req) => ({ operadores: await C.listarOperadores(req.userId) }), 'Erro ao carregar os operadores'));

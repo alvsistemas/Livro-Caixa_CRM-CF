@@ -34,19 +34,20 @@ const PLANOS = {
     nome: 'Essencial',
     valorPadrao: 29.9,
     valorAnualPadrao: 300,
-    itens: ['CRM completo: leads, funil em Kanban, clientes e histórico', 'Controle financeiro', 'Celular e computador'],
-    recursos: { ia: false, googleAgenda: false },
+    itens: ['CRM: contatos, negociações, agenda e comissões', 'Controle financeiro completo', 'PDV: venda no balcão, caixa, estoque, clientes, fiado e fidelidade', 'Venda sem internet e planilhas do Excel', 'Celular e computador'],
+    recursos: { ia: false, googleAgenda: false, restaurante: false, nfce: false, equipe: false, relatorios: false, automacoes: false },
   },
   completo: {
     nome: 'Completo',
     valorPadrao: 39.9,
     valorAnualPadrao: 400,
-    itens: ['Tudo do Essencial', 'Assistente com IA (CRM e financeiro)', 'Integração com o Google Agenda'],
-    recursos: { ia: true, googleAgenda: true },
+    itens: ['Tudo do Essencial', 'Assistente com IA (CRM e financeiro)', 'Integração com o Google Agenda', 'Restaurante: cardápio digital, mesas e comandas, tela da cozinha e garçom', 'Nota fiscal (NFC-e) e compra pelo XML da NF-e', 'Equipe: operadores com PIN no PDV, membros e supervisão no CRM', 'Relatórios avançados: lucro por produto, margem e horários mais fortes', 'Ações automáticas e sequências no CRM'],
+    recursos: { ia: true, googleAgenda: true, restaurante: true, nfce: true, equipe: true, relatorios: true, automacoes: true },
   },
 };
 const CICLOS = { mensal: { asaas: 'MONTHLY', meses: 1, nome: 'mensal' }, anual: { asaas: 'YEARLY', meses: 12, nome: 'anual' } };
-const TODOS_OS_RECURSOS = { ia: true, googleAgenda: true };
+const TODOS_OS_RECURSOS = { ia: true, googleAgenda: true, restaurante: true, nfce: true, equipe: true, relatorios: true, automacoes: true };
+const NENHUM_RECURSO = Object.fromEntries(Object.keys(TODOS_OS_RECURSOS).map((k) => [k, false]));
 
 const centavos = (v) => Math.round(Number(v) * 100) / 100;
 // aplica o desconto em centavos inteiros (39,90 com 25% = 29,93, sem erro de arredondamento)
@@ -214,7 +215,7 @@ function calcularAcesso(linha, { agora = new Date(), email = '', ligada = cobran
     return { ...info, liberado: true, emTolerancia: true, recursos: PLANOS[plano].recursos };
   }
   const motivo = l.status === 'cancelada' ? 'cancelada' : pagoAteReal ? 'pagamento_atrasado' : l.asaas_assinatura_id ? 'aguardando_pagamento' : 'teste_acabou';
-  return { ...info, liberado: false, motivo, recursos: { ia: false, googleAgenda: false } };
+  return { ...info, liberado: false, motivo, recursos: NENHUM_RECURSO };
 }
 
 // Preços que ESTA pessoa veria em cada plano e ciclo (com desconto pessoal ou promoção)
@@ -263,6 +264,18 @@ const cache = new Map(); // userId -> { ate, valor }
 const CACHE_MS = 30 * 1000;
 function esquecer(userId) { cache.delete(String(userId)); }
 
+// Os recursos do plano de alguém, fora de uma requisição (agendadores, automações, cardápio público)
+async function recursosDe(userId) {
+  const { comoSistema } = require('../db/contexto');
+  const User = require('../models/User');
+  return comoSistema(async () => {
+    const u = await User.findById(String(userId)).select('email');
+    return (await situacaoDe(String(userId), u ? u.email : '')).recursos || {};
+  });
+}
+async function temRecurso(userId, recurso) {
+  try { return !!(await recursosDe(userId))[recurso]; } catch (e) { return true; } // na dúvida, não corta nada
+}
 async function situacaoDe(userId, email) {
   const chave = String(userId);
   const guardado = cache.get(chave);
@@ -623,7 +636,7 @@ async function sincronizarPendentes() {
   return n;
 }
 
-module.exports = {
+module.exports = { recursosDe, temRecurso, NENHUM_RECURSO, TODOS_OS_RECURSOS,
   PLANOS, CICLOS, listaDePlanos, valorDoPlano, valorDevido, descontoVale, cobrancaLigada, avisosProprios,
   calcularAcesso, situacaoDe, esquecer, precosPara,
   cpfCnpjValido, somarUmMes, somarMeses, hojeEmBrasilia, situacaoPelasCobrancas,

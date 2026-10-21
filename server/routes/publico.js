@@ -34,7 +34,7 @@ async function restauranteDoSlug(req, res) {
   const row = await E.negocioPorSlug(req.params.slug);
   if (!row) { res.status(404).json({ error: 'Cardápio não encontrado.' }); return null; }
   const s = await A.situacaoDe(String(row.user_id), row.email).catch(() => ({ liberado: true }));
-  if (!s.liberado) { res.status(404).json({ error: 'Este cardápio está fora do ar no momento.' }); return null; }
+  if (!s.liberado || (s.recursos && s.recursos.restaurante === false)) { res.status(404).json({ error: 'Este cardápio está fora do ar no momento.' }); return null; }
   return row;
 }
 

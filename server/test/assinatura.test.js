@@ -39,7 +39,7 @@ test('assinou no teste: ganha a tolerância pra pagar a 1ª fatura, depois bloqu
 test('pago: vale o plano escolhido; Essencial não tem IA', () => {
   const s = A.calcularAcesso({ plano: 'essencial', status: 'ativa', teste_ate: em(-30), pago_ate: em(10), asaas_assinatura_id: 'sub_1' }, { agora, ligada: true, tolerancia: 3 });
   assert.equal(s.liberado, true);
-  assert.deepEqual(s.recursos, { ia: false, googleAgenda: false });
+  assert.deepEqual(s.recursos, { ia: false, googleAgenda: false, restaurante: false, nfce: false, equipe: false, relatorios: false, automacoes: false });
 });
 
 test('vencido: libera nos dias de tolerância e bloqueia depois', () => {

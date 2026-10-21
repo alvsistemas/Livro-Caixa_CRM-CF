@@ -970,3 +970,25 @@ tr.membro-supervisor-destaque td:last-child{ border-right:1px solid var(--gold);
   .checkbox-item input { width: 18px; height: 18px; }
   .modal-head button { min-width: 40px; min-height: 40px; }
 }
+
+/* "Mais": as abas aparecem descendo uma a uma (e sobem ao fechar) */
+.nav-mais.animar .nav-mais-lista > * { animation: maisDesce .28s cubic-bezier(.2, .75, .3, 1) both; }
+.nav-mais.animar .nav-mais-lista > :nth-child(2) { animation-delay: .04s; }
+.nav-mais.animar .nav-mais-lista > :nth-child(3) { animation-delay: .08s; }
+.nav-mais.animar .nav-mais-lista > :nth-child(4) { animation-delay: .12s; }
+.nav-mais.animar .nav-mais-lista > :nth-child(5) { animation-delay: .16s; }
+.nav-mais.animar .nav-mais-lista > :nth-child(6) { animation-delay: .20s; }
+.nav-mais.animar .nav-mais-lista > :nth-child(n+7) { animation-delay: .24s; }
+.nav-mais.animar .nav-mais-lista { animation: maisLinha .3s ease-out both; }
+.nav-mais.fechando .nav-mais-lista > * { animation: maisSobe .15s ease-in both; }
+@keyframes maisDesce { from { opacity: 0; transform: translateY(-12px); } to { opacity: 1; transform: none; } }
+@keyframes maisSobe { from { opacity: 1; transform: none; } to { opacity: 0; transform: translateY(-8px); } }
+@keyframes maisLinha { from { border-left-color: transparent; } }
+
+/* recurso do plano Completo */
+.selo-completo{ display:inline-block; font-size:10.5px; font-weight:700; letter-spacing:.04em; text-transform:uppercase; color:var(--ink); background:var(--badge-neutral-bg); border:1px solid var(--badge-border); border-radius:999px; padding:3px 9px; }
+.selo-completo.mini{ margin-left:auto; font-size:9px; padding:2px 6px; }
+.plano-completo-aviso{ display:flex; flex-direction:column; align-items:flex-start; gap:8px; padding:18px; margin-bottom:18px; border:1px dashed var(--line); border-radius:12px; background:var(--paper); }
+.plano-completo-aviso b{ font-size:15px; }
+.plano-completo-aviso p{ margin:0; font-size:13px; color:var(--ink-soft); line-height:1.5; }
+.plano-completo-aviso .btn-primary{ text-decoration:none; display:inline-flex; align-items:center; }

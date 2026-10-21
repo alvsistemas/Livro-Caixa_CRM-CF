@@ -11,13 +11,13 @@
 <link rel="apple-touch-icon" href="../icons/icon-192.png" />
 <meta name="apple-mobile-web-app-capable" content="yes" />
 <meta name="apple-mobile-web-app-title" content="Livro-Caixa" />
-<link rel="stylesheet" href="../css/assistente-ia.css?v=20261147" />
-<link rel="stylesheet" href="styles.css?v=20261147" />
-<link rel="stylesheet" href="../css/transicao-apps.css?v=20261147" />
-<link rel="stylesheet" href="../css/acessibilidade.css?v=20261147" />
-<script src="../js/acessibilidade.js?v=20261147"></script>
-<script src="../js/confirmacao.js?v=20261147"></script>
-<script src="../js/transicao-apps.js?v=20261147"></script>
+<link rel="stylesheet" href="../css/assistente-ia.css?v=20261150" />
+<link rel="stylesheet" href="styles.css?v=20261150" />
+<link rel="stylesheet" href="../css/transicao-apps.css?v=20261150" />
+<link rel="stylesheet" href="../css/acessibilidade.css?v=20261150" />
+<script src="../js/acessibilidade.js?v=20261150"></script>
+<script src="../js/confirmacao.js?v=20261150"></script>
+<script src="../js/transicao-apps.js?v=20261150"></script>
 </head>
 <body>
 
@@ -39,12 +39,17 @@
       <button class="nav-item" data-tab="apagar"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><path d="M12 14v3l2 1"/></svg><span class="nav-label">A pagar e receber</span><span class="nav-badge" id="badge-apagar" hidden></span></button>
       <button class="nav-item" data-tab="contas"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 21h18"/><path d="M5 21V10"/><path d="M19 21V10"/><path d="M9.5 21V10"/><path d="M14.5 21V10"/><path d="m2 10 10-7 10 7"/></svg><span class="nav-label">Contas e saldo</span></button>
       <button class="nav-item" data-tab="cartoes"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/><line x1="6" y1="15" x2="10" y2="15"/></svg><span class="nav-label">Cartões</span></button>
-      <button class="nav-item" data-tab="orcamento"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21.2 15.9A10 10 0 1 1 8 2.8"/><path d="M22 12A10 10 0 0 0 12 2v10z"/></svg><span class="nav-label">Orçamento</span></button>
-      <button class="nav-item" data-tab="dividas"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7"/><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7"/></svg><span class="nav-label">Dívidas</span></button>
-      <button class="nav-item" data-tab="investimentos"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></svg><span class="nav-label">Investimentos</span></button>
-      <button class="nav-item" data-tab="empresa"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg><span class="nav-label">Empresa</span></button>
-      <button class="nav-item" data-tab="objetivos"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg><span class="nav-label">Objetivos</span></button>
-      <button class="nav-item" data-tab="relatorios"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg><span class="nav-label">Relatórios</span></button>
+      <div class="nav-mais" id="nav-mais">
+        <button type="button" class="nav-item nav-mais-btn" id="nav-mais-btn" aria-expanded="false"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="5" cy="12" r="1.3"/><circle cx="12" cy="12" r="1.3"/><circle cx="19" cy="12" r="1.3"/></svg>Mais<span class="nav-mais-seta" aria-hidden="true">▾</span></button>
+        <div class="nav-mais-lista">
+          <button class="nav-item" data-tab="orcamento"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21.2 15.9A10 10 0 1 1 8 2.8"/><path d="M22 12A10 10 0 0 0 12 2v10z"/></svg><span class="nav-label">Orçamento</span></button>
+          <button class="nav-item" data-tab="dividas"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7"/><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7"/></svg><span class="nav-label">Dívidas</span></button>
+          <button class="nav-item" data-tab="investimentos"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></svg><span class="nav-label">Investimentos</span></button>
+          <button class="nav-item" data-tab="empresa"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg><span class="nav-label">Empresa</span></button>
+          <button class="nav-item" data-tab="objetivos"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg><span class="nav-label">Objetivos</span></button>
+          <button class="nav-item" data-tab="relatorios"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg><span class="nav-label">Relatórios</span></button>
+        </div>
+      </div>
     </nav>
     <div class="sidebar-footer" id="nav-rodape">
       <a class="nav-item" href="/" title="Abrir o CRM ou voltar para a escolha de aplicativo"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg><span class="nav-label">Trocar de aplicativo</span></a>
@@ -65,19 +70,19 @@
 <div id="modal-root"></div>
 <div id="assistente-root"></div>
 
-<script src="../js/assistente-ia.js?v=20261147"></script>
-<script src="calculos.js?v=20261147"></script>
-<script src="script.js?v=20261147"></script>
-<script src="contas.js?v=20261147"></script>
-<script src="cartoes.js?v=20261147"></script>
-<script src="orcamento.js?v=20261147"></script>
-<script src="dividas.js?v=20261147"></script>
-<script src="comprovantes.js?v=20261147"></script>
-<script src="importar.js?v=20261147"></script>
-<script src="relatorios.js?v=20261147"></script>
-<script src="perfil.js?v=20261147"></script>
+<script src="../js/assistente-ia.js?v=20261150"></script>
+<script src="calculos.js?v=20261150"></script>
+<script src="script.js?v=20261150"></script>
+<script src="contas.js?v=20261150"></script>
+<script src="cartoes.js?v=20261150"></script>
+<script src="orcamento.js?v=20261150"></script>
+<script src="dividas.js?v=20261150"></script>
+<script src="comprovantes.js?v=20261150"></script>
+<script src="importar.js?v=20261150"></script>
+<script src="relatorios.js?v=20261150"></script>
+<script src="perfil.js?v=20261150"></script>
 
 
-<script src="../js/instalar.js?v=20261147"></script>
+<script src="../js/instalar.js?v=20261150"></script>
 </body>
 </html>

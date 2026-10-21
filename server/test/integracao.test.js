@@ -958,6 +958,20 @@ describe('API com PostgreSQL (integração)', { skip: pular }, () => {
       const ia = await api('POST', '/api/ai/assistente', { mensagens: [{ role: 'user', content: 'oi' }] }, t);
       assert.equal(ia.status, 403);
       assert.equal(ia.dados.recurso, 'ia');
+      // o resto do que é só do Completo
+      for (const [m, c, rec] of [['GET', '/api/estoque/mesas', 'restaurante'], ['GET', '/api/estoque/cozinha', 'restaurante'], ['GET', '/api/estoque/analises?de=2026-01-01&ate=2026-01-31', 'relatorios'],
+        ['GET', '/api/estoque/fiscal', 'nfce'], ['POST', '/api/estoque/operadores', 'equipe'], ['POST', '/api/automacoes', 'automacoes'], ['POST', '/api/fluxos', 'automacoes'], ['POST', '/api/equipe', 'equipe']]) {
+        const r = await api(m, c, m === 'GET' ? undefined : {}, t);
+        assert.equal(r.status, 403, `${m} ${c}`);
+        assert.equal(r.dados.recurso, rec, c);
+        assert.match(r.dados.error, /plano Completo/);
+      }
+      assert.equal((await api('GET', '/api/fluxos', undefined, t)).status, 200, 'ver o que já tinha continua aberto');
+      assert.equal((await api('GET', '/api/estoque/operadores', undefined, t)).status, 200);
+      const pdvEss = (await api('GET', '/api/estoque', undefined, t)).dados;
+      assert.equal(pdvEss.recursos.restaurante, false);
+      assert.equal(pdvEss.pdv.exigirOperador, false);
+      assert.equal((await api('PUT', '/api/estoque/pdv', { exigirOperador: true }, t)).status, 400, 'PIN é do Completo');
       // aviso da assinatura antiga apagada chega depois: é ignorado
       assert.equal((await aviso({ id: 'evt_old', event: 'SUBSCRIPTION_DELETED', subscription: { id: sub.id, deleted: true } }, 'token-do-webhook-teste')).status, 200);
       await new Promise((r2) => setTimeout(r2, 200));

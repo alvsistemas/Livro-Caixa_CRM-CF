@@ -663,3 +663,22 @@ body.com-faixa-offline .main { padding-top: 64px; }
   .check { min-height: 40px; align-items: center; }
   .check input { width: 20px; height: 20px; margin: 0; }
 }
+
+/* "Mais" do celular: a folha sobe e os itens aparecem descendo, um a um */
+@media (max-width: 760px) {
+  .mais-fundo { animation: maisFundo .2s ease-out both; }
+  .mais-folha { animation: maisFolha .28s cubic-bezier(.2, .8, .3, 1) both; }
+  .mais-grade > * { animation: maisDesce .28s cubic-bezier(.2, .75, .3, 1) both; animation-delay: calc(.06s + var(--i, 0) * .035s); }
+  .mais-grade > :nth-child(1) { --i: 0; } .mais-grade > :nth-child(2) { --i: 1; } .mais-grade > :nth-child(3) { --i: 2; }
+  .mais-grade > :nth-child(4) { --i: 3; } .mais-grade > :nth-child(5) { --i: 4; } .mais-grade > :nth-child(6) { --i: 5; }
+  .mais-grade > :nth-child(7) { --i: 6; } .mais-grade > :nth-child(8) { --i: 7; } .mais-grade > :nth-child(n+9) { --i: 8; }
+}
+@keyframes maisFundo { from { background: transparent; } }
+@keyframes maisFolha { from { transform: translateY(100%); } to { transform: none; } }
+@keyframes maisDesce { from { opacity: 0; transform: translateY(-12px); } to { opacity: 1; transform: none; } }
+
+/* recurso do plano Completo */
+.selo-completo { display: inline-block; font-size: 10.5px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--acento); background: var(--acento-soft); border-radius: 999px; padding: 3px 9px; }
+.selo-completo.mini { margin-left: auto; font-size: 9.5px; padding: 2px 7px; }
+.plano-completo { border-style: dashed; }
+.plano-completo .btn { text-decoration: none; display: inline-flex; align-items: center; }
