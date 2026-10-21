@@ -68,7 +68,7 @@ router.post('/:id/promover', async (req, res) => {
       temperatura: temperatura || 'morno',
       obs: obs || '',
       mes: mes || '', // mês de venda só é preenchido quando a venda acontece
-      mesInicioContato: new Date().toISOString().slice(0, 7),
+      mesInicioContato: new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo' }).format(new Date()), // hoje (data de Brasília)
     });
     await PossivelLead.findByIdAndDelete(possivel._id);
     res.status(201).json(card.toJSON());

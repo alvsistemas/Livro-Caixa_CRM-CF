@@ -339,8 +339,6 @@ let regraEditForm = null; // editor de uma regra específica, dentro do modal de
 let nomeNovoVal = '';
 let nomeMsg = null;
 let verificandoAtualizacao = false;
-let preenchendoMesInicioContato = false;
-let mesInicioContatoMsg = null;
 let backupGerando = false;
 let backupImportando = false;
 let backupMsg = null;
@@ -2517,23 +2515,6 @@ async function baixarBackupCompleto(){
   backupGerando = false;
   renderApp();
   if(backupModalAberto) renderBackupModal();
-}
-async function preencherMesInicioContatoAntigos(){
-  preenchendoMesInicioContato = true;
-  mesInicioContatoMsg = null;
-  renderApp();
-  try{
-    const data = await apiRequest('POST', '/cards/preencher-mes-inicio-contato');
-    // atualiza localmente também, sem precisar recarregar tudo do servidor de novo
-    board.cards.forEach(c=>{ if(!c.mesInicioContato && c.mes) c.mesInicioContato = c.mes; });
-    mesInicioContatoMsg = { tipo:'ok', texto: data.atualizados
-      ? `${data.atualizados} contato(s) atualizado(s).`
-      : 'Nenhum contato precisava de atualização — todos já tinham esse campo preenchido.' };
-  }catch(e){
-    mesInicioContatoMsg = { tipo:'erro', texto:'Não foi possível preencher os contatos antigos agora.' };
-  }
-  preenchendoMesInicioContato = false;
-  renderApp();
 }
 async function verificarAtualizacaoApp(){
   verificandoAtualizacao = true;
@@ -5934,12 +5915,6 @@ function renderConfigManutencao(){
     </div>
     ${renderBlocoBackupAuto()}
     <div class="settings-page-section">
-      <h3>Início de contato nos contatos antigos</h3>
-      <p class="settings-page-note">Preenche automaticamente o "mês de início de contato" dos seus contatos que ainda não têm esse campo, usando o mês de venda que já estava cadastrado como ponto de partida. Não altera leads que você já preencheu manualmente, e pode ser usado quantas vezes quiser.</p>
-      ${mesInicioContatoMsg ? `<p class="settings-page-msg ${mesInicioContatoMsg.tipo}">${esc(mesInicioContatoMsg.texto)}</p>` : ''}
-      <button class="btn-outline" data-action="preencher-mes-inicio-contato" ${preenchendoMesInicioContato?'disabled':''}>${preenchendoMesInicioContato?'Preenchendo…':'Preencher automaticamente'}</button>
-    </div>
-    <div class="settings-page-section">
       <h3>Atualizações</h3>
       <p class="settings-page-note">Se o painel parecer desatualizado (algo que já mudou e não aparece), use esse botão pra forçar buscar a versão mais nova — principalmente útil no app instalado no celular.</p>
       ${atualizacaoMsg ? `<p class="settings-page-msg ${atualizacaoMsg.tipo}">${esc(atualizacaoMsg.texto)}</p>` : ''}
@@ -6037,8 +6012,6 @@ function bindAppEvents(){
   if(backupAutoAgoraBtn) backupAutoAgoraBtn.addEventListener('click', enviarBackupAutoAgora);
   const verificarAtualizacaoBtn = app.querySelector('[data-action="verificar-atualizacao"]');
   if(verificarAtualizacaoBtn) verificarAtualizacaoBtn.addEventListener('click', verificarAtualizacaoApp);
-  const preencherMesInicioBtn = app.querySelector('[data-action="preencher-mes-inicio-contato"]');
-  if(preencherMesInicioBtn) preencherMesInicioBtn.addEventListener('click', preencherMesInicioContatoAntigos);
   app.querySelectorAll('[data-action="ver-dashboard-membro"]').forEach(btn=>{
     btn.addEventListener('click', ()=> abrirDashboardDeMembro(btn.dataset.userId, btn.dataset.nome));
   });
@@ -7078,9 +7051,15 @@ function renderEscolhaTipoPessoaModal(){
   });
 }
 function abrirNovoCardComTipo(columnId, tipoPessoa){
-  // se a pessoa estiver vendo um mês específico no Pipeline, começa nesse mês (dia 1);
-  // se estiver em "Geral", usa a data de hoje mesmo, com o dia certinho
-  const dataInicial = filterMonth ? `${filterMonth}-01` : new Date().toISOString().slice(0,10);
+  // início de contato = hoje (data de Brasília). Vendo outro mês nas Negociações, usa o mesmo dia
+  // naquele mês (senão o cliente novo sumiria da tela que a pessoa está olhando)
+  const hoje = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo' }).format(new Date());
+  let dataInicial = hoje;
+  if(filterMonth && filterMonth !== hoje.slice(0,7)){
+    const [a, m] = filterMonth.split('-').map(Number);
+    const ultimoDia = new Date(a, m, 0).getDate();
+    dataInicial = `${filterMonth}-${String(Math.min(Number(hoje.slice(8,10)), ultimoDia)).padStart(2,'0')}`;
+  }
   modalForm = {
     __isNew: true, id:null, columnId,
     cliente:'', valor:0, temperatura:'morno', telefone:'', obs:'',

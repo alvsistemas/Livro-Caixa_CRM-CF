@@ -70,26 +70,11 @@ function filtrarCampos(body) {
   return dados;
 }
 
-// POST /api/cards/preencher-mes-inicio-contato -> pra leads antigos (de antes desse
-// campo existir): copia o "mês de venda" pro "mês de início de contato" onde esse
-// último ainda estiver vazio. Nunca sobrescreve um valor que a pessoa já tenha
-// preenchido, então pode ser chamada mais de uma vez sem problema.
-router.post('/preencher-mes-inicio-contato', async (req, res) => {
-  try {
-    const resultado = await Card.updateMany(
-      { userId: req.userId, $or: [{ mesInicioContato: { $exists: false } }, { mesInicioContato: '' }], mes: { $nin: [null, ''] } },
-      [{ $set: { mesInicioContato: '$mes' } }]
-    );
-    res.json({ atualizados: resultado.modifiedCount });
-  } catch (err) {
-    res.status(500).json({ error: 'Erro ao preencher o início de contato dos leads antigos.' });
-  }
-});
-
 // POST /api/cards -> cria um novo cliente/card para o usuário logado
 router.post('/', async (req, res) => {
   try {
     const dados = filtrarCampos(req.body);
+    if (!dados.mesInicioContato) dados.mesInicioContato = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo' }).format(new Date()); // início de contato: hoje
     if (!dados.cliente || !dados.cliente.trim()) {
       return res.status(400).json({ error: 'Nome do cliente é obrigatório.' });
     }

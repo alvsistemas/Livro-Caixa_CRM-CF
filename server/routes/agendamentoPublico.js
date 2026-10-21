@@ -125,7 +125,7 @@ router.post('/:userId/reservar', async (req, res) => {
       if (!card) {
         const colunaDestino = user.agendamentoPublico.colunaDestinoId;
         if (colunaDestino) {
-          card = await Card.create({ userId: user._id, cliente: nome.trim(), telefone: telefone.trim(), columnId: colunaDestino });
+          card = await Card.create({ userId: user._id, cliente: nome.trim(), telefone: telefone.trim(), columnId: colunaDestino, mesInicioContato: new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo' }).format(new Date()) });
         }
       }
     }
