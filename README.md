@@ -707,6 +707,24 @@ estiver ativa. Rotas do app: `/api/estoque/*` (`server/routes/estoque.js`, regra
 Servidor: `server/utils/caixa.js`, rotas `/api/estoque/caixa*`, `/api/estoque/operadores*`,
 `/api/estoque/clientes/:id/fiado*`, migração `012_pdv_caixa.sql`.
 
+### Botões maiores no celular (versão 20261147)
+
+- Em tela de toque, tudo que se toca tem pelo menos 40px (setas do mês, lápis/lixeira, alça e nome das
+  colunas, bolinhas de seleção, caixinhas de marcar, filtros, links-botão, ✕ das janelas, partes que abrem
+  e fecham). No computador nada muda.
+- **Lançamentos no celular:** cada lançamento vira um cartão (nome e valor em cima, data, seletores e
+  lápis/lixeira embaixo), sem tabela rolando para o lado.
+
+### Leitor de tela e aviso antes de apagar (versão 20261146)
+
+- **Leitor de tela** (sempre ligado, não muda nada na tela): botões só com ícone ganham nome, os
+  campos ganham rótulo, bolinhas de marcar e chaves funcionam no teclado e os avisos são lidos.
+- **Alto contraste e menos animação** ligam sozinhos quando o celular já pede isso (até a pessoa escolher).
+- **Antes de apagar:** a mesma janela nos três aplicativos. Nas coisas importantes (cliente/contato,
+  lançamento, venda, produto, conta, cartão, comissão…) ela aparece sempre. Nas menores (tarefa,
+  anexo, bloco da rotina, ação automática, categoria, orçamento…) tem "Não perguntar de novo";
+  dá para voltar a perguntar no painel de Acessibilidade.
+
 ### Nomes mais simples no CRM e acessibilidade (versão 20261145)
 
 - **CRM com nomes do dia a dia:** Dashboard → **Visão geral**, Pipeline → **Negociações**, Leads → **Contatos**,

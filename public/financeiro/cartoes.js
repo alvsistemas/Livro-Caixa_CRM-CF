@@ -141,9 +141,9 @@ TELAS.cartoes = {
     if (atrib) atrib.addEventListener("click", openAtribuirCartao);
     const cartaoDe = (e) => state.cards.find((c) => c.id === e.target.closest(".item-card").dataset.id);
     document.querySelectorAll(".card-edit").forEach((b) => b.addEventListener("click", (e) => openCardModal(cartaoDe(e))));
-    document.querySelectorAll(".card-del").forEach((b) => b.addEventListener("click", (e) => {
+    document.querySelectorAll(".card-del").forEach((b) => b.addEventListener("click", async (e) => {
       const c = cartaoDe(e);
-      if (!confirm(`Excluir o cartão "${c.name}"? As compras continuam nos lançamentos.`)) return;
+      if (!(await confirmarAcao({ mensagem: `Excluir o cartão "${c.name}"? As compras continuam nos lançamentos.`, sempre: true }))) return;
       state.cards = state.cards.filter((x) => x.id !== c.id);
       state.txs.forEach((tx) => { if (tx.cardId === c.id) delete tx.cardId; });
       saveCards(); saveTxs(); render();

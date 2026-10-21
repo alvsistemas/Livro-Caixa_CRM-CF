@@ -491,21 +491,21 @@ const STATUS_COLORS = {
 function statusSelect(row) {
   const st = row.status || row.tx.status;
   const opts = STATUS_OPTIONS.map((o) => `<option value="${o}" ${o === st ? "selected" : ""}>${o}</option>`).join("");
-  return `<select class="status-select status-${(st || "Pago").toLowerCase()}" data-id="${row.tx.id}" data-mes="${row.mes || ""}" title="${row.tx.recurrence && row.tx.recurrence !== "unico" ? "Muda só neste mês" : ""}">${opts}</select>`;
+  return `<select class="status-select status-${(st || "Pago").toLowerCase()}" aria-label="Status de ${escapeHtml(row.tx.desc || "lançamento")}" data-id="${row.tx.id}" data-mes="${row.mes || ""}" title="${row.tx.recurrence && row.tx.recurrence !== "unico" ? "Muda só neste mês" : ""}">${opts}</select>`;
 }
 function categorySelect(tx) {
   const cats = categoriasDe(tx.type);
   if (tx.category && !cats.includes(tx.category)) cats.unshift(tx.category);
   const opts = cats.map((c) => `<option value="${escapeHtml(c)}" ${c === tx.category ? "selected" : ""}>${escapeHtml(c)}</option>`).join("");
-  return `<select class="status-select cat-select neutro" data-id="${tx.id}">${opts}</select>`;
+  return `<select class="status-select cat-select neutro" aria-label="Categoria de ${escapeHtml(tx.desc || "lançamento")}" data-id="${tx.id}">${opts}</select>`;
 }
 function scopeSelectInline(tx) {
   const opts = ["Pessoal", "Empresa"].map((s) => `<option value="${s}" ${s === tx.scope ? "selected" : ""}>${s}</option>`).join("");
-  return `<select class="status-select scope-select ${tx.scope === "Empresa" ? "escopo-empresa" : "escopo-pessoal"}" data-id="${tx.id}">${opts}</select>`;
+  return `<select class="status-select scope-select ${tx.scope === "Empresa" ? "escopo-empresa" : "escopo-pessoal"}" aria-label="Pessoal ou empresa: ${escapeHtml(tx.desc || "lançamento")}" data-id="${tx.id}">${opts}</select>`;
 }
 function accountSelectInline(tx) {
   const opts = CONTAS.map((c) => `<option value="${c}" ${c === tx.account ? "selected" : ""}>${c}</option>`).join("");
-  return `<select class="status-select account-select neutro" data-id="${tx.id}">${opts}</select>`;
+  return `<select class="status-select account-select neutro" aria-label="Forma de pagamento de ${escapeHtml(tx.desc || "lançamento")}" data-id="${tx.id}">${opts}</select>`;
 }
 // "Nubank" / "Conta Itaú" embaixo da forma de pagamento
 function origemDoLancamento(tx) {
@@ -528,7 +528,7 @@ function valueInputInline(tx, displayValue) {
   const v = displayValue != null ? displayValue : tx.value;
   const isReceita = tx.type === "Receita";
   return `<span class="value-inline-wrap ${isReceita ? "val-receita" : "val-despesa"}">${isReceita ? "+" : "−"}
-    <input type="number" step="0.01" class="value-inline" data-id="${tx.id}" value="${(v || 0).toFixed(2)}" /></span>`;
+    <input type="number" step="0.01" class="value-inline" aria-label="Valor de ${escapeHtml(tx.desc || "lançamento")} (${isReceita ? "receita" : "despesa"})" data-id="${tx.id}" value="${(v || 0).toFixed(2)}" /></span>`;
 }
 function scopePills() {
   return `<div class="row-gap">
@@ -573,7 +573,7 @@ function occTable(rows) {
       <td>${statusSelect(r)}</td>
       <td style="white-space:nowrap"><button class="icon-btn tx-edit" title="Editar">✎</button><button class="icon-btn tx-del" title="Excluir">🗑</button></td>
     </tr>`).join("");
-  return `<div class="table-wrap"><table>
+  return `<div class="table-wrap"><table class="tabela-lancamentos">
     <thead><tr><th>Data</th><th>Descrição</th><th>Categoria</th><th>Escopo</th><th>Forma</th><th>Valor</th><th>Status</th><th></th></tr></thead>
     <tbody>${trs}</tbody></table></div>`;
 }
@@ -1175,12 +1175,12 @@ function attachMainEvents() {
   const newInvBtn = document.getElementById("new-inv-btn");
   if (newInvBtn) newInvBtn.addEventListener("click", () => openInvModal(null));
   document.querySelectorAll(".inv-edit").forEach((b) => b.addEventListener("click", (e) => { const id = e.target.closest("tr").dataset.id; openInvModal(state.invs.find((i) => i.id === id)); }));
-  document.querySelectorAll(".inv-del").forEach((b) => b.addEventListener("click", (e) => { const id = e.target.closest("tr").dataset.id; if (confirm("Excluir este investimento?")) { state.invs = state.invs.filter((i) => i.id !== id); saveInvs(); render(); } }));
+  document.querySelectorAll(".inv-del").forEach((b) => b.addEventListener("click", async (e) => { const id = e.target.closest("tr").dataset.id; if (await confirmarAcao({ mensagem: "Excluir este investimento?", sempre: true })) { state.invs = state.invs.filter((i) => i.id !== id); saveInvs(); render(); } }));
 
   const newGoalBtn = document.getElementById("new-goal-btn");
   if (newGoalBtn) newGoalBtn.addEventListener("click", () => openGoalModal(null));
   document.querySelectorAll(".goal-edit").forEach((b) => b.addEventListener("click", (e) => { const id = e.target.closest(".item-card").dataset.id; openGoalModal(state.goals.find((g) => g.id === id)); }));
-  document.querySelectorAll(".goal-del").forEach((b) => b.addEventListener("click", (e) => { const id = e.target.closest(".item-card").dataset.id; if (confirm("Excluir este objetivo?")) { state.goals = state.goals.filter((g) => g.id !== id); saveGoals(); render(); } }));
+  document.querySelectorAll(".goal-del").forEach((b) => b.addEventListener("click", async (e) => { const id = e.target.closest(".item-card").dataset.id; if (await confirmarAcao({ mensagem: "Excluir este objetivo?", chave: "objetivo" })) { state.goals = state.goals.filter((g) => g.id !== id); saveGoals(); render(); } }));
 
   /* Lucro / integração com o CRM */
   document.querySelectorAll("[data-goto]").forEach((a) => a.addEventListener("click", (e) => { e.preventDefault(); irParaAba(a.dataset.goto); }));
@@ -1299,7 +1299,7 @@ async function excluirLancamento(tx, mes) {
   } else {
     const aviso = tx.estoque && ["venda", "compra"].includes(tx.estoque.origem)
       ? `\n\nEste lançamento veio do PDV. Excluir aqui não mexe no estoque: para desfazer a ${tx.estoque.origem} por inteiro, cancele lá.` : "";
-    if (!confirm(`Excluir "${tx.desc}"?${aviso}`)) return;
+    if (!(await confirmarAcao({ mensagem: `Excluir "${tx.desc}"?${aviso}`, sempre: true }))) return;
     apagarLancamento(tx);
   }
   saveTxs(); render();
@@ -1902,8 +1902,8 @@ async function iniciar() {
   if (state.profile && state.profile.character) startApp();
   else { document.getElementById("app-root").style.display = "none"; openQuiz(false); }
 }
-document.getElementById("logout-btn").addEventListener("click", () => {
-  if (salvamento.pendentes.size || salvamento.salvando) { if (!confirm("Ainda há alterações sendo salvas. Sair mesmo assim?")) return; }
+document.getElementById("logout-btn").addEventListener("click", async () => {
+  if (salvamento.pendentes.size || salvamento.salvando) { if (!(await confirmarAcao({ mensagem: "Ainda há alterações sendo salvas. Sair mesmo assim?", botao: "Sair", sempre: true }))) return; }
   sair();
 });
 iniciar();

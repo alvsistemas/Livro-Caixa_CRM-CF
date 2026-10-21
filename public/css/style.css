@@ -253,6 +253,8 @@ input[type=date]::-webkit-calendar-picker-indicator:hover, input[type=time]::-we
 
 .confirm-box{ width:100%; max-width:360px; background:var(--paper); border-radius:14px; padding:22px; box-shadow:0 24px 60px rgba(0,0,0,.28); }
 .confirm-box p{ margin:0; font-size:13px; color:var(--ink); }
+.confirm-pular{ display:flex; align-items:center; gap:9px; margin-top:12px; min-height:40px; font-size:13px; color:var(--ink); cursor:pointer; }
+.confirm-pular input{ width:18px; height:18px; margin:0; accent-color:var(--accent); }
 .confirm-actions{ display:flex; justify-content:flex-end; gap:8px; margin-top:18px; }
 .btn-danger{ padding:10px 16px; min-height:40px; border-radius:8px; border:none; background:var(--danger); color:#fff; font-size:12px; font-weight:600; cursor:pointer; }
 
@@ -946,3 +948,25 @@ tr.membro-supervisor-destaque td:last-child{ border-right:1px solid var(--gold);
 .btn-arquivo:focus-within{ outline:2px solid var(--accent); outline-offset:2px; }
 .arquivo-nome{ font-size:12px; color:var(--ink-soft); }
 .btn-link{ background:none; border:none; padding:0; color:var(--ink); font-size:12px; font-weight:600; cursor:pointer; text-decoration:underline; text-underline-offset:3px; }
+
+/* ---------- tela de toque: alvos de pelo menos 40px (no computador nada muda) ---------- */
+@media (pointer: coarse) {
+  .dash-panel-toggle { min-height: 40px; }
+  .grip { min-width: 40px; min-height: 40px; display: inline-flex; align-items: center; justify-content: center; margin: 0; }
+  .col-name { min-height: 40px; display: flex; align-items: center; }
+  .col-add-btn { min-width: 40px; min-height: 40px; }
+  .check-circle { width: 24px; height: 24px; position: relative; }
+  .check-circle::after { content: ""; position: absolute; inset: -9px; }
+  .icon-btn { min-width: 40px; min-height: 40px; }
+}
+
+/* mais alvos de toque (segunda leva) */
+@media (pointer: coarse) {
+  .tab-btn { min-height: 40px; }
+  .btn-link { display: inline-block; padding: 12px 0; }
+  .config-sidebar-item { min-height: 40px; }
+  .auditoria-toggle { min-height: 40px; }
+  .checkbox-item { min-height: 40px; }
+  .checkbox-item input { width: 18px; height: 18px; }
+  .modal-head button { min-width: 40px; min-height: 40px; }
+}

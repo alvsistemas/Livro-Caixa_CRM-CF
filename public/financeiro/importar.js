@@ -310,8 +310,8 @@ function confirmarImportacaoAntiga(dados) {
       <button class="alcance-opcao" data-modo="juntar"><strong>Juntar com o que já tenho aqui</strong><span>Os dados antigos entram junto com os atuais.</span></button>
       <button class="alcance-opcao" data-modo="substituir"><strong>Substituir</strong><span>Apaga lançamentos, cartões, investimentos e objetivos atuais e fica só com os do arquivo.</span></button>
     </div>` : `<button class="btn char save-btn" data-modo="juntar">Importar</button>`}`);
-  document.querySelectorAll("[data-modo]").forEach((b) => b.addEventListener("click", () => {
-    if (b.dataset.modo === "substituir" && !confirm("Apagar os dados atuais e ficar só com os do arquivo?")) return;
+  document.querySelectorAll("[data-modo]").forEach((b) => b.addEventListener("click", async () => {
+    if (b.dataset.modo === "substituir" && !(await confirmarAcao({ mensagem: "Apagar os dados atuais e ficar só com os do arquivo?", botao: "Apagar e importar", sempre: true }))) return;
     const juntar = b.dataset.modo === "juntar";
     const mapa = { transacoes: "txs", cartoes: "cards", investimentos: "invs", objetivos: "goals" };
     Object.entries(mapa).forEach(([secao, chave]) => {

@@ -55,3 +55,18 @@ html.a11y-links button:not(:disabled), html.a11y-links [role="button"] { text-un
 .a11y-chave.ligada i { transform: translateX(18px); }
 [data-theme="dark"] .a11y-chave.ligada i { background: #141414; }
 .a11y-nota { margin: 0; font-size: 12.5px; opacity: .75; }
+.a11y-avisos { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 10px 0; border-top: 1px solid var(--line, var(--rule, #E6E6E6)); }
+.a11y-voltar { flex: none; min-height: 40px; padding: 0 14px; border-radius: 10px; border: 1px solid var(--line, var(--rule, #D6D6D6)); background: transparent; color: inherit; font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; }
+
+/* ---- janela de confirmação (js/confirmacao.js) ---- */
+.cf-fundo { position: fixed; inset: 0; z-index: 10000; background: rgba(0, 0, 0, .45); display: flex; align-items: center; justify-content: center; padding: 16px; }
+.cf-caixa { width: min(420px, 100%); background: var(--paper, var(--bg, #fff)); color: var(--ink, #141414); border-radius: 16px; padding: 20px; box-shadow: 0 20px 50px rgba(0, 0, 0, .3); }
+[data-theme="dark"] .cf-caixa { background: #1C1C1C; }
+.cf-titulo { margin: 0 0 6px; font-size: 18px; font-weight: 700; font-family: inherit; }
+.cf-msg { margin: 0; font-size: 14.5px; line-height: 1.5; white-space: pre-line; }
+.cf-pular { display: flex; align-items: center; gap: 10px; margin-top: 14px; font-size: 14px; cursor: pointer; min-height: 40px; }
+.cf-pular input { width: 20px; height: 20px; margin: 0; accent-color: var(--ink, #141414); }
+.cf-botoes { display: flex; gap: 10px; justify-content: flex-end; margin-top: 18px; flex-wrap: wrap; }
+.cf-botoes button { min-height: 44px; padding: 0 18px; border-radius: 10px; font: inherit; font-size: 14.5px; font-weight: 600; cursor: pointer; border: 1px solid var(--line, var(--rule, #D6D6D6)); background: transparent; color: inherit; }
+.cf-botoes .cf-sim { background: var(--ink, #141414); color: var(--paper, var(--bg, #fff)); border-color: transparent; }
+.cf-botoes .cf-sim.cf-perigo { background: var(--danger, var(--red, var(--vermelho, #B42318))); color: #fff; }

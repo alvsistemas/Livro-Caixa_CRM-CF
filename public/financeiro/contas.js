@@ -123,18 +123,18 @@ TELAS.contas = {
     const t = document.getElementById("nova-transf-btn");
     if (t) t.addEventListener("click", openTransferenciaModal);
     document.querySelectorAll(".conta-edit").forEach((b) => b.addEventListener("click", (e) => openContaModal(state.contas.find((k) => k.id === e.target.closest(".item-card").dataset.id))));
-    document.querySelectorAll(".conta-del").forEach((b) => b.addEventListener("click", (e) => {
+    document.querySelectorAll(".conta-del").forEach((b) => b.addEventListener("click", async (e) => {
       const id = e.target.closest(".item-card").dataset.id;
       const k = state.contas.find((x) => x.id === id);
       const usados = state.txs.filter((tx) => tx.contaId === id).length;
-      if (!confirm(`Excluir a conta "${k.name}"?${usados ? `\n\n${usados} lançamento(s) estão ligados a ela: eles continuam, mas sem conta.` : ""}`)) return;
+      if (!(await confirmarAcao({ mensagem: `Excluir a conta "${k.name}"?${usados ? `\n\n${usados} lançamento(s) estão ligados a ela: eles continuam, mas sem conta.` : ""}`, sempre: true }))) return;
       state.contas = state.contas.filter((x) => x.id !== id);
       if (usados) { state.txs.forEach((tx) => { if (tx.contaId === id) delete tx.contaId; }); saveTxs(); }
       saveContas(); render();
     }));
-    document.querySelectorAll(".transf-del").forEach((b) => b.addEventListener("click", (e) => {
-      if (!confirm("Excluir esta transferência?")) return;
+    document.querySelectorAll(".transf-del").forEach((b) => b.addEventListener("click", async (e) => {
       const id = e.target.closest("tr").dataset.id;
+      if (!(await confirmarAcao({ mensagem: "Excluir esta transferência?", sempre: true }))) return;
       state.transferencias = state.transferencias.filter((t) => t.id !== id);
       saveTransferencias(); render();
     }));

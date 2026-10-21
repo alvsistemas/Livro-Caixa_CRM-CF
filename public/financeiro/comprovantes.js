@@ -77,7 +77,7 @@ function ligarComprovantesNoFormulario(f, enviadosAgora, redesenhar) {
   }));
   document.querySelectorAll(".comprov-del").forEach((b) => b.addEventListener("click", async (e) => {
     const id = e.target.closest(".comprov-item").dataset.cid;
-    if (!confirm("Remover este comprovante?")) return;
+    if (!(await confirmarAcao({ mensagem: "Remover este comprovante?", botao: "Remover", chave: "comprovante" }))) return;
     try { await api("DELETE", `/financeiro/comprovantes/${id}`); } catch (err) { /* já pode ter sido apagado */ }
     f.comprovantes = (f.comprovantes || []).filter((x) => x.id !== id);
     gravarNoLancamento();

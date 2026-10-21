@@ -144,7 +144,7 @@ TELAS.dividas = {
     const div = (e) => state.dividas.find((d) => d.id === e.target.closest("[data-id]").dataset.id);
     document.querySelectorAll(".div-edit").forEach((b) => b.addEventListener("click", (e) => openDividaModal(div(e))));
     document.querySelectorAll(".div-pagar").forEach((b) => b.addEventListener("click", (e) => openPagamentoDivida(div(e))));
-    document.querySelectorAll(".div-del, .div-del-q").forEach((b) => b.addEventListener("click", (e) => { const d = div(e); if (confirm(`Excluir a dívida "${d.name}"?`)) { state.dividas = state.dividas.filter((x) => x.id !== d.id); saveDividas(); render(); } }));
+    document.querySelectorAll(".div-del, .div-del-q").forEach((b) => b.addEventListener("click", async (e) => { const d = div(e); if (await confirmarAcao({ mensagem: `Excluir a dívida "${d.name}"?`, sempre: true })) { state.dividas = state.dividas.filter((x) => x.id !== d.id); saveDividas(); render(); } }));
     document.querySelectorAll("[data-estrategia]").forEach((b) => b.addEventListener("click", () => { state.config = { ...state.config, planoDividas: { ...planoAtual(), estrategia: b.dataset.estrategia } }; saveConfig(); render(); }));
     const valor = document.getElementById("plano-valor");
     if (valor) valor.addEventListener("change", (e) => { state.config = { ...state.config, planoDividas: { ...planoAtual(), pagamentoMensal: parseFloat(e.target.value) || 0 } }; saveConfig(); render(); });

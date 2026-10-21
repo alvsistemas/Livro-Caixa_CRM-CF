@@ -119,7 +119,7 @@ TELAS.orcamento = {
     ["novo-orc-btn", "novo-orc-btn-2"].forEach((id) => { const b = document.getElementById(id); if (b) b.addEventListener("click", () => openOrcamentoModal(null)); });
     const orc = (e) => state.orcamentos.find((o) => o.id === e.target.closest(".orc-linha").dataset.id);
     document.querySelectorAll(".orc-edit").forEach((b) => b.addEventListener("click", (e) => openOrcamentoModal(orc(e))));
-    document.querySelectorAll(".orc-del").forEach((b) => b.addEventListener("click", (e) => { const o = orc(e); if (confirm(`Remover o orçamento de ${o.category}?`)) { state.orcamentos = state.orcamentos.filter((x) => x.id !== o.id); saveOrcamentos(); render(); } }));
+    document.querySelectorAll(".orc-del").forEach((b) => b.addEventListener("click", async (e) => { const o = orc(e); if (await confirmarAcao({ mensagem: `Remover o orçamento de ${o.category}?`, botao: "Remover", chave: "orcamento" })) { state.orcamentos = state.orcamentos.filter((x) => x.id !== o.id); saveOrcamentos(); render(); } }));
     document.querySelectorAll(".orc-sugerir").forEach((b) => b.addEventListener("click", () => openOrcamentoModal(null, { category: b.dataset.cat, limite: b.dataset.valor })));
   },
 };
@@ -165,10 +165,10 @@ TELAS.categorias = {
       state.orcamentos.forEach((o) => { if (o.category === antigo) o.category = novo; });
       saveCategorias(); if (mudou) saveTxs(); saveOrcamentos(); render();
     }));
-    document.querySelectorAll(".cat-del").forEach((b) => b.addEventListener("click", (e) => {
+    document.querySelectorAll(".cat-del").forEach((b) => b.addEventListener("click", async (e) => {
       const c = cat(e);
       const usados = state.txs.filter((tx) => tx.category === c.nome && tx.type === c.tipo).length;
-      if (!confirm(`Excluir a categoria "${c.nome}"?${usados ? `\n\n${usados} lançamento(s) usam ela e vão para "Outros".` : ""}`)) return;
+      if (!(await confirmarAcao({ mensagem: `Excluir a categoria "${c.nome}"?${usados ? `\n\n${usados} lançamento(s) usam ela e vão para "Outros".` : ""}`, chave: "categoria" }))) return;
       state.txs.forEach((tx) => { if (tx.category === c.nome && tx.type === c.tipo) tx.category = "Outros"; });
       state.categorias = state.categorias.filter((x) => x.id !== c.id);
       state.orcamentos = state.orcamentos.filter((o) => o.category !== c.nome);

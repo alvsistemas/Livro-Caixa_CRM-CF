@@ -1074,7 +1074,7 @@
       variacoes: f.comVariacoes ? f.variacoes.filter((v) => v.nome.trim() || v.id).map((v) => ({ id: v.id || undefined, nome: v.nome, codigo: v.codigo || "", preco: v.preco === "" ? null : numOu(v.preco), custo: v.custo === "" ? null : numOu(v.custo), estoqueMinimo: numOu(v.estoqueMinimo), estoqueInicial: numOu(v.estoqueInicial), ativo: v.ativo !== false })) : [],
     };
     if (f.id && !f.comVariacoes && PF.variacoes.some((v) => v.id)) {
-      if (!confirm("As variações deste produto serão apagadas (com o estoque delas). Continuar?")) return;
+      if (!(await confirmarAcao({ mensagem: "As variações deste produto serão apagadas (com o estoque delas). Continuar?", botao: "Continuar", cancelar: "Voltar", sempre: true }))) return;
     }
     f.salvando = true; redesenharProduto();
     try {
@@ -2036,10 +2036,10 @@
     linhas.push("", "Confira os itens antes de pagar.", "Documento sem valor fiscal.");
     imprimir80(`Conta ${c.rotulo}`, linhas.join("\n"));
   }
-  function fecharContaComanda() {
+  async function fecharContaComanda() {
     const c = CM.dados;
     if (caixaBloqueia()) { toast("Abra o caixa para fechar a conta.", "erro"); fecharModal(); irPara("caixa"); return; }
-    if (c.pendentes && !confirm(`${c.pendentes === 1 ? "1 item não foi" : `${c.pendentes} itens não foram`} para a cozinha. Fechar a conta mesmo assim?`)) return;
+    if (c.pendentes && !(await confirmarAcao({ mensagem: `${c.pendentes === 1 ? "1 item não foi" : `${c.pendentes} itens não foram`} para a cozinha. Fechar a conta mesmo assim?`, botao: "Fechar a conta", cancelar: "Voltar", perigo: false, sempre: true }))) return;
     const t = totaisComanda();
     const comanda = { id: c.id, semTaxa: CM.semTaxa, desconto: t.desc, pessoas: c.pessoas, rotulo: c.rotulo };
     CM = null;
@@ -2166,6 +2166,7 @@
         const it = CM.dados.itens.find((i) => i.id === id); if (!it) break;
         let motivo = "";
         if (it.enviadoEm) { motivo = window.prompt(`“${it.nome}” já foi para a cozinha. Motivo do cancelamento (a cozinha vai ver):`, "cliente desistiu"); if (motivo === null) break; }
+        else if (!(await confirmarAcao({ mensagem: `Tirar “${it.nome}” da conta?`, botao: "Tirar", cancelar: "Voltar", chave: "item-comanda" }))) break;
         try { const r = await api("DELETE", `/estoque/comandas/${CM.id}/itens/${id}`, { motivo }); if (CM) { CM.dados = r.comanda; redesenharComanda(); } } catch (e) { toast(esc(e.message), "erro"); }
         break;
       }
@@ -2184,7 +2185,7 @@
       case "cm-imprimir": imprimirConta(); break;
       case "cm-cancelar": {
         const tem = CM.dados.itens.some((i) => !i.cancelado);
-        if (!confirm(tem ? "Cancelar a comanda inteira? Nada vira venda e o que estiver na cozinha sai da tela. Só um gerente pode fazer isso." : "Cancelar esta comanda vazia?")) break;
+        if (!(await confirmarAcao({ mensagem: tem ? "Cancelar a comanda inteira? Nada vira venda e o que estiver na cozinha sai da tela. Só um gerente pode fazer isso." : "Cancelar esta comanda vazia?", botao: "Cancelar comanda", cancelar: "Voltar", sempre: true }))) break;
         try { await api("POST", `/estoque/comandas/${CM.id}/cancelar`, {}); fecharModal(); toast("Comanda cancelada."); } catch (e) { toast(esc(e.message), "erro"); }
         break;
       }
@@ -2668,7 +2669,7 @@
     try {
       const corpo = { ativo: f.ativo, ambiente: f.ambiente, cnpj: f.cnpj, csosn: f.csosn, cfop: f.cfop, ncm: f.ncm, pisCofins: f.pisCofins, emitir: f.emitir, infoAdicional: f.infoAdicional };
       if (f.token.trim()) corpo.token = f.token.trim();
-      if (f.ambiente === "producao" && !(S.fiscal && S.fiscal.ambiente === "producao") && f.ativo && !confirm("Produção emite nota fiscal de verdade, com valor para a SEFAZ. Confirma que já testou em homologação e que o seu contador conferiu os códigos?")) { f.salvando = false; render(); return; }
+      if (f.ambiente === "producao" && !(S.fiscal && S.fiscal.ambiente === "producao") && f.ativo && !(await confirmarAcao({ mensagem: "Produção emite nota fiscal de verdade, com valor para a SEFAZ. Confirma que já testou em homologação e que o seu contador conferiu os códigos?", botao: "Usar produção", cancelar: "Voltar", perigo: false, sempre: true }))) { f.salvando = false; render(); return; }
       S.fiscal = (await api("PUT", "/estoque/fiscal", corpo)).fiscal;
       FS = null; toast("Configuração fiscal salva.", "ok");
     } catch (e) { f.erro = e.message; f.salvando = false; }
@@ -2794,7 +2795,7 @@
       case "off-ver": abrirFilaOffline(); break;
       case "off-enviar": { await sincronizarFila(true); if (modalAberto() && $(".modal-titulo") && /sem internet/.test($(".modal-titulo").textContent)) abrirFilaOffline(); break; }
       case "off-descartar": {
-        if (!confirm("Descartar esta venda? Ela não vai para o financeiro nem baixa o estoque.")) break;
+        if (!(await confirmarAcao({ mensagem: "Descartar esta venda? Ela não vai para o financeiro nem baixa o estoque.", botao: "Descartar", cancelar: "Voltar", sempre: true }))) break;
         gravarFila(lerFila().filter((x) => x.ref !== el.dataset.ref)); abrirFilaOffline(); break;
       }
       default: break;
@@ -2906,15 +2907,15 @@
       case "ajustar": ev.stopPropagation(); abrirAjuste(id); break;
       case "salvar-produto": salvarProduto(); break;
       case "excluir-produto": {
-        if (!confirm(`Excluir “${PF.nome}”? O histórico de estoque some; as vendas já feitas continuam. Prefere só desativar? Desmarque “Produto ativo”.`)) break;
+        if (!(await confirmarAcao({ mensagem: `Excluir “${PF.nome}”? O histórico de estoque some; as vendas já feitas continuam. Prefere só desativar? Desmarque “Produto ativo”.`, botao: "Excluir", cancelar: "Voltar", sempre: true }))) break;
         try { await api("DELETE", `/estoque/produtos/${PF.id}`); await recarregarProdutos(); fecharModal(); toast("Produto excluído."); render(); } catch (e) { toast(esc(e.message), "erro"); }
         break;
       }
-      case "tirar-foto": if (PF.id && PF.foto) { try { await api("PUT", `/estoque/produtos/${PF.id}/foto`, { foto: null }); await recarregarProdutos(); } catch (e) { toast(esc(e.message), "erro"); break; } } PF.foto = ""; PF.fotoNova = null; redesenharProduto(); break;
+      case "tirar-foto": if (!(await confirmarAcao({ mensagem: "Tirar a foto deste produto?", botao: "Tirar foto", cancelar: "Voltar", chave: "foto-produto" }))) break; if (PF.id && PF.foto) { try { await api("PUT", `/estoque/produtos/${PF.id}/foto`, { foto: null }); await recarregarProdutos(); } catch (e) { toast(esc(e.message), "erro"); break; } } PF.foto = ""; PF.fotoNova = null; redesenharProduto(); break;
       case "add-var-linha": PF.variacoes.push({ nome: "", preco: "", custo: "", estoqueInicial: "", estoqueMinimo: "" }); redesenharProduto(); break;
       case "tirar-var": {
         const v = PF.variacoes[Number(el.dataset.i)];
-        if (v && v.id && v.estoque && !confirm(`A variação “${v.nome}” tem ${fmtN(v.estoque)} em estoque. Tirar mesmo assim?`)) break;
+        if (v && v.id && v.estoque && !(await confirmarAcao({ mensagem: `A variação “${v.nome}” tem ${fmtN(v.estoque)} em estoque. Tirar mesmo assim?`, botao: "Tirar", cancelar: "Voltar", sempre: true }))) break;
         PF.variacoes.splice(Number(el.dataset.i), 1); redesenharProduto(); break;
       }
       case "gerar-var": {
@@ -2936,14 +2937,14 @@
       case "cp-tirar": CP.linhas.splice(Number(el.dataset.i), 1); corpoModal(compraHtml()); break;
       case "cp-salvar": salvarCompra(); break;
       case "cancelar-compra": {
-        if (!confirm("Cancelar esta compra? A mercadoria sai do estoque e a despesa sai do Controle financeiro.")) break;
+        if (!(await confirmarAcao({ mensagem: "Cancelar esta compra? A mercadoria sai do estoque e a despesa sai do Controle financeiro.", botao: "Cancelar compra", cancelar: "Voltar", sempre: true }))) break;
         try { await api("POST", `/estoque/compras/${id}/cancelar`); await recarregarProdutos(); toast("Compra cancelada."); carregarDaAba("compras"); } catch (e) { toast(esc(e.message), "erro"); }
         break;
       }
       // gastos
       case "salvar-gasto": salvarGasto(); break;
       case "excluir-gasto": {
-        if (!confirm("Excluir esta nota de gasto? Ela sai também do Controle financeiro.")) break;
+        if (!(await confirmarAcao({ mensagem: "Excluir esta nota de gasto? Ela sai também do Controle financeiro.", botao: "Excluir", cancelar: "Voltar", sempre: true }))) break;
         try { await api("DELETE", `/estoque/gastos/${encodeURIComponent(id)}`); toast("Gasto excluído."); carregarDaAba("relatorios"); } catch (e) { toast(esc(e.message), "erro"); }
         break;
       }
@@ -2954,7 +2955,7 @@
       }
       case "ver-venda": verVenda(id); break;
       case "cancelar-venda": {
-        if (!confirm("Cancelar esta venda? Os produtos voltam para o estoque e a receita sai do Controle financeiro.")) break;
+        if (!(await confirmarAcao({ mensagem: "Cancelar esta venda? Os produtos voltam para o estoque e a receita sai do Controle financeiro.", botao: "Cancelar venda", cancelar: "Voltar", sempre: true }))) break;
         try { await api("POST", `/estoque/vendas/${id}/cancelar`); await recarregarProdutos(); fecharModal(); toast("Venda cancelada."); carregarDaAba("relatorios"); } catch (e) { toast(esc(e.message), "erro"); }
         break;
       }
@@ -2973,7 +2974,7 @@
         break;
       }
       case "recusar-pedido": {
-        if (!confirm("Recusar este pedido? Avise o cliente pelo WhatsApp.")) break;
+        if (!(await confirmarAcao({ mensagem: "Recusar este pedido? Avise o cliente pelo WhatsApp.", botao: "Recusar", cancelar: "Voltar", sempre: true }))) break;
         try { await api("POST", `/estoque/pedidos/${id}/recusar`); carregarDaAba("pedidos"); atualizarSelos(); } catch (e) { toast(esc(e.message), "erro"); }
         break;
       }
@@ -3036,7 +3037,7 @@
       case "op-papel": OPF.nome = $("#op-nome").value; OPF.papel = el.dataset.v; corpoModal(operadorHtml()); break;
       case "op-salvar": salvarOperadorTela(); break;
       case "op-excluir": {
-        if (!confirm(`Excluir o operador ${OPF.nome}? As vendas dele continuam com o nome registrado.`)) break;
+        if (!(await confirmarAcao({ mensagem: `Excluir o operador ${OPF.nome}? As vendas dele continuam com o nome registrado.`, botao: "Excluir", cancelar: "Voltar", sempre: true }))) break;
         try { await api("DELETE", `/estoque/operadores/${OPF.id}`); S.operadores = (await api("GET", "/estoque/operadores")).operadores; PC = null; fecharModal(); atualizarChipOperador(); render(); } catch (e) { OPF.erro = e.message; corpoModal(operadorHtml()); }
         break;
       }
@@ -3075,7 +3076,7 @@
         break;
       }
       case "fc-excluir": {
-        if (!confirm(`Excluir ${FC.dados.cliente.nome || "este cliente"}? As vendas continuam no histórico, só sem a ligação com ele. O saldo do programa de fidelidade é perdido.`)) break;
+        if (!(await confirmarAcao({ mensagem: `Excluir ${FC.dados.cliente.nome || "este cliente"}? As vendas continuam no histórico, só sem a ligação com ele. O saldo do programa de fidelidade é perdido.`, botao: "Excluir", cancelar: "Voltar", sempre: true }))) break;
         try { await api("DELETE", `/estoque/clientes/${FC.id}`); fecharModal(); toast("Cliente excluído."); if (S.tab === "clientes") carregarDaAba("clientes"); } catch (e) { toast(esc(e.message), "erro"); }
         break;
       }

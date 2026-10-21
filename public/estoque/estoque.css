@@ -649,3 +649,17 @@ body.com-faixa-offline .main { padding-top: 64px; }
 
 .so-cel { display: none; }
 #carrinho-folha .carrinho-topo h2 { visibility: hidden; }
+
+/* ---------- tela de toque: alvos de pelo menos 40px (no computador nada muda) ---------- */
+@media (pointer: coarse) {
+  .link { padding: 11px 4px; }
+}
+
+/* mais alvos de toque (segunda leva) */
+@media (pointer: coarse) {
+  summary { padding-top: 12px; padding-bottom: 12px; }
+  .btn.mini { min-height: 40px; min-width: 40px; }
+  .modal-fechar { width: 40px; height: 40px; }
+  .check { min-height: 40px; align-items: center; }
+  .check input { width: 20px; height: 20px; margin: 0; }
+}

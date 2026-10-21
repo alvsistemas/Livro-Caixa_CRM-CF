@@ -486,3 +486,40 @@ tr:hover td { background: rgba(0,0,0,0.015); }
 .taxa-input input { width: 100%; box-sizing: border-box; padding: 9px 30px 9px 10px; border: 1px solid var(--rule); border-radius: 8px; font-family: 'IBM Plex Mono', monospace; font-size: 14px; background: var(--page); color: var(--ink); }
 .taxa-input span { position: absolute; right: 10px; top: 50%; transform: translateY(-50%); color: var(--ink-muted); }
 .mercadoria-opcao { margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--line, rgba(0,0,0,.08)); display: flex; flex-direction: column; gap: 8px; }
+
+/* ---------- tela de toque: alvos de pelo menos 40px (no computador nada muda) ---------- */
+@media (pointer: coarse) {
+  .month-nav button { width: 40px; height: 40px; font-size: 18px; }
+  .icon-btn { min-width: 40px; min-height: 40px; font-size: 17px; }
+  .link-lucro { display: inline-block; padding: 11px 0; }
+  .filtro-check { min-height: 40px; }
+  .status-select { height: 40px; min-height: 40px; font-size: 13px; }
+}
+/* ---------- Lançamentos no celular: cada lançamento vira um cartão ---------- */
+@media (max-width: 700px) {
+  .table-wrap:has(.tabela-lancamentos) { overflow: visible; }
+  .tabela-lancamentos thead { display: none; }
+  .tabela-lancamentos, .tabela-lancamentos tbody { display: block; width: 100%; min-width: 0 !important; }
+  .tabela-lancamentos tbody tr { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; padding: 14px 12px; border-bottom: 1px solid var(--rule); }
+  .tabela-lancamentos td { display: block; padding: 0 !important; border: 0 !important; }
+  .tabela-lancamentos td:nth-child(2) { order: 1; flex: 1 1 55%; min-width: 0; font-weight: 600; font-size: 15px; }
+  .tabela-lancamentos td:nth-child(6) { order: 2; margin-left: auto; }
+  .tabela-lancamentos td:nth-child(1) { order: 3; flex: 1 1 100%; }
+  .tabela-lancamentos td:nth-child(3) { order: 4; }
+  .tabela-lancamentos td:nth-child(4) { order: 5; }
+  .tabela-lancamentos td:nth-child(5) { order: 6; }
+  .tabela-lancamentos td:nth-child(7) { order: 7; }
+  .tabela-lancamentos td:nth-child(8) { order: 8; margin-left: auto; }
+  .tabela-lancamentos tr.crm-row td:nth-child(5) { display: none; }
+  .tabela-lancamentos .origem-mini { display: none; }
+  .tabela-lancamentos .status-select { max-width: 160px; }
+  .tabela-lancamentos .value-inline { min-height: 40px; font-size: 15px; text-align: right; }
+}
+
+/* mais alvos de toque (segunda leva) */
+@media (pointer: coarse) {
+  .pill { min-height: 40px; }
+  .link-lucro { min-width: 40px; text-align: center; }
+  .link-btn { display: inline-block; padding: 12px 2px; }
+  .bar-line { align-items: center; }
+}

@@ -933,6 +933,7 @@ async function salvarGerotEditor(){
 async function apagarGerotEditorAtual(){
   if(!gerotEditor || !gerotEditor.blocoId) return;
   const blocoId = gerotEditor.blocoId;
+  if(!(await confirmarAcao({ mensagem:'Apagar este bloco da rotina?', botao:'Apagar', chave:'bloco-rotina' }))) return;
   try{
     await apiRequest('DELETE', `/gerot/${blocoId}`);
     gerotBlocos = gerotBlocos.filter(b=>b.id!==blocoId);
@@ -1020,6 +1021,7 @@ async function exportarGerotParaPlanilha(){
 }
 async function importarGerotDePlanilha(file){
   if(!file) return;
+  if(gerotBlocos.length && !(await confirmarAcao({ mensagem:`A planilha substitui a rotina desta semana: os ${gerotBlocos.length} bloco(s) de agora são apagados.`, botao:'Substituir', sempre:true }))) return;
   try{ await carregarBiblioteca('xlsx'); }catch(e){ errorMsg = e.message; renderApp(); return; }
   gerotImportando = true;
   gerotImportMsg = null;
@@ -1403,7 +1405,7 @@ async function loadMonitoramento(){
   renderApp();
 }
 async function limparMonitoramento(){
-  showConfirm({
+  showConfirm({ chave:'log-erros',
     message: 'Limpar todo o log de erros registrado? Não afeta o funcionamento do sistema, só apaga o histórico.',
     confirmLabel: 'Limpar',
     onConfirm: async ()=>{
@@ -1965,7 +1967,7 @@ async function toggleWebhookSaida(id, ativo){
   renderApp();
 }
 async function excluirWebhookSaida(id){
-  showConfirm({
+  showConfirm({ chave:'webhook',
     message: 'Remover esse webhook? Ele para de disparar imediatamente.',
     confirmLabel: 'Remover',
     onConfirm: async ()=>{
@@ -2075,6 +2077,8 @@ function ligarBindingsHistoricoContato(){
   document.querySelectorAll('[data-action="excluir-historico-contato"]').forEach(btn=>{
     btn.addEventListener('click', async ()=>{
       const id = btn.dataset.id;
+      if(historicoContatoItens.findIndex(i=>i.id===id)===-1) return;
+      if(!(await confirmarAcao({ mensagem:'Apagar este registro do histórico de contato?', botao:'Apagar', chave:'historico-contato' }))) return;
       const idx = historicoContatoItens.findIndex(i=>i.id===id);
       if(idx===-1) return;
       const [removido] = historicoContatoItens.splice(idx,1);
@@ -2187,6 +2191,7 @@ function ligarBindingsAnexos(){
   document.querySelectorAll('[data-action="excluir-anexo"]').forEach(btn=>{
     btn.addEventListener('click', async ()=>{
       const anexoId = btn.dataset.anexoId;
+      if(!(await confirmarAcao({ mensagem:'Excluir este anexo?', chave:'anexo' }))) return;
       btn.disabled = true;
       try{
         await apiRequest('DELETE', `/cards/${modalForm.id}/anexos/${anexoId}`);
@@ -2971,7 +2976,7 @@ function ordenarPorCriterio(lista, criterio, campoNome, campoInicio, campoVenda)
 // mexe em nada, só para de aplicar ordenação automática daqui pra frente.
 function aplicarOrdenacaoPipeline(criterio){
   if(criterio === 'padrao'){ pipelineOrdenarPor = 'padrao'; renderApp(); return; }
-  showConfirm({
+  showConfirm({ chave:'reordenar-auto',
     message: 'Isso vai reordenar automaticamente os clientes dentro de cada coluna. Se você tiver organizado numa ordem específica que funciona melhor pra você, ela será substituída. Continuar?',
     confirmLabel: 'Reordenar',
     danger: false,
@@ -4832,7 +4837,7 @@ function renderLeadsPage(){
 
     <div class="leads-toolbar">
       <input type="text" class="leads-search" id="leads-search-input" placeholder="Buscar por nome ou telefone" value="${esc(leadsSearch)}" />
-      <select class="leads-filter" id="leads-status-filter">
+      <select class="leads-filter" id="leads-status-filter" aria-label="Filtrar por situação">
         <option value="">Todos os status</option>
         ${board.columns.map(c=>`<option value="${c.id}" ${leadsStatusFilter===c.id?'selected':''}>${esc(c.nome)}</option>`).join('')}
       </select>
@@ -6095,7 +6100,7 @@ function bindAppEvents(){
   app.querySelectorAll('[data-action="delete-task"]').forEach(btn=>{
     btn.addEventListener('click', ()=>{
       const id = btn.dataset.taskId;
-      showConfirm({
+      showConfirm({ chave:'tarefa',
         message: 'Excluir esta tarefa? Essa ação não pode ser desfeita.',
         onConfirm: ()=>{ deleteTaskById(id); closeConfirm(); closeTaskModal(); },
       });
@@ -6211,7 +6216,7 @@ function bindAppEvents(){
   app.querySelectorAll('[data-action="delete-automacao"]').forEach(btn=>{
     btn.addEventListener('click', ()=>{
       const id = btn.dataset.automacaoId;
-      showConfirm({
+      showConfirm({ chave:'acao-automatica',
         message: 'Excluir esta ação automática? Ela para de rodar imediatamente.',
         onConfirm: ()=>{ excluirAutomacao(id); closeConfirm(); },
       });
@@ -6234,7 +6239,7 @@ function bindAppEvents(){
   app.querySelectorAll('[data-action="delete-fluxo"]').forEach(btn=>{
     btn.addEventListener('click', ()=>{
       const id = btn.dataset.fluxoId;
-      showConfirm({
+      showConfirm({ chave:'sequencia',
         message: 'Excluir esta sequência? As que estão em andamento para clientes atuais são interrompidas.',
         onConfirm: ()=>{ excluirFluxo(id); closeConfirm(); },
       });
@@ -6265,7 +6270,7 @@ function bindAppEvents(){
   app.querySelectorAll('[data-action="descartar-possivel-lead"]').forEach(btn=>{
     btn.addEventListener('click', ()=>{
       const id = btn.dataset.leadId;
-      showConfirm({
+      showConfirm({ chave:'possivel-contato',
         message: 'Descartar esse possível contato? Ele não vira cliente.',
         confirmLabel: 'Descartar',
         onConfirm: ()=>{ descartarPossivelLead(id); closeConfirm(); },
@@ -6661,7 +6666,7 @@ function bindAppEvents(){
       const n = cardsOf(id).length;
       openMenuColId = null;
       renderApp();
-      showConfirm({
+      showConfirm({ chave: n ? null : 'coluna-vazia',
         message: n ? `Excluir a coluna "${col.nome}"? Os ${n} cliente(s) dela também serão removidos.` : `Excluir a coluna "${col.nome}"?`,
         onConfirm: ()=>{ deleteColumnById(id); closeConfirm(); },
       });
@@ -8143,7 +8148,7 @@ function renderTaskModal(){
   document.getElementById('t-save').addEventListener('click', saveTaskFromModal);
   if(!f.__isNew){
     document.getElementById('t-delete').addEventListener('click', ()=>{
-      showConfirm({
+      showConfirm({ chave:'tarefa',
         message: 'Excluir esta tarefa? Essa ação não pode ser desfeita.',
         onConfirm: ()=>{ deleteTaskById(f.id); closeTaskModal(); closeConfirm(); },
       });
@@ -9195,7 +9200,7 @@ function renderAutomacaoModal(){
   document.getElementById('am-save').addEventListener('click', salvarAutomacao);
   if(!f.__isNew){
     document.getElementById('am-delete').addEventListener('click', ()=>{
-      showConfirm({
+      showConfirm({ chave:'acao-automatica',
         message: 'Excluir esta ação automática? Ela para de rodar imediatamente.',
         onConfirm: ()=>{ excluirAutomacao(f.id); closeAutomacaoModal(); closeConfirm(); },
       });
@@ -9467,7 +9472,7 @@ function bindFluxoModalEvents(){
   });
   if(!fluxoModalForm.__isNew){
     document.getElementById('fx-delete').addEventListener('click', ()=>{
-      showConfirm({
+      showConfirm({ chave:'sequencia',
         message: 'Excluir esta sequência? As que estão em andamento para clientes atuais são interrompidas.',
         onConfirm: ()=>{ excluirFluxo(fluxoModalForm.id); closeFluxoModal(); closeConfirm(); },
       });
@@ -9517,16 +9522,20 @@ function renderFluxoModal(){
 }
 
 /* ---------- confirmação genérica ---------- */
-function showConfirm({ message, onConfirm, confirmLabel, cancelLabel, danger }){
+function showConfirm({ message, onConfirm, confirmLabel, cancelLabel, danger, chave }){
+  // chave = dá pra marcar "Não perguntar de novo" (só nas coisas que não são importantes; sem chave, pergunta sempre)
+  if(chave && window.Confirmacao && Confirmacao.pulada(chave)){ onConfirm(); return; }
   confirmState = { message, onConfirm };
   const root = document.getElementById('confirm-root');
+  const anterior = document.activeElement;
   const rotuloConfirmar = confirmLabel || 'Excluir'; // "Excluir" continua sendo o padrão, pra não quebrar quem já chama sem passar isso
   const rotuloCancelar = cancelLabel || 'Cancelar';
   const classeConfirmar = danger===false ? 'btn-primary' : 'btn-danger';
   root.innerHTML = `
     <div class="overlay" id="confirm-overlay" style="z-index:90">
-      <div class="confirm-box">
-        <p>${esc(message)}</p>
+      <div class="confirm-box" role="alertdialog" aria-modal="true" aria-describedby="confirm-msg">
+        <p id="confirm-msg">${esc(message)}</p>
+        ${chave && window.Confirmacao ? `<label class="confirm-pular"><input type="checkbox" id="confirm-pular" /> <span>Não perguntar de novo para isto</span></label>` : ''}
         <div class="confirm-actions">
           <button class="btn-outline" id="confirm-cancel">${esc(rotuloCancelar)}</button>
           <button class="${classeConfirmar}" id="confirm-ok">${esc(rotuloConfirmar)}</button>
@@ -9534,11 +9543,20 @@ function showConfirm({ message, onConfirm, confirmLabel, cancelLabel, danger }){
       </div>
     </div>
   `;
+  const fecharComTecla = (e)=>{ if(e.key==='Escape'){ e.stopPropagation(); closeConfirm(); } };
+  document.addEventListener('keydown', fecharComTecla, true);
+  confirmState.soltar = ()=>{ document.removeEventListener('keydown', fecharComTecla, true); if(anterior && anterior.focus && document.contains(anterior)) try{ anterior.focus(); }catch(e){} };
   document.getElementById('confirm-cancel').addEventListener('click', closeConfirm);
   document.getElementById('confirm-overlay').addEventListener('click', (e)=>{ if(e.target.id==='confirm-overlay') closeConfirm(); });
-  document.getElementById('confirm-ok').addEventListener('click', ()=> confirmState.onConfirm());
+  document.getElementById('confirm-ok').addEventListener('click', ()=>{
+    const pular = document.getElementById('confirm-pular');
+    if(chave && pular && pular.checked) Confirmacao.pular(chave);
+    const st = confirmState; if(st && st.soltar) st.soltar();
+    st.onConfirm();
+  });
+  document.getElementById('confirm-cancel').focus(); // o padrão é não apagar
 }
-function closeConfirm(){ confirmState = null; document.getElementById('confirm-root').innerHTML=''; }
+function closeConfirm(){ if(confirmState && confirmState.soltar) confirmState.soltar(); confirmState = null; document.getElementById('confirm-root').innerHTML=''; }
 
 /* ---------- start ---------- */
 if(getToken()){
