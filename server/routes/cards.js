@@ -74,6 +74,7 @@ function filtrarCampos(body) {
 router.post('/', async (req, res) => {
   try {
     const dados = filtrarCampos(req.body);
+    if (req.acesso && req.acesso.operador) dados.responsavelOpId = req.acesso.operador.id; // quem da equipe cadastrou
     if (!dados.mesInicioContato) dados.mesInicioContato = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo' }).format(new Date()); // início de contato: hoje
     if (!dados.cliente || !dados.cliente.trim()) {
       return res.status(400).json({ error: 'Nome do cliente é obrigatório.' });

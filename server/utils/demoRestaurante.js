@@ -124,7 +124,7 @@ async function criarRestauranteDemo({ whatsapp = '' } = {}, agora = new Date()) 
     await C.movimentarCaixa(userId, { tipo: 'sangria', valor: 100, descricao: 'Levado para o cofre' }, 'Marco', agora, E.registrarGasto);
     // salão: 10 mesas, garçom, taxa de serviço; algumas mesas ocupadas e pedidos na cozinha
     await C.salvarPdv(userId, { taxaServico: 10 });
-    await C.salvarOperador(userId, { nome: 'Marco', papel: 'gerente', pin: '1234' });
+    await C.salvarOperador(userId, { nome: 'Marco', papel: 'gestor', pin: '1234' });
     await C.salvarOperador(userId, { nome: 'Tito', papel: 'garcom', pin: '2222' });
     const mesas = await M.salvarMesas(userId, Array.from({ length: 10 }, (_, i) => ({ nome: `Mesa ${i + 1}` })));
     const pizzaComanda = (chave, tam, borda, extra = []) => ({ produtoId: prod[chave].id, variacaoId: vr(chave, tam), qtd: 1, opcoes: { 0: [borda], 1: extra } });

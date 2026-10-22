@@ -6,6 +6,7 @@
   if(!token){ window.location.href = 'login.html'; return; }
 
   function sair(){
+    if(window.Acesso){ Acesso.sair(); return; }
     localStorage.removeItem('token');
     localStorage.removeItem('user');
     window.location.href = 'login.html';
@@ -65,6 +66,29 @@
     .then((res)=> res.ok ? res.json() : null)
     .then((r)=>{ if(r && r.dono) document.getElementById('inicio-dono').hidden = false; })
     .catch(()=>{});
+
+  // Equipe: aparelho da loja pede quem vai usar; funcionário vê só os aplicativos da função dele
+  if(window.Acesso){
+    Acesso.garantirPessoa().then(()=> Acesso.info(true)).then((i)=>{
+      const esc = (t)=> String(t == null ? '' : t).replace(/[&<>"']/g, (c)=>({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
+      const cartoes = { crm:'.inicio-app-crm', financeiro:'.inicio-app-fin', pdv:'.inicio-app-est' };
+      Object.entries(cartoes).forEach(([app, sel])=>{ if(i.apps && i.apps[app] === false){ const el = document.querySelector(sel); if(el) el.remove(); } });
+      if(i.gestor) document.getElementById('inicio-painel').hidden = false;
+      if(i.tipo !== 'dono'){
+        ['inicio-assinatura', 'inicio-dono'].forEach((id)=>{ const el = document.getElementById(id); if(el) el.remove(); });
+        const q = document.getElementById('inicio-quem');
+        if(i.operador){
+          q.innerHTML = `Você está como <b>${esc(i.operador.nome)}</b> · ${esc(i.operador.funcao)}${i.tipo === 'loja' ? ' · <button type="button" class="inicio-trocar" id="inicio-trocar">Trocar pessoa</button>' : ''}`;
+          q.hidden = false;
+          const t = document.getElementById('inicio-trocar'); if(t) t.addEventListener('click', ()=> Acesso.trocarPessoa());
+          document.getElementById('inicio-nome').textContent = `, ${String(i.operador.nome).trim().split(/\s+/)[0]}`;
+        }
+        if(!document.querySelector('.inicio-app')){
+          document.querySelector('.inicio-apps').innerHTML = '<p class="inicio-sub">A sua função ainda não tem nenhum aplicativo liberado. Fale com o gestor.</p>';
+        }
+      }
+    }).catch(()=>{});
+  }
 
   // Acessibilidade: abre numa janela por cima (a tela de trás não mexe)
   const janela = document.getElementById('a11y-janela');

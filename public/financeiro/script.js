@@ -115,6 +115,7 @@ const sessionToken = localStorage.getItem("token");
 if (!sessionToken) window.location.href = "../login.html";
 
 function sair() {
+  if (window.Acesso) return Acesso.sair();
   localStorage.removeItem("token");
   localStorage.removeItem("user");
   window.location.href = "../login.html";
@@ -122,7 +123,7 @@ function sair() {
 // Servidor acordando ou ocupado (502/503/504): tenta de novo sozinho, sem deslogar.
 // GET sempre pode repetir; gravações só quando o servidor avisa que nem chegaram a rodar.
 async function api(method, path, body, tentativa = 0) {
-  const opts = { method, headers: { Authorization: "Bearer " + sessionToken } };
+  const opts = { method, headers: { Authorization: "Bearer " + sessionToken, ...(window.Acesso ? Acesso.cabecalhos() : {}) } };
   if (body !== undefined) { opts.headers["Content-Type"] = "application/json"; opts.body = JSON.stringify(body); }
   const res = await fetch(API_BASE + path, opts);
   if (res.status === 401) { sair(); throw new Error("Sessão expirada."); }
@@ -1907,6 +1908,8 @@ function telaDeErro(msg) {
   if (b) b.addEventListener("click", iniciar);
 }
 async function iniciar() {
+  // equipe: aparelho da loja pede quem vai usar; quem não tem o financeiro na função não entra
+  if (window.Acesso && !(await Acesso.exigirApp("financeiro", "o Controle financeiro"))) return;
   document.getElementById("onboarding-root").innerHTML = `<div class="carregando"><p>Carregando seu financeiro…</p></div>`;
   try {
     try { state.user = JSON.parse(localStorage.getItem("user") || "null"); } catch (e) {}

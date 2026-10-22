@@ -74,3 +74,7 @@
 .a11y-janela [data-a11y-painel]{ padding:8px 20px 4px; }
 .a11y-janela-rodape{ display:flex; justify-content:flex-end; padding:8px 20px 18px; }
 .a11y-janela-pronto{ min-height:44px; padding:0 22px; border:none; border-radius:10px; background:var(--ink); color:var(--paper, #fff); font:inherit; font-weight:700; cursor:pointer; }
+
+/* quem está usando (equipe) */
+.inicio-quem{ margin:12px 0 0; font-size:14px; color:var(--ink); display:flex; align-items:center; gap:6px; flex-wrap:wrap; }
+.inicio-trocar{ border:1px solid var(--line); background:var(--paper); color:var(--ink); border-radius:999px; min-height:40px; padding:0 14px; font:inherit; font-size:13px; font-weight:600; cursor:pointer; }

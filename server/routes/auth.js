@@ -172,6 +172,11 @@ router.get('/me', auth, async (req, res) => {
   try {
     const user = await User.findById(req.userId);
     if (!user) return res.status(404).json({ error: 'Usuário não encontrado.' });
+    const a = req.acesso;
+    if (a && a.tipo !== 'dono' && a.operador) {
+      // funcionário pelo celular: aparece o nome dele, nada da conta do dono
+      return res.json({ user: { id: user._id.toString(), _id: user._id.toString(), nome: a.operador.nome, email: '', funcionario: true } });
+    }
     res.json({ user: user.toJSON() });
   } catch (err) {
     res.status(500).json({ error: 'Erro ao buscar usuário.' });

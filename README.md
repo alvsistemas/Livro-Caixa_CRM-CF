@@ -605,9 +605,30 @@ funciona, sandbox → produção) no documento "Assinatura com o Asaas".
 - **Liberar alguém sem cobrança:** `ASSINATURA_LIBERADOS` (e-mails) ou, no Neon,
   `SELECT set_config('app.bypass', 'on', false); UPDATE assinaturas SET status = 'cortesia' WHERE user_id = (SELECT id FROM usuarios WHERE email = 'pessoa@email.com');` (a primeira parte libera o comando por causa do RLS)
 
-## Painel do dono
+## Equipe: funções, entrada pelo celular e Painel do dono
 
-Página `dono.html` (link "Painel do dono" na tela inicial, só para donos): cadastros, quem está no
+Cada conta pode ter uma equipe (plano Completo). Cada pessoa tem nome, PIN e uma **função**:
+
+| Função | O que faz por padrão |
+|---|---|
+| Gestor | Tudo, inclusive lucro, financeiro, configurações e a equipe |
+| Gerente | Vende, caixa, produtos, compras, clientes, mesas, relatórios, CRM e comissões (sem lucro, financeiro e configurações) |
+| Vendedor | Vende no balcão, vê produtos, clientes e CRM |
+| Estoquista | Vende, produtos e estoque, compras |
+| Caixa | Vende, caixa, vê produtos, clientes e mesas |
+| Garçom | Mesas, comandas e cozinha |
+
+O gestor ajusta cada pessoa (marcar/desmarcar permissões) no **Painel do dono** (`painel.html`), que também
+mostra o resumo do dia e do mês, as vendas de cada pessoa, o código da loja e o "aparelho da loja".
+
+- **Pelo próprio celular:** `funcionario.html?c=CODIGO` → escolhe o nome → PIN. Não usa a senha do dono.
+- **Aparelho da loja:** o computador/tablet do balcão vira "aparelho da loja"; cada um entra com o PIN e só vê o que a função permite.
+- O servidor confere cada rota (`server/utils/acesso.js`, `middleware/auth.js`) e tira custo, margem e lucro das respostas para quem não pode ver.
+- Opção do gestor: "Vendedores veem os contatos de todos no CRM" (desligada, cada vendedor vê só os que cadastrou).
+
+## Painel do dev
+
+Página `dono.html` (link "Painel do dev" na tela inicial, só para os donos do sistema): cadastros, quem está no
 teste, quem paga e em qual plano, receita mensal estimada, conversão do teste, atrasados,
 cancelamentos, lista de clientes com filtros e busca, e a saúde do sistema (servidor, banco,
 cobrança/avisos do Asaas, integrações, erros recentes).

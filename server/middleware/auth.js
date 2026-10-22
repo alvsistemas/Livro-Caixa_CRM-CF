@@ -3,6 +3,7 @@ const User = require('../models/User');
 const { comoUsuario } = require('../db/contexto');
 const { situacaoDe } = require('../utils/assinatura');
 const { permissoesDe, regraDoCaminho, NOMES } = require('../utils/permissoes');
+const A = require('../utils/acesso');
 
 // Com a assinatura vencida, só estes caminhos continuam abertos: login, a própria tela de
 // assinatura, exportar os dados (os dados são da pessoa, sempre) e desligar notificações.
@@ -63,6 +64,24 @@ module.exports = async function auth(req, res, next) {
       return res.status(401).json({ error: 'Sessão encerrada em outro dispositivo. Faça login novamente.' });
     }
     req.userId = String(user._id);
+    // Quem está usando: o dono, um funcionário pelo próprio celular ou o aparelho da loja (ver utils/acesso.js)
+    let acesso = { tipo: 'dono', operador: null, perm: A.TUDO };
+    if (payload.func) {
+      const op = await A.operadorDaConta(req.userId, payload.func);
+      if (!op || (op.versao || 0) !== (payload.fv || 0)) return res.status(401).json({ error: 'Seu acesso mudou. Entre de novo com o seu PIN.', funcionario: true });
+      acesso = { tipo: 'funcionario', operador: op, perm: A.permissoesDe(op) };
+    } else if (payload.loja) {
+      let op = null;
+      const t = req.headers['x-operador'];
+      if (t) {
+        try {
+          const p = jwt.verify(String(t), `${JWT_SECRET}:operador`);
+          if (p.u === req.userId) op = await A.operadorDaConta(req.userId, p.op);
+        } catch (e) { op = null; }
+      }
+      acesso = { tipo: 'loja', operador: op, perm: op ? A.permissoesDe(op) : A.NADA };
+    }
+    req.acesso = acesso;
     // Assinatura: sem pagamento em dia (e fora do teste grátis), bloqueia com 402
     const assinatura = await situacaoDe(req.userId, user.email);
     req.assinatura = assinatura;
@@ -73,6 +92,28 @@ module.exports = async function auth(req, res, next) {
     const recurso = recursoDoCaminho(caminho, req.method);
     if (recurso && !assinatura.recursos[recurso]) {
       return res.status(403).json({ error: `${NOME_DO_RECURSO[recurso]} ${/^(As|Os) /.test(NOME_DO_RECURSO[recurso]) ? 'fazem' : 'faz'} parte do plano Completo.`, recurso, planoNecessario: 'completo' });
+    }
+    // Função de quem está usando (funcionário ou aparelho da loja): o servidor confere cada rota
+    if (acesso.tipo !== 'dono') {
+      if (assinatura.recursos && assinatura.recursos.equipe === false && !caminho.startsWith('/api/acesso')) {
+        return res.status(403).json({ error: 'O acesso da equipe faz parte do plano Completo. Peça para o dono da conta.', recurso: 'equipe', funcao: true });
+      }
+      // vendedor vê só os contatos dele, se o gestor escolheu assim
+      if (acesso.operador && acesso.operador.papel === 'vendedor' && caminho.startsWith('/api/board')) {
+        acesso.soMeusContatos = !(await A.opcoesDaEquipe(req.userId)).crmTodos;
+      }
+      const precisa = A.permissaoDoCaminho(req.method, caminho);
+      if (precisa !== 'livre' && (!acesso.operador || !acesso.perm[precisa])) {
+        return res.status(403).json({
+          error: acesso.operador ? 'A sua função não tem acesso a isto. Fale com o gestor.' : 'Entre com o seu PIN para continuar.',
+          permissao: precisa, operador: !acesso.operador, funcao: true,
+        });
+      }
+      // quem não vê custos não recebe custo, margem nem lucro (as compras mostram o que a pessoa mesma lança)
+      if (!acesso.perm.custos && !caminho.startsWith('/api/estoque/compras')) {
+        const json = res.json.bind(res);
+        res.json = (corpo) => json(A.tirarCustos(corpo));
+      }
     }
     // Permissões da equipe: o gestor pode tirar abas e funções dos membros
     const regra = regraDoCaminho(req.method, caminho);

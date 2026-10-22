@@ -116,6 +116,8 @@ app.use('/api/historico-contato', historicoContatoRoutes);
 app.use('/api/push', pushRoutes);
 app.use('/api/assinatura', assinaturaRoutes);
 app.use('/api/dono', donoRoutes);
+app.use('/api/acesso', require('./routes/acesso')); // entrada da equipe e quem está usando
+app.use('/api/gestao', require('./routes/gestao')); // Painel do dono
 
 // página pública de agendamento — /agendar/<userId> (sem login, o cliente acessa direto)
 app.get('/agendar/:userId', (req, res) => {

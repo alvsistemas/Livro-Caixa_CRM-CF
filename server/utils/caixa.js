@@ -55,8 +55,8 @@ async function salvarPdv(userId, d = {}) {
   if (d.exigirOperador !== undefined) {
     n.exigirOperador = !!d.exigirOperador;
     if (n.exigirOperador) {
-      const { rows } = await query(`SELECT 1 FROM estoque_operadores WHERE user_id = $1::uuid AND ativo AND papel = 'gerente' LIMIT 1`, [userId]);
-      if (!rows.length) throw erro('Cadastre pelo menos um operador gerente antes de exigir o PIN.');
+      const { rows } = await query(`SELECT 1 FROM estoque_operadores WHERE user_id = $1::uuid AND ativo AND papel IN ('gestor', 'gerente') LIMIT 1`, [userId]);
+      if (!rows.length) throw erro('Cadastre pelo menos um gestor ou gerente antes de exigir o PIN.');
     }
   }
   await query('INSERT INTO estoque_negocio (user_id) VALUES ($1::uuid) ON CONFLICT (user_id) DO NOTHING', [userId]);
@@ -66,7 +66,9 @@ async function salvarPdv(userId, d = {}) {
 
 /* ------------------------------ operadores ------------------------------ */
 
-const operadorObj = (r) => ({ id: r.id, nome: r.nome, papel: r.papel, ativo: r.ativo });
+const PAPEIS = ['gestor', 'gerente', 'vendedor', 'estoquista', 'caixa', 'garcom'];
+const CHEFIA = ['gestor', 'gerente'];
+const operadorObj = (r) => ({ id: r.id, nome: r.nome, papel: r.papel, ativo: r.ativo, permissoes: r.permissoes || {}, ultimoAcesso: r.ultimo_acesso || null });
 async function listarOperadores(userId) {
   const { rows } = await query('SELECT * FROM estoque_operadores WHERE user_id = $1::uuid ORDER BY ativo DESC, nome', [userId]);
   return rows.map(operadorObj);
@@ -74,7 +76,10 @@ async function listarOperadores(userId) {
 async function salvarOperador(userId, d = {}, id = null) {
   const nome = texto(d.nome, 60);
   if (!nome) throw erro('Informe o nome do operador.');
-  const papel = ['gerente', 'garcom'].includes(d.papel) ? d.papel : 'caixa';
+  const papel = PAPEIS.includes(d.papel) ? d.papel : 'caixa';
+  // ajustes por pessoa (só chaves conhecidas, só verdadeiro/falso)
+  const CH = require('./acesso').CHAVES;
+  const ajustes = d.permissoes && typeof d.permissoes === 'object' ? Object.fromEntries(Object.entries(d.permissoes).filter(([k, v]) => CH.includes(k) && k !== 'config' && typeof v === 'boolean')) : null;
   const pin = d.pin === undefined || d.pin === null || d.pin === '' ? null : String(d.pin);
   if (pin !== null && !/^\d{4,6}$/.test(pin)) throw erro('O PIN precisa ter de 4 a 6 números.');
   if (!id && !pin) throw erro('Crie um PIN de 4 a 6 números.');
@@ -83,6 +88,9 @@ async function salvarOperador(userId, d = {}, id = null) {
     const sets = ['nome = $3', 'papel = $4', 'ativo = $5'];
     const params = [userId, id, nome, papel, d.ativo !== false];
     if (pin) { params.push(await bcrypt.hash(pin, 8)); sets.push(`pin_hash = $${params.length}`); }
+    if (ajustes) { params.push(JSON.stringify(ajustes)); sets.push(`permissoes = $${params.length}::jsonb`); }
+    // mudou PIN, função, ajustes ou ativo: os acessos abertos no celular caem
+    sets.push(`versao = versao + (CASE WHEN papel IS DISTINCT FROM $4 OR ativo IS DISTINCT FROM $5 ${pin ? 'OR true' : ''} ${ajustes ? `OR permissoes IS DISTINCT FROM $${params.length}::jsonb` : ''} THEN 1 ELSE 0 END)`);
     const r = await query(`UPDATE estoque_operadores SET ${sets.join(', ')} WHERE user_id = $1::uuid AND id = $2::uuid RETURNING *`, params);
     if (!r.rows.length) throw erro('Operador não encontrado.');
     await garantirGerente(userId);
@@ -90,15 +98,15 @@ async function salvarOperador(userId, d = {}, id = null) {
   }
   const { rows: c } = await query('SELECT count(*)::int AS n FROM estoque_operadores WHERE user_id = $1::uuid', [userId]);
   if (c[0].n >= 50) throw erro('Limite de 50 operadores.');
-  const r = await query('INSERT INTO estoque_operadores (user_id, nome, pin_hash, papel) VALUES ($1::uuid, $2, $3, $4) RETURNING *', [userId, nome, await bcrypt.hash(pin, 8), papel]);
+  const r = await query('INSERT INTO estoque_operadores (user_id, nome, pin_hash, papel, permissoes) VALUES ($1::uuid, $2, $3, $4, $5::jsonb) RETURNING *', [userId, nome, await bcrypt.hash(pin, 8), papel, JSON.stringify(ajustes || {})]);
   return operadorObj(r.rows[0]);
 }
 // Exigindo PIN, não pode ficar sem nenhum gerente (ninguém conseguiria mexer nas configurações)
 async function garantirGerente(userId) {
   const pdv = await lerPdv(userId);
   if (!pdv.exigirOperador) return;
-  const { rows } = await query(`SELECT 1 FROM estoque_operadores WHERE user_id = $1::uuid AND ativo AND papel = 'gerente' LIMIT 1`, [userId]);
-  if (!rows.length) throw erro('Precisa ficar pelo menos um gerente ativo enquanto o PIN for exigido.');
+  const { rows } = await query(`SELECT 1 FROM estoque_operadores WHERE user_id = $1::uuid AND ativo AND papel IN ('gestor', 'gerente') LIMIT 1`, [userId]);
+  if (!rows.length) throw erro('Precisa ficar pelo menos um gestor ou gerente ativo enquanto o PIN for exigido.');
 }
 async function excluirOperador(userId, id) {
   if (!ehUuid(id)) throw erro('Operador não encontrado.');
@@ -114,6 +122,7 @@ async function entrarOperador(userId, d = {}) {
   const { rows } = await query('SELECT * FROM estoque_operadores WHERE user_id = $1::uuid AND id = $2::uuid AND ativo', [userId, d.id]);
   const o = rows[0];
   if (!o || !(await bcrypt.compare(String(d.pin || ''), o.pin_hash))) throw erro('PIN incorreto.');
+  await query('UPDATE estoque_operadores SET ultimo_acesso = now() WHERE id = $1::uuid', [o.id]);
   const token = jwt.sign({ u: String(userId), op: o.id, nome: o.nome, papel: o.papel }, SEGREDO(), { expiresIn: '14h' });
   // credencial para vender sem internet neste aparelho (7 dias). O aparelho guarda ela cifrada com
   // uma chave tirada do PIN — o PIN em si nunca é guardado. Só vale para registrar venda feita sem
@@ -356,7 +365,7 @@ async function fiadoEmAberto(userId) {
 }
 
 module.exports = {
-  ErroCaixa, MEIOS_CAIXA, PDV_PADRAO, pdvDe, lerPdv, salvarPdv,
+  ErroCaixa, MEIOS_CAIXA, PDV_PADRAO, pdvDe, lerPdv, salvarPdv, operadorObj, CHEFIA,
   listarOperadores, salvarOperador, excluirOperador, entrarOperador, operadorDoPedido,
   situacaoCaixa, abrirCaixa, movimentarCaixa, fecharCaixa, historicoCaixas, caixaPorId,
   contaFiado, receberFiado, fiadoEmAberto,

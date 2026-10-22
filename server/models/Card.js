@@ -41,6 +41,7 @@ module.exports = definirModelo('Card', {
     camposPersonalizados: { type: 'json', default: () => ({}) }, // { campoId: valor }
     arquivado: { type: 'boolean', default: false },
     atribuidoPorId: { type: 'id', ref: 'User', default: null }, // gestor que passou esse lead pra esta pessoa
+    responsavelOpId: { type: 'id', default: null }, // funcionário da equipe (PDV/loja) que cadastrou o contato
     fechamento: { type: 'json' }, // fechamento da venda (valor final, parcelas) — ver utils/fechamento.js
     fechamentoPendente: { type: 'boolean', default: false }, // "Agora não" na janela de fechamento
   },

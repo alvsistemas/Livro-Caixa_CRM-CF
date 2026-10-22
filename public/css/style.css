@@ -992,3 +992,16 @@ tr.membro-supervisor-destaque td:last-child{ border-right:1px solid var(--gold);
 .plano-completo-aviso b{ font-size:15px; }
 .plano-completo-aviso p{ margin:0; font-size:13px; color:var(--ink-soft); line-height:1.5; }
 .plano-completo-aviso .btn-primary{ text-decoration:none; display:inline-flex; align-items:center; }
+
+/* login: entrada da equipe (funcionario.html) */
+.auth-funcionario{ display:flex; align-items:center; justify-content:center; min-height:44px; margin-top:14px; border:1px dashed var(--line); border-radius:10px; color:var(--ink); font-size:13px; font-weight:600; text-decoration:none; }
+.auth-funcionario:hover{ border-color:var(--ink); }
+.func-pessoas{ display:grid; grid-template-columns:repeat(auto-fill,minmax(120px,1fr)); gap:10px; margin-top:12px; }
+.func-pessoa{ display:flex; flex-direction:column; align-items:center; gap:6px; padding:14px 8px; border:1px solid var(--line); border-radius:14px; background:var(--paper); color:var(--ink); font:inherit; cursor:pointer; }
+.func-pessoa:hover{ border-color:var(--ink); }
+.func-pessoa b{ font-size:14px; }
+.func-pessoa small{ font-size:12px; color:var(--ink-soft); }
+.func-av{ width:40px; height:40px; border-radius:50%; background:var(--ink); color:var(--paper); display:flex; align-items:center; justify-content:center; font-weight:700; }
+.func-pin{ font-size:24px !important; letter-spacing:10px; text-align:center; }
+.func-loja{ font-family:'Fraunces',serif; font-size:20px; font-weight:600; margin:4px 0 2px; }
+.func-link{ background:none; border:none; color:var(--ink); opacity:.8; font:inherit; font-size:13px; text-decoration:underline; cursor:pointer; padding:10px 4px; }

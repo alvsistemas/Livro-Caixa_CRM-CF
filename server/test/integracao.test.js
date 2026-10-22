@@ -1495,7 +1495,7 @@ describe('API com PostgreSQL (integração)', { skip: pular }, () => {
     assert.equal(hist[0].vendas, 2);
     // operadores: gerente e caixa com PIN; exigir PIN
     assert.equal((await api('PUT', '/api/estoque/pdv', { exigirOperador: true }, t)).status, 400, 'sem gerente não liga');
-    const ger = (await api('POST', '/api/estoque/operadores', { nome: 'Rosa', papel: 'gerente', pin: '1234' }, t)).dados.operador;
+    const ger = (await api('POST', '/api/estoque/operadores', { nome: 'Rosa', papel: 'gestor', pin: '1234' }, t)).dados.operador;
     const cx = (await api('POST', '/api/estoque/operadores', { nome: 'Leo', papel: 'caixa', pin: '5555' }, t)).dados.operador;
     assert.equal((await api('POST', '/api/estoque/operadores', { nome: 'X', pin: '12' }, t)).status, 400);
     r = await api('PUT', '/api/estoque/pdv', { exigirOperador: true, descontoMaxCaixa: 10 }, t);
@@ -1531,7 +1531,7 @@ describe('API com PostgreSQL (integração)', { skip: pular }, () => {
     const p0 = jwt.decode(entCx.offline);
     const vencida = jwt.sign({ u: p0.u, op: p0.op, off: 1, iat: Math.floor(Date.now() / 1000) - 9 * 86400, exp: Math.floor(Date.now() / 1000) - 86400 }, `${process.env.JWT_SECRET}:operador:offline`);
     assert.equal((await api('POST', '/api/estoque/vendas', { itens: [{ produtoId: prod.id, qtd: 1 }], meio: 'pix', refCliente: 'off-pin-3', feitaEm: agoraIso }, t, { 'x-operador-offline': vencida })).status, 403, 'vencida');
-    assert.equal((await api('DELETE', `/api/estoque/operadores/${ger.id}`, undefined, t, comGer)).status, 400, 'não fica sem gerente');
+    assert.equal((await api('DELETE', `/api/estoque/operadores/${ger.id}`, undefined, t, comGer)).status, 400, 'não fica sem gestor');
     assert.equal((await api('PUT', '/api/estoque/pdv', { exigirOperador: false }, t, comGer)).status, 200);
   });
 
@@ -1548,7 +1548,7 @@ describe('API com PostgreSQL (integração)', { skip: pular }, () => {
     const [m1, m2] = r.dados.mesas;
     assert.equal((await api('PUT', '/api/estoque/mesas', { mesas: [{ nome: 'A' }, { nome: 'a' }] }, t)).status, 400, 'nome repetido');
     // operador garçom: abre a mesa, lança e manda para a cozinha, mas não cobra
-    const ger = (await api('POST', '/api/estoque/operadores', { nome: 'Dona', papel: 'gerente', pin: '1111' }, t)).dados.operador;
+    const ger = (await api('POST', '/api/estoque/operadores', { nome: 'Dona', papel: 'gestor', pin: '1111' }, t)).dados.operador;
     const gar = (await api('POST', '/api/estoque/operadores', { nome: 'Tito', papel: 'garcom', pin: '2222' }, t)).dados.operador;
     assert.equal(gar.papel, 'garcom');
     await api('PUT', '/api/estoque/pdv', { exigirOperador: true, taxaServico: 10 }, t);
@@ -1865,6 +1865,100 @@ describe('API com PostgreSQL (integração)', { skip: pular }, () => {
       await api('PUT', '/api/estoque/fiscal', { token: 'outrotoken99999' }, t);
       assert.equal((await api('POST', '/api/estoque/fiscal/testar', {}, t)).status, 400);
     } finally { delete process.env.FOCUS_NFE_URL; focus.close(); }
+  });
+
+  test('equipe: funções, entrar pelo celular com código + PIN, aparelho da loja e custos escondidos', async () => {
+    const t = (await api('POST', '/api/auth/register', { nome: 'Dona Loja', email: 'equipe-funcoes@teste.com', senha: 'senha123' })).dados.token;
+    await api('PUT', '/api/estoque/negocio', { tipo: 'loja', nome: 'Pisos da Ana', controlaEstoque: true }, t);
+    const prod = (await api('POST', '/api/estoque/produtos', { nome: 'Porcelanato', preco: 90, custo: 52, estoqueInicial: 40 }, t)).dados.produto;
+    const novo = async (nome, papel, pin, extra = {}) => (await api('POST', '/api/estoque/operadores', { nome, papel, pin, ...extra }, t)).dados.operador;
+    const gestor = await novo('Ana', 'gestor', '1111');
+    const vend = await novo('Bruno', 'vendedor', '2222');
+    const estq = await novo('Caio', 'estoquista', '3333');
+    const cx = await novo('Duda', 'caixa', '4444');
+    assert.equal(vend.papel, 'vendedor');
+    // Painel do dono: código da loja e a equipe com as permissões de cada um
+    const painel = await api('GET', '/api/gestao', undefined, t);
+    assert.equal(painel.status, 200, JSON.stringify(painel.dados));
+    const codigo = painel.dados.codigo;
+    assert.match(codigo, /^[A-Z2-9]{6}$/);
+    assert.equal(painel.dados.equipe.find((o) => o.id === vend.id).efetivas.financeiro, false);
+    // entrar pelo celular
+    const loja = await api('GET', `/api/acesso/loja/${codigo.toLowerCase()}`);
+    assert.equal(loja.status, 200);
+    assert.equal(loja.dados.loja, 'Pisos da Ana');
+    assert.equal(loja.dados.pessoas.length, 4);
+    assert.equal((await api('GET', '/api/acesso/loja/XXXXXX')).status, 404);
+    assert.equal((await api('POST', '/api/acesso/entrar', { codigo, id: vend.id, pin: '0000' })).status, 400);
+    const ent = await api('POST', '/api/acesso/entrar', { codigo, id: vend.id, pin: '2222' });
+    assert.equal(ent.status, 200, JSON.stringify(ent.dados));
+    const tv = ent.dados.token;
+    const eu = (await api('GET', '/api/acesso', undefined, tv)).dados;
+    assert.equal(eu.tipo, 'funcionario');
+    assert.deepEqual(eu.apps, { pdv: true, crm: true, financeiro: false });
+    assert.equal((await api('GET', '/api/auth/me', undefined, tv)).dados.user.nome, 'Bruno');
+    // o vendedor: CRM e vender sim; financeiro, gestão, senha e editar produto não; custo some
+    assert.equal((await api('GET', '/api/financeiro', undefined, tv)).status, 403);
+    assert.equal((await api('GET', '/api/gestao', undefined, tv)).status, 403);
+    assert.equal((await api('PUT', '/api/auth/password', { senhaAtual: 'x', novaSenha: 'y12345678' }, tv)).status, 403);
+    assert.equal((await api('POST', '/api/auth/logout-all', {}, tv)).status, 403, 'funcionário não derruba os aparelhos do dono');
+    assert.equal((await api('POST', '/api/estoque/produtos', { nome: 'X', preco: 1 }, tv)).status, 403);
+    const est = (await api('GET', '/api/estoque', undefined, tv)).dados;
+    const p0 = est.produtos.find((p) => p.id === prod.id);
+    assert.equal(p0.preco, 90);
+    assert.equal(p0.custo, undefined, 'vendedor não vê custo');
+    const venda = await api('POST', '/api/estoque/vendas', { itens: [{ produtoId: prod.id, qtd: 2 }], meio: 'pix' }, tv);
+    assert.equal(venda.status, 200, JSON.stringify(venda.dados));
+    assert.equal(venda.dados.venda.operador, 'Bruno');
+    assert.equal(venda.dados.venda.cmv, undefined);
+    assert.equal((await api('POST', `/api/estoque/vendas/${venda.dados.venda.id}/cancelar`, {}, tv)).status, 403);
+    const board = (await api('GET', '/api/board', undefined, tv)).dados;
+    const meu = await api('POST', '/api/cards', { cliente: 'Cliente do Bruno', columnId: board.columns[0].id }, tv);
+    assert.equal(meu.status, 201, JSON.stringify(meu.dados));
+    await api('POST', '/api/cards', { cliente: 'Cliente da dona', columnId: board.columns[0].id }, t);
+    assert.equal((await api('GET', '/api/board', undefined, tv)).dados.cards.length, 2, 'por padrão o vendedor vê todos');
+    assert.equal((await api('PUT', '/api/gestao/opcoes', { crmTodos: false }, t)).status, 200);
+    const soMeus = (await api('GET', '/api/board', undefined, tv)).dados.cards;
+    assert.deepEqual(soMeus.map((c) => c.cliente), ['Cliente do Bruno']);
+    assert.equal((await api('GET', '/api/board', undefined, t)).dados.cards.length, 2, 'a dona vê todos');
+    assert.equal((await api('PUT', '/api/columns/' + board.columns[0].id, { nome: 'X' }, tv)).status, 403, 'estrutura do funil é do gestor');
+    // o estoquista edita produto sem ver (nem apagar) o custo
+    const te = (await api('POST', '/api/acesso/entrar', { codigo, id: estq.id, pin: '3333' })).dados.token;
+    const ed = await api('PUT', `/api/estoque/produtos/${prod.id}`, { nome: 'Porcelanato Bege', preco: 95 }, te);
+    assert.equal(ed.status, 200, JSON.stringify(ed.dados));
+    const depois = (await api('GET', '/api/estoque', undefined, t)).dados.produtos.find((p) => p.id === prod.id);
+    assert.equal(depois.preco, 95);
+    assert.equal(depois.custo, 52, 'o custo não foi apagado');
+    assert.equal((await api('GET', '/api/estoque/exportar/produtos.xlsx', undefined, te)).status, 403);
+    // o caixa abre o caixa; o gestor pelo celular vê tudo e cancela
+    const tc = (await api('POST', '/api/acesso/entrar', { codigo, id: cx.id, pin: '4444' })).dados.token;
+    assert.equal((await api('POST', '/api/estoque/caixa/abrir', { trocoInicial: 50 }, tc)).status, 200);
+    assert.equal((await api('POST', '/api/estoque/caixa/abrir', { trocoInicial: 50 }, tv)).status, 403, 'vendedor não mexe no caixa');
+    const tg = (await api('POST', '/api/acesso/entrar', { codigo, id: gestor.id, pin: '1111' })).dados.token;
+    assert.equal((await api('GET', '/api/financeiro', undefined, tg)).status, 200);
+    assert.equal((await api('POST', `/api/estoque/vendas/${venda.dados.venda.id}/cancelar`, {}, tg)).status, 200);
+    // mudou o PIN do vendedor: o acesso do celular dele cai
+    assert.equal((await api('PUT', `/api/estoque/operadores/${vend.id}`, { nome: 'Bruno', papel: 'vendedor', pin: '5555' }, t)).status, 200);
+    assert.equal((await api('GET', '/api/board', undefined, tv)).status, 401);
+    // ajuste por pessoa: o caixa passa a ver custos
+    await api('PUT', `/api/estoque/operadores/${cx.id}`, { nome: 'Duda', papel: 'caixa', permissoes: { custos: true } }, t);
+    const tc2 = (await api('POST', '/api/acesso/entrar', { codigo, id: cx.id, pin: '4444' })).dados.token;
+    assert.equal((await api('GET', '/api/estoque', undefined, tc2)).dados.produtos.find((p) => p.id === prod.id).custo, 52);
+    // aparelho da loja: sem PIN, nada além de escolher quem vai usar; com o PIN, vale a função
+    const tl = (await api('POST', '/api/acesso/aparelho-loja', {}, t)).dados.token;
+    assert.equal((await api('GET', '/api/acesso', undefined, tl)).dados.tipo, 'loja');
+    const semPin = await api('GET', '/api/board', undefined, tl);
+    assert.equal(semPin.status, 403);
+    assert.equal(semPin.dados.operador, true);
+    assert.equal((await api('GET', '/api/estoque', undefined, tl)).status, 200, 'a tela do PDV abre para mostrar a trava');
+    const pinCx = (await api('POST', '/api/estoque/operadores/entrar', { id: cx.id, pin: '4444' }, tl)).dados.token;
+    assert.equal((await api('GET', '/api/estoque/caixa', undefined, tl, { 'x-operador': pinCx })).status, 200);
+    assert.equal((await api('GET', '/api/financeiro', undefined, tl, { 'x-operador': pinCx })).status, 403);
+    assert.equal((await api('POST', '/api/acesso/aparelho-normal', {}, tl, { 'x-operador': pinCx })).status, 403, 'só o gestor tira o modo loja');
+    const pinG = (await api('POST', '/api/estoque/operadores/entrar', { id: gestor.id, pin: '1111' }, tl)).dados.token;
+    const normal = await api('POST', '/api/acesso/aparelho-normal', {}, tl, { 'x-operador': pinG });
+    assert.equal(normal.status, 200);
+    assert.equal((await api('GET', '/api/acesso', undefined, normal.dados.token)).dados.tipo, 'dono');
   });
 
   test('sair de todos os aparelhos invalida o token antigo', async () => {

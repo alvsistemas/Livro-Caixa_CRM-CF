@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Livro-Caixa — Painel do dono</title>
+<link rel="manifest" href="manifest.json" />
+<meta name="theme-color" content="#141414" />
+<link rel="icon" href="icons/icon-192.png" />
+<script>try{document.documentElement.setAttribute('data-theme',localStorage.getItem('darkMode')==='1'?'dark':'light');}catch(e){}</script>
+<link rel="stylesheet" href="css/style.css?v=20261152" />
+<link rel="stylesheet" href="css/assinatura.css?v=20261152" />
+<link rel="stylesheet" href="css/dono.css?v=20261152" />
+<link rel="stylesheet" href="css/painel.css?v=20261152" />
+<link rel="stylesheet" href="css/acessibilidade.css?v=20261152" />
+<script src="js/acessibilidade.js?v=20261152"></script>
+<script src="js/confirmacao.js?v=20261152"></script>
+<script src="js/acesso.js?v=20261152"></script>
+</head>
+<body class="ass-body">
+  <main class="ass-wrap pd-wrap" id="pd">
+    <header class="ass-head pd-head">
+      <div>
+        <a class="ass-voltar" href="/">← Voltar</a>
+        <p class="ass-marca">Livro-Caixa</p>
+        <h1 class="ass-titulo">Painel do dono</h1>
+        <p class="ass-sub" id="pd-sub">Carregando…</p>
+      </div>
+      <button type="button" class="ass-btn" id="pd-atualizar">Atualizar</button>
+    </header>
+    <div id="pd-conteudo"><p class="ass-carregando">Carregando…</p></div>
+  </main>
+  <div id="pd-modal"></div>
+  <script src="js/painel.js?v=20261152"></script>
+</body>
+</html>

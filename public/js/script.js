@@ -137,6 +137,7 @@ function getCurrentUser(){
   catch(e){ return null; }
 }
 function logout(){
+  if(window.Acesso){ Acesso.sair(); return; }
   localStorage.removeItem('token');
   localStorage.removeItem('user');
   window.location.href = 'login.html';
@@ -416,6 +417,7 @@ async function apiRequestUmaVez(method, path, body, timeoutMs){
   const opts = { method, headers: {} };
   const token = getToken();
   if(token) opts.headers['Authorization'] = 'Bearer ' + token;
+  if(window.Acesso) Object.assign(opts.headers, Acesso.cabecalhos()); // aparelho da loja: quem entrou com o PIN
   if(body !== undefined){
     opts.headers['Content-Type'] = 'application/json';
     opts.body = JSON.stringify(body);
@@ -5948,10 +5950,12 @@ function renderConfiguracoesPage(){
 
     <div class="config-layout">
       <div class="config-sidebar">
-        ${CONFIG_CATEGORIAS.map(g=>`
+        ${CONFIG_CATEGORIAS.map(g=>{
+          const itens = g.itens.filter(([key])=> !acessoCrm || acessoCrm.gestor || key === 'aparencia'); // equipe: só a aparência
+          return itens.length ? `
           <div class="config-sidebar-grupo">${g.grupo}</div>
-          ${g.itens.map(([key,label])=>`<button class="config-sidebar-item ${configCategoriaAtiva===key?'active':''}" data-action="set-config-categoria" data-categoria="${key}">${label}</button>`).join('')}
-        `).join('')}
+          ${itens.map(([key,label])=>`<button class="config-sidebar-item ${configCategoriaAtiva===key?'active':''}" data-action="set-config-categoria" data-categoria="${key}">${label}</button>`).join('')}
+        ` : '';}).join('')}
       </div>
       <div class="config-content">
         ${renderFn()}
@@ -9552,8 +9556,31 @@ function showConfirm({ message, onConfirm, confirmLabel, cancelLabel, danger, ch
 function closeConfirm(){ if(confirmState && confirmState.soltar) confirmState.soltar(); confirmState = null; document.getElementById('confirm-root').innerHTML=''; }
 
 /* ---------- start ---------- */
-if(getToken()){
-  if(window.AssistenteIA) AssistenteIA.iniciar({
+/* Equipe: o que cada função vê no CRM (o servidor confere tudo; aqui só some da tela) */
+var acessoCrm = { tipo:'dono', permissoes:{}, gestor:true }; // var: as telas podem desenhar antes desta linha rodar
+const PERM_DA_PAGINA = { comissoes:'comissoes', automacoes:'config', fluxos:'config', 'import-export':'config', equipe:'config' };
+function podeNaPagina(pg){ if(!acessoCrm || acessoCrm.tipo === 'dono') return true; const k = PERM_DA_PAGINA[pg] || 'crm'; return !!acessoCrm.permissoes[k]; }
+function aplicarFuncaoNaTela(){
+  if(!acessoCrm || acessoCrm.tipo === 'dono') return;
+  document.querySelectorAll('[data-action="nav"][data-page]').forEach((el)=>{ const pg = el.dataset.page; if(pg !== 'configuracoes' && pg !== 'suporte' && !podeNaPagina(pg)) el.remove(); });
+  document.querySelectorAll('.nav-mais').forEach((g)=>{ if(!g.querySelector('[data-page]')) g.remove(); });
+  const r = document.querySelector('[data-action="abrir-reordenar-nav"]'); if(r) r.remove();
+}
+new MutationObserver(()=> aplicarFuncaoNaTela()).observe(document.body, { childList:true, subtree:true });
+
+async function iniciarCrm(){
+  if(window.Acesso){
+    if(!(await Acesso.exigirApp('crm', 'o CRM'))) return;
+    const i = await Acesso.info();
+    acessoCrm = { tipo:i.tipo, permissoes:i.permissoes || {}, gestor:!!i.gestor };
+    if(i.tipo !== 'dono'){
+      if(!podeNaPagina(currentPage)) currentPage = 'pipeline';
+      if(!acessoCrm.gestor && configCategoriaAtiva !== 'aparencia') configCategoriaAtiva = 'aparencia';
+    }
+  }
+  const p = acessoCrm.tipo === 'dono' ? null : acessoCrm.permissoes;
+  const pode = (k)=> !p || !!p[k];
+  if(window.AssistenteIA && pode('financeiro')) AssistenteIA.iniciar({
     contexto:'crm',
     // carrossel de perguntas prontas, embaixo da conversa
     sugestoes: [
@@ -9576,17 +9603,16 @@ if(getToken()){
   loadBoard();
   loadFunis();
   loadTasks();
-  loadCalendarStatus();
-  loadContratos();
-  loadRegrasComissao();
+  if(pode('config')) loadCalendarStatus();
+  if(pode('comissoes')){ loadContratos(); loadRegrasComissao(); }
   loadIntegracoesConfig();
   loadCamposPersonalizados();
   loadPossiveisLeads();
   loadMetaVendas();
   loadMetaVendasEquipe();
   if(!agendaLoaded) loadAgendaMes(agendaMesAtual); // carrega em segundo plano — o Dashboard também usa eventos do Google em "Tarefas abertas"
-  loadEquipe();
+  if(pode('config')){ loadEquipe(); loadWebhooksSaida(); }
   loadAutomacoes();
   loadFluxos();
-  loadWebhooksSaida();
 }
+if(getToken()) iniciarCrm();

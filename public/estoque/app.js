@@ -16,7 +16,7 @@
   /* ----------------------------- utilidades ----------------------------- */
   const $ = (s, el = document) => el.querySelector(s);
   const esc = (s) => String(s == null ? "" : s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
-  const fmt = (n) => (Number(n) || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+  const fmt = (n) => n === undefined && ACESSO && !pode("custos") ? "—" : (Number(n) || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
   const fmtN = (n, casas = 3) => (Number(n) || 0).toLocaleString("pt-BR", { maximumFractionDigits: casas });
   const num = (v) => { if (v === null || v === undefined || v === "") return NaN; const n = Number(String(v).replace(/\s/g, "").replace(/\.(?=\d{3}(\D|$))/g, "").replace(",", ".")); return Number.isFinite(n) ? n : NaN; };
   const numOu = (v, padrao = 0) => { const n = num(v); return Number.isNaN(n) ? padrao : n; };
@@ -31,6 +31,7 @@
   const CATEGORIAS_GASTO = ["Aluguel Comercial", "Fornecedores", "Salários", "Comissões", "Marketing", "Impostos", "Frete", "Taxas de pagamento", "Ferramentas/Software", "Transporte", "Alimentação", "Moradia", "Outros"];
 
   function sair() {
+    if (window.Acesso) return Acesso.sair();
     localStorage.removeItem("token");
     localStorage.removeItem("user");
     window.location.href = "../login.html";
@@ -38,7 +39,7 @@
 
   async function api(metodo, caminho, corpo, tentativa = 0) {
     const opts = { method: metodo, headers: { Authorization: "Bearer " + token } };
-    const tokOp = lerOperador(); if (tokOp && tokOp.token) opts.headers["x-operador"] = tokOp.token;
+    const tokOp = ehFuncionario() ? null : lerOperador(); if (tokOp && tokOp.token) opts.headers["x-operador"] = tokOp.token;
     if (cabecalhoExtra) Object.assign(opts.headers, cabecalhoExtra);
     if (corpo !== undefined) { opts.headers["Content-Type"] = "application/json"; opts.body = JSON.stringify(corpo); }
     let res;
@@ -53,7 +54,7 @@
     let dados = null;
     try { dados = await res.json(); } catch (e) { /* sem corpo */ }
     if (!res.ok) {
-      if (res.status === 403 && dados && dados.operador) { if (S.pdv && S.pdv.exigirOperador) { esquecerOperador(); setTimeout(() => mostrarTrava(dados.error), 0); } }
+      if (res.status === 403 && dados && dados.operador) { if (S.pdv && pinObrigatorio()) { esquecerOperador(); setTimeout(() => mostrarTrava(dados.error), 0); } }
       const acordando = [502, 503, 504].includes(res.status) && (metodo === "GET" || (dados && dados.tentarDeNovo));
       if (acordando && tentativa < 2) { await new Promise((ok) => setTimeout(ok, tentativa ? 2500 : 1000)); return api(metodo, caminho, corpo, tentativa + 1); }
       throw new Error((dados && dados.error) || (acordando ? "O servidor está acordando. Tente de novo em alguns segundos." : "Erro de comunicação com o servidor."));
@@ -68,6 +69,29 @@
   function guardarOperador(r) { try { localStorage.setItem(CHAVE_OP, JSON.stringify({ token: r.token, offline: r.offline || null, operador: r.operador, ate: Date.now() + 13.5 * 3600 * 1000 })); } catch (e) { /* sem armazenamento */ } }
   let cabecalhoExtra = null; // usado só ao enviar a fila (a credencial de quem fez a venda sem internet)
   function esquecerOperador() { try { localStorage.removeItem(CHAVE_OP); } catch (e) { /* nada */ } }
+
+  /* ---------- função de quem está usando (utils/acesso.js no servidor) ----------
+     dono: tudo (ou, com "Pedir o PIN", o que a função de quem entrou permite);
+     funcionário (pelo próprio celular): o token já diz quem é; aparelho da loja: só com o PIN.
+     Aqui só se esconde o que a pessoa não usa — quem decide é o servidor. */
+  let ACESSO = null;
+  const ehFuncionario = () => !!(ACESSO && ACESSO.tipo === "funcionario") || (window.Acesso && Acesso.tipoLocal() === "funcionario");
+  const ehLoja = () => !!(ACESSO && ACESSO.tipo === "loja") || (window.Acesso && Acesso.tipoLocal() === "loja");
+  const pinObrigatorio = () => !!(S.pdv && S.pdv.exigirOperador) || ehLoja();
+  function permsAtuais() {
+    if (!ACESSO) return null;
+    if (ACESSO.tipo === "dono") return ACESSO.pdv && lerOperador() ? ACESSO.pdv.permissoes : null;
+    if (ACESSO.tipo === "loja" && !lerOperador()) return {};
+    return ACESSO.permissoes || {};
+  }
+  function pode(k) { const p = permsAtuais(); return !p || !!p[k]; }
+  const PERM_ABA = { vender: ["vender"], caixa: ["vender", "caixa"], produtos: ["produtosVer", "produtos"], compras: ["compras"], relatorios: ["relatorios"], clientes: ["clientes"], config: ["config"], mesas: ["mesas"], cozinha: ["mesas"], pedidos: ["mesas"], cardapio: ["config"] };
+  const podeAba = (t) => !PERM_ABA[t] || PERM_ABA[t].some(pode);
+  const ehGestor = () => !ACESSO || (ACESSO.tipo === "dono" ? !(ACESSO.pdv && lerOperador()) || ACESSO.pdv.operador.papel === "gestor" : !!ACESSO.gestor);
+  async function carregarAcesso() {
+    try { ACESSO = await api("GET", "/acesso"); } catch (e) { if (!ACESSO) ACESSO = null; }
+    return ACESSO;
+  }
 
   function toast(html, tipo = "") {
     const el = $("#toast");
@@ -208,11 +232,17 @@
     const alvo = ALIAS[doHash] || doHash;
     desenharNavCelular();
     atualizarChipOperador();
-    irPara(validas.includes(alvo) ? alvo : ehGarcom() ? "mesas" : (S.pdv.exigirCaixa && !S.caixa ? "caixa" : restaurante() && tem("restaurante") ? "mesas" : "vender"));
+    irPara(validas.includes(alvo) && podeAba(alvo) ? alvo : primeiraAba() || "vender");
     atualizarSelos();
     if (restaurante()) setInterval(atualizarSelos, 60000);
   }
+  function primeiraAba() {
+    const ordem = ehGarcom() ? ["mesas", "cozinha", "pedidos"] : (S.pdv.exigirCaixa && !S.caixa ? ["caixa"] : []).concat(restaurante() && tem("restaurante") ? ["mesas", "vender"] : ["vender"]);
+    return [...ordem, "caixa", "vender", "mesas", "produtos", "compras", "clientes", "relatorios", "config"].find((t) => podeAba(t) && (restaurante() || !["mesas", "cozinha", "pedidos", "cardapio"].includes(t))) || null;
+  }
   function irPara(tab) {
+    if (!tab || !podeAba(tab)) tab = primeiraAba();
+    if (!tab) { semAcessoAoPdv(); return; }
     S.tab = tab;
     if (location.hash !== "#" + tab) history.replaceState(null, "", "#" + tab);
     document.querySelectorAll(".nav-item[data-tab], .nav-cel button[data-tab]").forEach((b) => b.classList.toggle("active", b.dataset.tab === tab));
@@ -286,7 +316,7 @@
      ===================================================================== */
   function primeirosPassos() {
     const c = S.negocio.checklist || {};
-    if (c.escondido) return "";
+    if (c.escondido || !ehGestor()) return "";
     const itens = [
       ["configurado", "Contar sobre o seu negócio", null],
       ["produto", "Cadastrar o primeiro produto", `<button class="btn mini claro" data-a="novo-produto">Cadastrar</button>`],
@@ -344,7 +374,7 @@
     const r = S.resumo;
     const mes = MESES[new Date().getMonth()];
     let html = topo(`Olá${S.negocio.nome ? `, ${esc(S.negocio.nome)}` : ""}!`, "O caixa do dia e o resumo do mês. Vendas, despesas e fiado já entram sozinhos no Controle financeiro.",
-      `<button class="btn claro so-desk" data-a="nova-compra">Registrar compra</button><button class="btn acento so-desk" data-a="ir" data-tab="vender">Nova venda</button>`);
+      `${pode("compras") ? `<button class="btn claro so-desk" data-a="nova-compra">Registrar compra</button>` : ""}${pode("vender") ? `<button class="btn acento so-desk" data-a="ir" data-tab="vender">Nova venda</button>` : ""}`);
     html += primeirosPassos();
     html += blocoCaixaHtml() + `<div class="espaco"></div>`;
     if (!r) return html + carregandoHtml;
@@ -353,8 +383,9 @@
     html += `<div class="grade grade-4">
       <div class="card"><p class="kpi-rotulo">Vendas hoje</p><p class="kpi-valor">${fmt(r.hoje.total)}</p><p class="kpi-nota">${r.hoje.vendas === 1 ? "1 venda" : `${r.hoje.vendas} vendas`}</p></div>
       <div class="card"><p class="kpi-rotulo">Vendido em ${mes}</p><p class="kpi-valor">${fmt(r.mes.total)}</p><p class="kpi-nota">${r.mes.vendas === 1 ? "1 venda" : `${r.mes.vendas} vendas`}${r.mes.vendas ? ` · ticket médio ${fmt(r.mes.total / r.mes.vendas)}` : ""}</p></div>
-      <div class="card"><p class="kpi-rotulo">Lucro bruto em ${mes}</p><p class="kpi-valor ${r.mes.lucroBruto >= 0 ? "positivo" : "negativo"}">${fmt(r.mes.lucroBruto)}</p><p class="kpi-nota">vendas − custo da mercadoria (${fmt(r.mes.cmv)})${r.mes.taxas ? ` − taxas (${fmt(r.mes.taxas)})` : ""}</p></div>
-      <div class="card"><p class="kpi-rotulo">Compras e gastos em ${mes}</p><p class="kpi-valor">${fmt(r.mes.gastos)}</p><p class="kpi-nota">${S.negocio.controlaEstoque || S.produtos.some((p) => p.controlaEstoque) ? `Estoque parado: ${fmt(r.valorEstoque)} (a preço de custo)` : "Notas de gasto e compras de mercadoria"}</p></div>
+      ${!pode("custos") ? `<div class="card"><p class="kpi-rotulo">Ticket médio hoje</p><p class="kpi-valor">${r.hoje.vendas ? fmt(r.hoje.total / r.hoje.vendas) : "—"}</p><p class="kpi-nota">quanto cada cliente gastou, em média</p></div>` : `<div class="card"><p class="kpi-rotulo">Lucro bruto em ${mes}</p><p class="kpi-valor ${r.mes.lucroBruto >= 0 ? "positivo" : "negativo"}">${fmt(r.mes.lucroBruto)}</p><p class="kpi-nota">vendas − custo da mercadoria (${fmt(r.mes.cmv)})${r.mes.taxas ? ` − taxas (${fmt(r.mes.taxas)})` : ""}</p></div>`}
+      ${!pode("custos") ? (() => { const n = S.produtos.filter((p) => p.ativo && (p.situacao === "baixo" || p.situacao === "acabou")).length; return `<div class="card"><p class="kpi-rotulo">Estoque baixo</p><p class="kpi-valor">${n}</p><p class="kpi-nota">${n === 1 ? "produto para repor" : "produtos para repor"}</p></div>`; })() : `<div class="card"><p class="kpi-rotulo">Compras e gastos em ${mes}</p><p class="kpi-valor">${fmt(r.mes.gastos)}</p><p class="kpi-nota">${S.negocio.controlaEstoque || S.produtos.some((p) => p.controlaEstoque) ? (pode("custos") ? `Estoque parado: ${fmt(r.valorEstoque)} (a preço de custo)` : "Notas de gasto e compras de mercadoria") : "Notas de gasto e compras de mercadoria"}</p></div>`}
+
     </div><div class="espaco"></div>
     <div class="grade grade-2">
       <div class="card"><h2 class="secao">Estoque pedindo atenção</h2>${r.alertas.length ? `<ul class="lista-simples">${r.alertas.map((a) => `<li><span>${esc(a.nome)}</span><span class="linha"><span class="num">${fmtN(a.estoque)} ${unid(a.unidade)}</span><span class="selo ${a.situacao}">${a.situacao === "acabou" ? "acabou" : "baixo"}</span><button class="btn mini claro" data-a="ajustar" data-id="${a.produtoId}">Ajustar</button></span></li>`).join("")}</ul>`
@@ -523,7 +554,7 @@
       <p class="bv-marca">${esc(S.negocio.nome || "PDV")}</p>
       ${!t.id ? `<h2 class="bv-titulo" style="font-size:22px">Quem vai usar o caixa?</h2>
         <div class="trava-ops">${ops.map((o) => `<button type="button" class="trava-op" data-a="tr-op" data-id="${o.id}"><span class="avatar">${inicial(o.nome)}</span><b>${esc(o.nome)}</b><small>${NOME_PAPEL[o.papel] || o.papel}</small></button>`).join("")}</div>
-        ${S.pdv.exigirOperador ? "" : `<button class="link" data-a="tr-fechar" style="margin-top:14px">Continuar sem operador</button>`}`
+        ${pinObrigatorio() ? "" : `<button class="link" data-a="tr-fechar" style="margin-top:14px">Continuar sem operador</button>`}`
       : `<button class="link" data-a="tr-voltar">← trocar pessoa</button>
         <h2 class="bv-titulo" style="font-size:22px;margin-top:10px">${esc(ops.find((o) => o.id === t.id).nome)}, digite seu PIN</h2>
         <div class="pin-pontos">${[0, 1, 2, 3, 4, 5].slice(0, Math.max(4, t.pin.length)).map((i) => `<i class="${i < t.pin.length ? "cheio" : ""}"></i>`).join("")}</div>
@@ -546,10 +577,18 @@
       depoisDeEntrar(r.operador, "");
     } catch (e) { t.entrando = false; t.pin = ""; t.erro = e.message; desenharTrava(); }
   }
-  function depoisDeEntrar(op, aviso) {
+  async function depoisDeEntrar(op, aviso) {
     TR = null; const el = $("#trava"); if (el) el.remove();
+    if (!S.offline) {
+      await carregarAcesso();
+      try { const d = await api("GET", "/estoque"); S.produtos = d.produtos; } catch (e) { /* fica o que já tinha */ }
+    }
     atualizarChipOperador(); desenharNavCelular(); toast(`Olá, ${esc(op.nome)}!${aviso}`, "ok");
     if (op.papel === "garcom" && restaurante() && !["mesas", "cozinha", "pedidos", "clientes"].includes(S.tab)) irPara("mesas"); else irPara(S.tab);
+  }
+  function semAcessoAoPdv() {
+    const o = ACESSO && ACESSO.operador;
+    $("#main").innerHTML = `<div class="card vazio" style="margin:24px"><b>Sem acesso ao PDV</b>A sua função${o ? ` (${esc(o.funcao || o.papel)})` : ""} não inclui o PDV. Fale com o gestor se precisar.<br/><br/><a class="btn claro" href="/">Voltar ao início</a>${ehLoja() ? ` <button class="btn claro" data-a="trocar-operador">Trocar pessoa</button>` : ""}</div>`;
   }
 
   /* PIN sem internet: o PIN NUNCA fica salvo. Ao entrar com internet, o servidor devolve uma credencial
@@ -603,7 +642,7 @@
   function encerrarSessaoLocal() {
     const o = lerOperador(); if (!o || !o.local) return;
     esquecerOperador(); atualizarChipOperador(); desenharNavCelular();
-    if (S.pdv && S.pdv.exigirOperador) mostrarTrava("A internet voltou: entre de novo com o seu PIN.");
+    if (S.pdv && pinObrigatorio()) mostrarTrava("A internet voltou: entre de novo com o seu PIN.");
   }
   // tira do cofre quem foi desativado ou removido
   function limparCofre() {
@@ -617,9 +656,10 @@
     const o = lerOperador();
     el.hidden = !S.operadores.filter((x) => x.ativo).length;
     el.innerHTML = o ? `<span class="avatar">${inicial(o.operador.nome)}</span><span>${esc(o.operador.nome)}</span><small>trocar</small>` : `<span class="avatar">?</span><span>Entrar com PIN</span>`;
-    // garçom não usa caixa, balcão nem compras: some do menu
-    const garcom = !!(o && o.operador.papel === "garcom");
-    ["caixa", "vender", "compras"].forEach((t) => { const b = document.querySelector(`#nav .nav-item[data-tab="${t}"]`); if (b) b.hidden = garcom; });
+    if (ehFuncionario()) el.hidden = true; // entrou pelo próprio celular: não troca de pessoa aqui
+    // cada função vê só as abas que usa (garçom: mesas, cozinha e pedidos; estoquista: produtos e compras…)
+    document.querySelectorAll(".nav-item[data-tab]").forEach((b) => { b.hidden = !podeAba(b.dataset.tab) || (b.hasAttribute("data-so-restaurante") && !restaurante()); });
+    const painel = $("#nav-painel"); if (painel) painel.hidden = !ehGestor() || !tem("equipe");
   }
 
   /* =====================================================================
@@ -967,21 +1007,21 @@
       && (!S.filtroProd || (S.filtroProd === "atencao" ? p.ativo && (p.situacao === "baixo" || p.situacao === "acabou") : S.filtroProd === "inativos" ? !p.ativo : p.ativo)));
     const atencao = S.produtos.filter((p) => p.ativo && (p.situacao === "baixo" || p.situacao === "acabou")).length;
     let html = topo("Produtos e estoque", `${S.produtos.length === 1 ? "1 produto" : `${S.produtos.length} produtos`} cadastrados. Para entrada de mercadoria comprada, use Compras: o custo médio se atualiza sozinho.`,
-      `<button class="btn claro so-desk" data-a="importar-prod" title="Cadastrar ou atualizar vários produtos de uma vez por planilha">Importar planilha</button><button class="btn claro so-desk" data-a="exportar-prod">Exportar (.xlsx)</button><button class="btn acento" data-a="novo-produto">Novo produto</button>`);
+      !pode("produtos") ? "" : `${pode("custos") ? `<button class="btn claro so-desk" data-a="importar-prod" title="Cadastrar ou atualizar vários produtos de uma vez por planilha">Importar planilha</button><button class="btn claro so-desk" data-a="exportar-prod">Exportar (.xlsx)</button>` : ""}<button class="btn acento" data-a="novo-produto">Novo produto</button>`);
     html += `<div class="linha" style="margin-bottom:14px"><input class="inp" style="max-width:340px" data-busca-prod value="${esc(S.buscaProd)}" placeholder="Buscar produto" />
       <div class="chips"><button class="chip ${!S.filtroProd ? "ativo" : ""}" data-a="filtro-prod" data-v="">Ativos</button><button class="chip ${S.filtroProd === "atencao" ? "ativo" : ""}" data-a="filtro-prod" data-v="atencao">Estoque baixo${atencao ? ` (${atencao})` : ""}</button><button class="chip ${S.filtroProd === "inativos" ? "ativo" : ""}" data-a="filtro-prod" data-v="inativos">Inativos</button></div></div>`;
     if (!S.produtos.length) return html + `<div class="card vazio"><b>Nenhum produto ainda</b>Cadastre o que você vende: nome, preço, custo e, se quiser, variações como tamanho ou cor.<br/><br/><button class="btn acento" data-a="novo-produto">Cadastrar o primeiro produto</button></div>`;
     if (!lista.length) return html + `<div class="card vazio">Nenhum produto neste filtro.</div>`;
-    html += `<div class="card" style="padding:6px 8px"><div class="tabela-wrap"><table class="tabela"><thead><tr><th>Produto</th><th class="dir">Preço</th><th class="dir">Custo</th><th class="dir">Margem</th><th class="dir">Estoque</th><th></th></tr></thead><tbody>
+    html += `<div class="card" style="padding:6px 8px"><div class="tabela-wrap"><table class="tabela"><thead><tr><th>Produto</th><th class="dir">Preço</th>${pode("custos") ? `<th class="dir">Custo</th><th class="dir">Margem</th>` : ""}<th class="dir">Estoque</th><th></th></tr></thead><tbody>
       ${lista.map((p) => {
         const m = margem(p);
         const est = !p.controlaEstoque ? `<span class="selo livre">sem controle</span>` : `<span class="num">${fmtN(p.estoque)} ${unid(p.unidade)}</span> <span class="selo ${p.situacao}">${p.situacao === "ok" ? "ok" : p.situacao === "baixo" ? "baixo" : "acabou"}</span>`;
-        return `<tr class="clicavel" data-a="editar-produto" data-id="${p.id}">
+        return `<tr ${pode("produtos") ? `class="clicavel" data-a="editar-produto" data-id="${p.id}"` : ""}>
           <td><div class="prod-cel"><span class="miniatura" ${p.foto ? `style="background-image:url('${esc(p.foto)}')"` : ""}>${p.foto ? "" : inicial(p.nome)}</span><div><div class="prod-nome">${esc(p.nome)}${p.ativo ? "" : ` <span class="selo neutro">inativo</span>`}</div><div class="prod-cat">${esc(p.categoria || "Sem categoria")}${p.variacoes.length ? ` · ${p.variacoes.length} variações` : ""}${restaurante() && !p.noCardapio ? " · fora do cardápio" : ""}</div></div></div></td>
-          <td class="dir num">${fmt(p.preco)}</td><td class="dir num">${fmt(p.custo)}</td>
-          <td class="dir">${m === null ? "—" : `<span class="${m < 0 ? "negativo" : ""}">${m}%</span>`}</td>
+          <td class="dir num">${fmt(p.preco)}</td>${pode("custos") ? `<td class="dir num">${fmt(p.custo)}</td>
+          <td class="dir">${m === null ? "—" : `<span class="${m < 0 ? "negativo" : ""}">${m}%</span>`}</td>` : ""}
           <td class="dir" style="white-space:nowrap">${est}</td>
-          <td class="dir">${p.controlaEstoque ? `<button class="btn mini claro" data-a="ajustar" data-id="${p.id}">Ajustar</button>` : ""}</td>
+          <td class="dir">${p.controlaEstoque && pode("produtos") ? `<button class="btn mini claro" data-a="ajustar" data-id="${p.id}">Ajustar</button>` : ""}</td>
         </tr>`;
       }).join("")}</tbody></table></div></div>`;
     return html;
@@ -1004,7 +1044,7 @@
     const varRows = f.variacoes.map((v, i) => `<div class="linha-ed var">
       <label><span class="rotulo-mob">Nome</span><input class="inp" data-var="${i}" data-campo="nome" value="${esc(v.nome)}" placeholder="Ex.: M ou Azul" maxlength="60" /></label>
       <label><span class="rotulo-mob">Preço</span><input class="inp" data-var="${i}" data-campo="preco" value="${esc(v.preco)}" inputmode="decimal" placeholder="${esc(f.preco || "igual")}" /></label>
-      <label><span class="rotulo-mob">Custo</span><input class="inp" data-var="${i}" data-campo="custo" value="${esc(v.custo)}" inputmode="decimal" placeholder="${esc(f.custo || "igual")}" /></label>
+      ${pode("custos") ? `<label><span class="rotulo-mob">Custo</span><input class="inp" data-var="${i}" data-campo="custo" value="${esc(v.custo)}" inputmode="decimal" placeholder="${esc(f.custo || "igual")}" /></label>` : ""}
       <label><span class="rotulo-mob">${v.id ? "Estoque" : "Estoque inicial"}</span>${v.id ? `<input class="inp" value="${fmtN(v.estoque)}" disabled title="Para mudar, use Ajustar ou Compras" />` : `<input class="inp" data-var="${i}" data-campo="estoqueInicial" value="${esc(v.estoqueInicial || "")}" inputmode="decimal" placeholder="0" ${f.controlaEstoque ? "" : "disabled"} />`}</label>
       <label><span class="rotulo-mob">Mínimo</span><input class="inp" data-var="${i}" data-campo="estoqueMinimo" value="${esc(v.estoqueMinimo)}" inputmode="decimal" placeholder="0" ${f.controlaEstoque ? "" : "disabled"} /></label>
       <button type="button" class="x-linha" data-a="tirar-var" data-i="${i}" aria-label="Tirar variação">×</button>
@@ -1027,7 +1067,7 @@
       </div>
       <div class="campos" style="margin-top:12px">
         <label class="campo"><span>Preço de venda</span><input data-pf="preco" value="${esc(f.preco)}" inputmode="decimal" placeholder="0,00" /></label>
-        <label class="campo"><span>Custo</span><input data-pf="custo" value="${esc(f.custo)}" inputmode="decimal" placeholder="0,00" /><small id="pf-margem">${m === null ? "Quanto você paga por ele" : `Margem: ${m}%`}</small></label>
+        ${!pode("custos") ? "" : `<label class="campo"><span>Custo</span><input data-pf="custo" value="${esc(f.custo)}" inputmode="decimal" placeholder="0,00" /><small id="pf-margem">${m === null ? "Quanto você paga por ele" : `Margem: ${m}%`}</small></label>`}
         <label class="campo"><span>Unidade</span><select data-pf="unidade">${S.unidades.map((u) => `<option value="${u}" ${f.unidade === u ? "selected" : ""}>${UNIDADE_NOME[u] || u}</option>`).join("")}</select></label>
         <label class="campo"><span>Código / código de barras</span><input data-pf="codigo" value="${esc(f.codigo)}" maxlength="40" placeholder="Opcional" /></label>
       </div>
@@ -1289,9 +1329,10 @@
      Vendas (histórico)
      ===================================================================== */
   function telaRelatorios() {
-    const abas = [["vendas", "Vendas"], ["produtos", "Produtos (ABC e margem)"], ["horarios", "Dias e horários"], ["caixas", "Fechamentos de caixa"], ["despesas", "Despesas"]];
+    const abas = [["vendas", "Vendas"], ["produtos", "Produtos (ABC e margem)"], ["horarios", "Dias e horários"], ["caixas", "Fechamentos de caixa"], ["despesas", "Despesas"]].filter(([k]) => pode("custos") || !["produtos", "despesas"].includes(k));
+    if (!abas.some(([k]) => k === S.relAba)) S.relAba = "vendas";
     const chips = `<div class="chips rel-abas" style="margin:0">${abas.map(([k, t]) => `<button class="chip ${S.relAba === k ? "ativo" : ""}" data-a="rel-aba" data-v="${k}">${t}</button>`).join("")}</div>`;
-    const excel = `<button class="btn claro mini rel-excel" data-a="baixar-xlsx" title="Planilha do mês com vendas, itens, pagamentos, caixas, despesas, estoque e clientes"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> Excel (.xlsx) de ${MESES[Number(S.mesVendas.slice(5, 7)) - 1]}</button>`;
+    const excel = !pode("custos") ? "" : `<button class="btn claro mini rel-excel" data-a="baixar-xlsx" title="Planilha do mês com vendas, itens, pagamentos, caixas, despesas, estoque e clientes"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> Excel (.xlsx) de ${MESES[Number(S.mesVendas.slice(5, 7)) - 1]}</button>`;
     return `<h1 class="so-cel titulo-cel">Relatórios</h1><div class="linha entre rel-topo">${chips}${excel}</div>` + (S.relAba === "caixas" ? telaCaixasHist() : S.relAba === "despesas" ? telaGastos() : S.relAba === "produtos" ? (tem("relatorios") ? telaAnaliseProdutos() : completoHtml("relatorios")) : S.relAba === "horarios" ? (tem("relatorios") ? telaAnaliseHorarios() : completoHtml("relatorios")) : telaVendas());
   }
   function telaCaixasHist() {
@@ -1324,15 +1365,15 @@
     const tot = validas.reduce((acc, v) => ({ total: acc.total + v.total, cmv: acc.cmv + v.cmv, taxa: acc.taxa + v.taxa, lucro: acc.lucro + v.lucro }), { total: 0, cmv: 0, taxa: 0, lucro: 0 });
     html += `<div class="grade grade-4">
       <div class="card"><p class="kpi-rotulo">Faturamento</p><p class="kpi-valor">${fmt(tot.total)}</p><p class="kpi-nota">${validas.length === 1 ? "1 venda" : `${validas.length} vendas`}${validas.length ? ` · ticket médio ${fmt(tot.total / validas.length)}` : ""}</p></div>
-      <div class="card"><p class="kpi-rotulo">Custo da mercadoria</p><p class="kpi-valor">${fmt(tot.cmv)}</p><p class="kpi-nota">pelo custo médio de cada produto</p></div>
+      ${pode("custos") ? `<div class="card"><p class="kpi-rotulo">Custo da mercadoria</p><p class="kpi-valor">${fmt(tot.cmv)}</p><p class="kpi-nota">pelo custo médio de cada produto</p></div>` : ""}
       <div class="card"><p class="kpi-rotulo">Taxas de cartão</p><p class="kpi-valor">${fmt(tot.taxa)}</p><p class="kpi-nota">as % ficam em Configurações</p></div>
-      <div class="card"><p class="kpi-rotulo">Lucro bruto</p><p class="kpi-valor ${tot.lucro >= 0 ? "positivo" : "negativo"}">${fmt(tot.lucro)}</p><p class="kpi-nota">${tot.total ? `margem de ${Math.round(tot.lucro / tot.total * 100)}%` : "—"}</p></div>
+      ${pode("custos") ? `<div class="card"><p class="kpi-rotulo">Lucro bruto</p><p class="kpi-valor ${tot.lucro >= 0 ? "positivo" : "negativo"}">${fmt(tot.lucro)}</p><p class="kpi-nota">${tot.total ? `margem de ${Math.round(tot.lucro / tot.total * 100)}%` : "—"}</p></div>` : ""}
     </div><div class="espaco"></div>`;
     if (!S.vendas.length) return html + `<div class="card vazio">Nenhuma venda neste mês.</div>`;
-    return html + `<div class="card" style="padding:6px 8px"><div class="tabela-wrap"><table class="tabela"><thead><tr><th class="so-desk">#</th><th class="so-desk">Data</th><th>Itens</th><th class="so-desk">Pagamento</th><th class="dir">Total</th><th class="dir so-desk">Lucro</th></tr></thead><tbody>
+    return html + `<div class="card" style="padding:6px 8px"><div class="tabela-wrap"><table class="tabela"><thead><tr><th class="so-desk">#</th><th class="so-desk">Data</th><th>Itens</th><th class="so-desk">Pagamento</th><th class="dir">Total</th>${pode("custos") ? `<th class="dir so-desk">Lucro</th>` : ""}</tr></thead><tbody>
       ${S.vendas.map((v) => `<tr class="clicavel ${v.cancelada ? "cancelada" : ""}" data-a="ver-venda" data-id="${v.id}"><td class="num so-desk">${v.numero}</td><td class="so-desk">${dataBR(v.data)}</td>
         <td><span class="so-cel prod-cat">#${v.numero} · ${dataBR(v.data)} · ${esc(pagamentoTexto(v))}${v.cancelada ? " · cancelada" : ""}</span>${v.itens.slice(0, 3).map((i) => `${fmtN(i.qtd)}× ${esc(i.nome)}`).join(", ")}${v.itens.length > 3 ? ` +${v.itens.length - 3}` : ""}${v.cliente ? `<div class="prod-cat">${esc(v.cliente)}${v.pedidoId ? " · cardápio" : v.comandaId ? " · mesa" : ""}</div>` : v.pedidoId ? `<div class="prod-cat">cardápio</div>` : ""}</td>
-        <td class="so-desk">${esc(pagamentoTexto(v))}${v.cancelada ? ` <span class="selo neutro">cancelada</span>` : ""}</td><td class="dir num">${fmt(v.total)}<div class="prod-cat so-cel ${v.lucro < 0 ? "negativo" : ""}">lucro ${fmt(v.lucro)}</div></td><td class="dir num so-desk ${v.lucro < 0 ? "negativo" : ""}">${fmt(v.lucro)}</td></tr>`).join("")}
+        <td class="so-desk">${esc(pagamentoTexto(v))}${v.cancelada ? ` <span class="selo neutro">cancelada</span>` : ""}</td><td class="dir num">${fmt(v.total)}${pode("custos") ? `<div class="prod-cat so-cel ${v.lucro < 0 ? "negativo" : ""}">lucro ${fmt(v.lucro)}</div></td><td class="dir num so-desk ${v.lucro < 0 ? "negativo" : ""}">${fmt(v.lucro)}` : ""}</td></tr>`).join("")}
     </tbody></table></div></div>`;
   }
   function verVenda(id) {
@@ -1348,9 +1389,9 @@
         ${v.premioValor ? `<div class="cart-linha"><span>Prêmio do cartão fidelidade</span><span class="num negativo">− ${fmt(v.premioValor)}</span></div>` : ""}
         ${v.acrescimo ? `<div class="cart-linha"><span>Entrega</span><span class="num">${fmt(v.acrescimo)}</span></div>` : ""}
         <div class="cart-linha total"><span>Total</span><span class="num">${fmt(v.total)}</span></div>
-        <div class="cart-linha"><span class="sub">Custo da mercadoria</span><span class="num sub">${fmt(v.cmv)}</span></div>
+        ${pode("custos") ? `<div class="cart-linha"><span class="sub">Custo da mercadoria</span><span class="num sub">${fmt(v.cmv)}</span></div>
         ${v.taxa ? `<div class="cart-linha"><span class="sub">Taxa do cartão</span><span class="num sub">${fmt(v.taxa)}</span></div>` : ""}
-        <div class="cart-linha"><span><b>Sobrou (lucro bruto)</b></span><b class="num ${v.lucro < 0 ? "negativo" : "positivo"}">${fmt(v.lucro)}</b></div>
+        <div class="cart-linha"><span><b>Sobrou (lucro bruto)</b></span><b class="num ${v.lucro < 0 ? "negativo" : "positivo"}">${fmt(v.lucro)}</b></div>` : ""}
       </div>
       ${v.cashbackGanho || v.selosGanhos ? `<p class="aviso info">🎁 ${esc(v.cliente)} ${v.cashbackGanho ? `ganhou ${fmt(v.cashbackGanho)} de cashback` : "ganhou +1 compra no cartão fidelidade"} nesta venda.</p>` : ""}
       ${v.clienteId ? `<p style="margin-top:10px"><button class="link" data-a="cli-ficha" data-id="${v.clienteId}">Ver a ficha de ${esc(v.cliente)}</button></p>` : ""}
@@ -1648,9 +1689,10 @@
         <label class="campo"><span>Mensagem no fim do recibo</span><input data-pc="reciboRodape" value="${esc(PC.reciboRodape)}" maxlength="140" placeholder="Obrigado pela preferência!" /></label>
       </div>
       <div class="bloco">
-        ${!tem("equipe") ? `<p class="bloco-titulo" style="margin:0">Operadores (funcionários)</p><p class="bloco-sub" style="margin-top:4px">Cada funcionário entrar com o próprio PIN faz parte do <b>plano Completo</b>. <a href="../assinatura.html?de=estoque">Ver planos</a></p>` : `<div class="linha entre"><p class="bloco-titulo" style="margin:0">Operadores (funcionários)</p><button class="btn mini claro" data-a="op-novo">+ Operador</button></div>
+        ${!tem("equipe") ? `<p class="bloco-titulo" style="margin:0">Operadores (funcionários)</p><p class="bloco-sub" style="margin-top:4px">Cada funcionário entrar com o próprio PIN faz parte do <b>plano Completo</b>. <a href="../assinatura.html?de=estoque">Ver planos</a></p>` : `<div class="linha entre"><p class="bloco-titulo" style="margin:0">Equipe</p><a class="btn mini claro" href="../painel.html">Abrir o Painel do dono</a></div>
+        <p class="bloco-sub" style="margin-top:4px">Cadastrar pessoas, trocar PIN, escolher a função de cada uma e o que pode ver fica no <b>Painel do dono</b>.</p>
         <p class="bloco-sub" style="margin-top:4px">Cada pessoa entra no caixa com um PIN. O sistema guarda quem vendeu e quem abriu e fechou o caixa. Gerente cancela vendas e mexe em produtos e configurações; caixa vende e cuida do caixa${restaurante() ? "; garçom lança os pedidos nas mesas" : ""}.</p>
-        ${ops.length ? `<ul class="lista-simples">${ops.map((o) => `<li><span><b>${esc(o.nome)}</b> <span class="selo ${o.papel === "gerente" ? "acento" : "neutro"}">${NOME_PAPEL[o.papel] || o.papel}</span>${o.ativo ? "" : ` <span class="selo neutro">inativo</span>`}</span><button class="btn mini claro" data-a="op-editar" data-id="${o.id}">Editar</button></li>`).join("")}</ul>` : `<p class="sub">Nenhum operador. Sem operadores, quem está logado na conta usa o caixa.</p>`}
+        ${ops.length ? `<ul class="lista-simples">${ops.map((o) => `<li><span><b>${esc(o.nome)}</b> <span class="selo ${["gestor", "gerente"].includes(o.papel) ? "acento" : "neutro"}">${NOME_PAPEL[o.papel] || o.papel}</span>${o.ativo ? "" : ` <span class="selo neutro">inativo</span>`}</span></li>`).join("")}</ul>` : `<p class="sub">Ninguém cadastrado ainda. Sem equipe, quem está logado na conta usa o caixa.</p>`}
         ${ops.length ? `<label class="check" style="margin-top:10px"><input type="checkbox" data-pc="exigirOperador" ${PC.exigirOperador ? "checked" : ""} /><span><b>Pedir o PIN para usar o caixa</b><small>Ninguém vende, cancela ou muda nada sem entrar com o PIN.</small></span></label>
         <label class="campo" style="margin-top:10px;max-width:220px"><span>Desconto máximo do caixa (%)</span><input data-pc="descontoMaxCaixa" value="${esc(PC.descontoMaxCaixa)}" inputmode="decimal" /><small>Acima disso, só o gerente.</small></label>` : ""}`}
       </div>
@@ -1668,7 +1710,7 @@
     render();
   }
   let OPF = null;
-  const NOME_PAPEL = { gerente: "gerente", caixa: "caixa", garcom: "garçom" };
+  const NOME_PAPEL = { gestor: "gestor", gerente: "gerente", vendedor: "vendedor", estoquista: "estoquista", caixa: "caixa", garcom: "garçom" };
   function abrirOperador(o) {
     OPF = o ? { ...o, pin: "", erro: "" } : { id: null, nome: "", papel: S.operadores.some((x) => x.papel === "gerente") ? "caixa" : "gerente", ativo: true, pin: "", erro: "" };
     abrirModal(o ? "Editar operador" : "Novo operador", operadorHtml(), { aoFechar: () => { OPF = null; } });
@@ -1754,8 +1796,9 @@
      o caixa fecha a conta com a mesma cobrança do balcão (taxa de serviço, divisão por
      pessoas, troco, fiado). O estoque só baixa quando a conta fecha.
      ===================================================================== */
-  const operadorAtual = () => { const o = lerOperador(); return o ? o.operador : null; };
-  const ehGarcom = () => { const o = operadorAtual(); return !!(o && o.papel === "garcom"); };
+  const operadorAtual = () => { const o = lerOperador(); return o ? o.operador : ACESSO && ACESSO.tipo === "funcionario" ? ACESSO.operador : null; };
+  // "garçom" = quem lança pedidos mas não cobra (a função não tem vender nem caixa)
+  const ehGarcom = () => { const o = operadorAtual(); return permsAtuais() ? !pode("vender") && !pode("caixa") && pode("mesas") : !!(o && o.papel === "garcom"); };
   const minutosDesde = (iso) => Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 60000));
   const tempoTxt = (iso) => { const m = minutosDesde(iso); return m < 60 ? `${m} min` : `${Math.floor(m / 60)}h${String(m % 60).padStart(2, "0")}`; };
   const relogio = (iso) => { const s = Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 1000)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`; };
@@ -2130,6 +2173,8 @@
     switch (a) {
       case "ms-abrir": abrirComandaTela(id); break;
       case "ms-nova": {
+        const mesa = S.mapa && S.mapa.mesas ? S.mapa.mesas.find((m) => m.id === id) : null;
+        if (!(await confirmarAcao({ titulo: "Abrir comanda?", mensagem: `Abrir uma comanda na ${mesa ? mesa.nome : "mesa"}? Ela fica ocupada até a conta ser fechada.`, botao: "Abrir comanda", cancelar: "Voltar", perigo: false, chave: "abrir-comanda" }))) break;
         el.disabled = true;
         try { const r = await api("POST", "/estoque/comandas", { mesaId: id }); abrirComandaTela(r.comanda.id, r.comanda, r.comanda.itens.length ? "conta" : "add"); }
         catch (e) { toast(esc(e.message), "erro"); }
@@ -2844,8 +2889,9 @@
   const ICONES = {};
   // restaurante: Caixa, Mesas, Cozinha, Pedidos (garçom: sem o Caixa); loja: Caixa, Vender, Produtos, Clientes
   function abasCelular() {
-    if (restaurante()) return ehGarcom() ? ["mesas", "cozinha", "pedidos", "clientes"] : ["caixa", "mesas", "cozinha", "pedidos"];
-    return ["caixa", "vender", "produtos", "clientes"];
+    const base = restaurante() ? (ehGarcom() ? ["mesas", "cozinha", "pedidos", "clientes"] : ["caixa", "mesas", "cozinha", "pedidos"]) : ["caixa", "vender", "produtos", "clientes"];
+    const extras = ["vender", "caixa", "produtos", "compras", "clientes", "relatorios"].filter((t) => !base.includes(t));
+    return [...base.filter(podeAba), ...extras.filter(podeAba)].slice(0, 4);
   }
   function desenharNavCelular() {
     const nav = $("#nav-cel"); if (!nav) return;
@@ -2857,13 +2903,14 @@
   }
   function abrirMais() {
     const principais = abasCelular();
-    const itens = [...document.querySelectorAll("#nav .nav-item[data-tab]:not([hidden]), .sidebar-footer .nav-item[data-tab]")].filter((b) => !principais.includes(b.dataset.tab));
+    const itens = [...document.querySelectorAll("#nav .nav-item[data-tab]:not([hidden]), .sidebar-footer .nav-item[data-tab]")].filter((b) => !principais.includes(b.dataset.tab) && podeAba(b.dataset.tab));
     const fundo = document.createElement("div");
     fundo.className = "mais-fundo"; fundo.setAttribute("data-a", "mais-fechar");
     fundo.innerHTML = `<div class="mais-folha" role="dialog" aria-label="Mais opções"><div class="mais-alca"></div>
       <div class="mais-grade">${itens.map((b) => `<button type="button" class="mais-item ${S.tab === b.dataset.tab ? "ativo" : ""}" data-tab="${b.dataset.tab}">${b.querySelector("svg").outerHTML}<span>${esc(b.querySelector("span").textContent)}</span></button>`).join("")}
         <a class="mais-item" href="/">${document.querySelector('.sidebar-footer a[href="/"] svg').outerHTML}<span>Trocar de aplicativo</span></a>
-        ${S.operadores.filter((o) => o.ativo).length ? `<button type="button" class="mais-item" data-a="trocar-operador"><span class="avatar">${lerOperador() ? inicial(lerOperador().operador.nome) : "?"}</span><span>${lerOperador() ? "Trocar operador" : "Entrar com PIN"}</span></button>` : ""}
+        ${ehGestor() && tem("equipe") ? `<a class="mais-item" href="../painel.html">${$("#nav-painel svg").outerHTML}<span>Painel do dono</span></a>` : ""}
+        ${S.operadores.filter((o) => o.ativo).length && !ehFuncionario() ? `<button type="button" class="mais-item" data-a="trocar-operador"><span class="avatar">${lerOperador() ? inicial(lerOperador().operador.nome) : "?"}</span><span>${lerOperador() ? "Trocar operador" : "Entrar com PIN"}</span></button>` : ""}
         <button type="button" class="mais-item sair" id="sair-cel">${$("#sair svg").outerHTML}<span>Sair</span></button>
       </div></div>`;
     document.body.appendChild(fundo);
@@ -3247,7 +3294,7 @@
   async function iniciar() {
     $("#boas-vindas").innerHTML = `<div class="carregando"><p>Carregando o PDV…</p></div>`;
     try {
-      const d = await api("GET", "/estoque");
+      const [d] = await Promise.all([api("GET", "/estoque"), carregarAcesso()]);
       S.negocio = d.negocio; S.produtos = d.produtos; S.meios = d.meios; S.unidades = d.unidades;
       S.pdv = d.pdv || {}; S.recursos = d.recursos || null; S.operadores = tem("equipe") ? (d.operadores || []) : []; S.caixa = d.caixa ? d.caixa.aberto : null;
       S.fiscal = d.fiscal || null;
@@ -3261,7 +3308,7 @@
         if (!tem("equipe")) S.operadores = [];
         $("#boas-vindas").innerHTML = "";
         abrirApp(); irPara("vender"); desenharFaixaOffline();
-        if (S.pdv.exigirOperador && !lerOperador()) mostrarTrava();
+        if (pinObrigatorio() && !lerOperador()) mostrarTrava();
         return;
       }
       const semPermissao = /^O gestor da sua equipe/.test(e.message || "");
@@ -3272,7 +3319,7 @@
     if (!S.negocio || !(S.negocio.checklist && S.negocio.checklist.configurado)) { telaBoasVindas(); return; }
     $("#boas-vindas").innerHTML = "";
     abrirApp();
-    if (S.pdv.exigirOperador && !lerOperador()) mostrarTrava();
+    if (pinObrigatorio() && !lerOperador() && !ehFuncionario()) mostrarTrava();
     desenharFaixaOffline(); sincronizarFila();
   }
   iniciar();
