@@ -96,7 +96,32 @@ function montarEmailBackup({ nome, geradoEm, anexado, tamanhoMb }) {
   return { assunto: anexado ? 'Seu backup semanal — Livro-Caixa' : 'Backup semanal grande demais para e-mail — Livro-Caixa', html: moldeEmail('Backup semanal', corpoHtml), texto };
 }
 
+function montarEmailTarefa({ nome, titulo, descricao, quando, comHora, tipo }) {
+  const novo = tipo === 'nova';
+  const cab = novo ? 'Nova tarefa no seu CRM' : (comHora ? 'Tarefa chegando' : 'Tarefa para hoje');
+  const html = moldeEmail(cab, `
+<p style="line-height:1.55;">${nome ? `Olá, ${escaparHtml(nome)}! ` : ''}${novo ? 'Você criou uma tarefa no Livro-Caixa:' : 'Lembrete da sua tarefa no Livro-Caixa:'}</p>
+<p style="font-size:17px;font-weight:bold;margin:14px 0 6px;">${escaparHtml(titulo)}</p>
+<p style="margin:0 0 6px;color:#555;">${escaparHtml(quando)}</p>
+${descricao ? `<p style="line-height:1.55;font-size:14px;color:#555;">${escaparHtml(descricao)}</p>` : ''}
+${novo ? '<p style="line-height:1.55;font-size:13px;color:#777;">O arquivo em anexo (.ics) adiciona esse compromisso ao seu calendário, se você abrir.</p>' : ''}
+<p style="font-size:12px;color:#888;margin-top:16px;">Para parar de receber, desative em Configurações → Integrações → E-mail.</p>`);
+  const texto = `${novo ? 'Nova tarefa' : 'Lembrete de tarefa'}: ${titulo}\n${quando}${descricao ? `\n${descricao}` : ''}`;
+  return { assunto: `${novo ? 'Nova tarefa' : (comHora ? 'Tarefa chegando' : 'Tarefa para hoje')}: ${titulo}`.slice(0, 150), html, texto };
+}
+
+// Aviso para o e-mail ANTIGO quando a pessoa troca o e-mail da conta
+function montarEmailTrocaDeEmail({ nome, novoEmail }) {
+  const html = moldeEmail('O e-mail da sua conta mudou', `
+<p style="line-height:1.55;">${nome ? `Olá, ${escaparHtml(nome)}! ` : ''}O e-mail de login da sua conta no Livro-Caixa foi trocado para <b>${escaparHtml(novoEmail)}</b>.</p>
+<p style="line-height:1.55;font-size:14px;color:#555;">Daqui em diante, entre com o novo e-mail. Se não foi você, responda a este aviso ou fale com o suporte imediatamente.</p>`);
+  const texto = `O e-mail de login da sua conta no Livro-Caixa foi trocado para ${novoEmail}. Se não foi você, fale com o suporte imediatamente.`;
+  return { assunto: 'O e-mail da sua conta mudou — Livro-Caixa', html, texto };
+}
+
 module.exports = {
+  montarEmailTarefa,
+  montarEmailTrocaDeEmail,
   emailConfigurado,
   urlBaseDoApp,
   enviarEmail,

@@ -626,6 +626,17 @@ mostra o resumo do dia e do mês, as vendas de cada pessoa, o código da loja e 
 - O servidor confere cada rota (`server/utils/acesso.js`, `middleware/auth.js`) e tira custo, margem e lucro das respostas para quem não pode ver.
 - Opção do gestor: "Vendedores veem os contatos de todos no CRM" (desligada, cada vendedor vê só os que cadastrou).
 
+## E-mail (Configurações → Integrações → E-mail)
+
+Com `RESEND_API_KEY`, `EMAIL_FROM` e `APP_URL` no Render, cada pessoa liga o que quer receber:
+
+- **Resumo diário** (dias úteis, a partir das 8h): tarefas de hoje e atrasadas, negociações paradas há 7+ dias, contatos novos em 24h e a meta do mês; o gestor da equipe recebe também o quadro da equipe. Botão "Enviar um agora (teste)".
+- **Tarefas por e-mail:** e-mail ao criar a tarefa (com `.ics` para o calendário) e lembrete no dia ou 15 minutos antes.
+- **Backup semanal** com o arquivo dos dados anexado.
+
+Saem sempre, sem ligar: recuperação de senha, senha alterada, e-mail da conta alterado e avisos da assinatura.
+O e-mail da conta é trocado em **Seu perfil** (pede a senha atual; o e-mail antigo recebe um aviso).
+
 ## Painel do dev
 
 Página `dono.html` (link "Painel do dev" na tela inicial, só para os donos do sistema): cadastros, quem está no

@@ -41,9 +41,10 @@ function janelaDoLembrete(vencimento) {
   return { inicio, fim: inicio + JANELA_DIA_MS };
 }
 
-function tarefasParaLembrar(tarefas, agora = Date.now()) {
+// campo: qual aviso conferir ("lembretePushEnviado" ou "lembreteEmailEnviado")
+function tarefasParaLembrar(tarefas, agora = Date.now(), campo = 'lembretePushEnviado') {
   return (tarefas || []).filter((t) => {
-    if (!t || !t.vencimento || t.concluida || t.lembretePushEnviado) return false;
+    if (!t || !t.vencimento || t.concluida || t[campo]) return false;
     const { inicio, fim } = janelaDoLembrete(t.vencimento);
     return agora >= inicio && agora < fim;
   });

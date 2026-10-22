@@ -6,6 +6,8 @@ const Card = require('../models/Card');
 const User = require('../models/User');
 const { chamarCalendarApi, getOrCreateCalendarId, sincronizarTarefaComCalendar } = require('../utils/calendarSync');
 const { dispararWebhooks } = require('../utils/dispararWebhooks');
+const { emailConfigurado } = require('../utils/email');
+const { enviarEmailDaTarefa } = require('../utils/emailTarefas');
 
 const router = express.Router();
 router.use(auth); // todas as rotas de tarefa exigem login
@@ -42,6 +44,22 @@ router.get('/', async (req, res) => {
   }
 });
 
+// GET/PUT /api/tasks/config/email -> liga/desliga o recebimento das tarefas por e-mail
+router.get('/config/email', async (req, res) => {
+  try {
+    const user = await User.findById(req.userId).select('emailTarefas email');
+    res.json({ ativo: !!(user && user.emailTarefas), emailDisponivel: emailConfigurado(), email: user ? user.email : '' });
+  } catch (err) { res.status(500).json({ error: 'Erro ao carregar a configuração.' }); }
+});
+router.put('/config/email', async (req, res) => {
+  try {
+    if (!emailConfigurado()) return res.status(400).json({ error: 'O envio de e-mail não está configurado neste servidor.' });
+    const ativo = !!(req.body && req.body.ativo);
+    await User.findByIdAndUpdate(req.userId, { emailTarefas: ativo });
+    res.json({ ativo });
+  } catch (err) { res.status(500).json({ error: 'Erro ao salvar a configuração.' }); }
+});
+
 // POST /api/tasks -> cria uma nova tarefa
 router.post('/', async (req, res) => {
   try {
@@ -59,6 +77,7 @@ router.post('/', async (req, res) => {
     const task = await Task.create({ ...dados, userId: req.userId });
     res.status(201).json(task.toJSON());
     sincronizarTarefaComCalendar(req.userId, task);
+    if (!req.acesso || req.acesso.tipo === 'dono') enviarEmailDaTarefa(req.userId, task, 'nova'); // só se a pessoa ligou "Tarefas por e-mail"; nunca atrapalha a tarefa
     dispararWebhooks(req.userId, 'tarefa.criada', { id: task._id.toString(), titulo: task.titulo, vencimento: task.vencimento, prioridade: task.prioridade });
   } catch (err) {
     console.error('Erro ao criar tarefa:', err.message);
@@ -76,7 +95,7 @@ router.put('/:id', async (req, res) => {
     if (dados.leadId && !isValidId(dados.leadId)) {
       return res.status(400).json({ error: 'Lead relacionado inválido.' });
     }
-    if (dados.vencimento !== undefined) dados.lembretePushEnviado = false; // mudou o horário: o lembrete vale de novo
+    if (dados.vencimento !== undefined) { dados.lembretePushEnviado = false; dados.lembreteEmailEnviado = false; } // mudou o horário: o lembrete vale de novo
     const task = await Task.findOneAndUpdate(
       { _id: req.params.id, userId: req.userId },
       dados,

@@ -9,7 +9,8 @@ const { gerarSegredo, verificarCodigoTOTP, montarOtpAuthUri } = require('../util
 const { registrarAuditoria } = require('../utils/auditoria');
 const { criarMiddlewareLimite } = require('../utils/limiteTaxa');
 const { gerarTokenReset, tokenResetValido, hashToken, VALIDADE_MINUTOS } = require('../utils/senhaReset');
-const { emailConfigurado, urlBaseDoApp, enviarEmail, montarEmailRecuperacao, montarEmailSenhaAlterada } = require('../utils/email');
+const { emailConfigurado, urlBaseDoApp, enviarEmail, montarEmailRecuperacao, montarEmailSenhaAlterada, montarEmailTrocaDeEmail } = require('../utils/email');
+const { comoSistema } = require('../db/contexto');
 
 const router = express.Router();
 const JWT_SECRET = auth.JWT_SECRET;
@@ -30,6 +31,12 @@ const limiteCadastro = criarMiddlewareLimite({
   janelaMs: 60 * 60 * 1000, max: Number(process.env.LIMITE_CADASTROS_POR_HORA) || 10,
   chaveDe: (req) => `cadastro:${req.ip}`,
   mensagem: 'Muitas contas criadas a partir desta conexão. Tente de novo mais tarde.',
+});
+// Trocar o e-mail pede a senha: poucas tentativas por pessoa
+const limiteTrocaEmail = criarMiddlewareLimite({
+  janelaMs: 60 * 60 * 1000, max: 8,
+  chaveDe: (req) => `troca-email:${req.ip}`,
+  mensagem: 'Muitas tentativas. Aguarde um pouco e tente de novo.',
 });
 const limite2FA = criarMiddlewareLimite({
   janelaMs: 15 * 60 * 1000, max: 10,
@@ -302,6 +309,40 @@ router.put('/nome', auth, async (req, res) => {
     res.json({ user: user.toJSON() });
   } catch (err) {
     res.status(500).json({ error: 'Erro ao atualizar o nome.' });
+  }
+});
+
+// PUT /api/auth/email -> troca o e-mail de login (pede a senha atual; avisa o e-mail antigo)
+router.put('/email', auth, limiteTrocaEmail, async (req, res) => {
+  try {
+    if (req.acesso && req.acesso.tipo !== 'dono') return res.status(403).json({ error: 'Só o dono da conta troca o e-mail.' });
+    const novo = String((req.body && req.body.email) || '').toLowerCase().trim();
+    const senha = String((req.body && req.body.senha) || '');
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(novo) || novo.length > 200) return res.status(400).json({ error: 'Digite um e-mail válido.' });
+    const user = await User.findById(req.userId);
+    if (!user) return res.status(404).json({ error: 'Usuário não encontrado.' });
+    if (novo === user.email) return res.status(400).json({ error: 'Esse já é o e-mail da sua conta.' });
+    if (!user.senhaHash) return res.status(400).json({ error: 'Sua conta entra com o Google. Para trocar o e-mail, crie uma senha em Login e segurança primeiro.' });
+    if (!senha || !(await bcrypt.compare(senha, user.senhaHash))) return res.status(400).json({ error: 'Senha incorreta.' });
+    // outra conta com esse e-mail? (a busca precisa ver todas as contas: roda como sistema)
+    const existente = await comoSistema(() => User.findOne({ email: novo }));
+    if (existente) return res.status(409).json({ error: 'Já existe uma conta com este e-mail.' });
+    const antigo = user.email;
+    try {
+      await User.findByIdAndUpdate(req.userId, { email: novo });
+    } catch (e) {
+      if (e && e.code === '23505') return res.status(409).json({ error: 'Já existe uma conta com este e-mail.' });
+      throw e;
+    }
+    if (emailConfigurado()) {
+      const msg = montarEmailTrocaDeEmail({ nome: user.nome, novoEmail: novo });
+      enviarEmail({ para: antigo, assunto: msg.assunto, html: msg.html, texto: msg.texto }).catch((e) => console.error('Erro ao avisar a troca de e-mail:', e.message));
+    }
+    const atualizado = await User.findById(req.userId);
+    res.json({ user: atualizado.toJSON() });
+  } catch (err) {
+    console.error('Erro ao trocar o e-mail:', err.message);
+    res.status(500).json({ error: 'Erro ao trocar o e-mail.' });
   }
 });
 

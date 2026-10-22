@@ -101,6 +101,7 @@ function permissaoDoCaminho(m, c) {
   if (c.startsWith('/api/financeiro') || c.startsWith('/api/ai/')) return 'financeiro';
   if (/^\/api\/(comissoes|regras-comissao)(\/|$)/.test(c)) return 'comissoes';
   if (/^\/api\/(columns|funis|campos-personalizados|automacoes|fluxos)(\/|$)/.test(c)) return g ? 'crm' : 'config'; // estrutura do CRM: só o gestor muda
+  if (c.startsWith('/api/tasks/config')) return 'config'; // e-mails das tarefas vão para o e-mail do dono
   if (/^\/api\/(board|cards|tasks|historico-contato|possiveis-leads|metas)(\/|$)/.test(c)) return 'crm';
   if (/^\/api\/calendar\/agenda-mes/.test(c) && g) return 'crm';
   return 'config'; // o resto (senha, assinatura, backup, integrações, equipe do CRM…) é do gestor

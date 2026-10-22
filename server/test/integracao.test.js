@@ -1961,6 +1961,34 @@ describe('API com PostgreSQL (integração)', { skip: pular }, () => {
     assert.equal((await api('GET', '/api/acesso', undefined, normal.dados.token)).dados.tipo, 'dono');
   });
 
+  test('e-mail: configurações da aba E-mail e trocar o e-mail da conta', async () => {
+    const r1 = await api('POST', '/api/auth/register', { nome: 'Edu', email: 'edu.mail@teste.com', senha: 'senha123' });
+    const r2 = await api('POST', '/api/auth/register', { nome: 'Gil', email: 'gil.mail@teste.com', senha: 'senha123' });
+    const t = r1.dados.token;
+    // sem RESEND_API_KEY: as opções dizem que o e-mail não está ligado e não deixam ligar
+    const tar = await api('GET', '/api/tasks/config/email', undefined, t);
+    assert.equal(tar.status, 200);
+    assert.equal(tar.dados.emailDisponivel, false);
+    assert.equal((await api('PUT', '/api/tasks/config/email', { ativo: true }, t)).status, 400);
+    const res = await api('GET', '/api/resumo-diario', undefined, t);
+    assert.equal(res.status, 200);
+    assert.equal(res.dados.ativo, false);
+    assert.equal((await api('PUT', '/api/resumo-diario', { ativo: true }, t)).status, 400);
+    // tarefa nova continua funcionando (o e-mail nunca atrapalha)
+    assert.equal((await api('POST', '/api/tasks', { titulo: 'Ligar', vencimento: '2026-10-23T00:00:00.000Z' }, t)).status, 201);
+    // trocar o e-mail
+    assert.equal((await api('PUT', '/api/auth/email', { email: 'novo.edu@teste.com', senha: 'errada' }, t)).status, 400);
+    assert.equal((await api('PUT', '/api/auth/email', { email: 'nao-e-email', senha: 'senha123' }, t)).status, 400);
+    assert.equal((await api('PUT', '/api/auth/email', { email: 'GIL.mail@teste.com', senha: 'senha123' }, t)).status, 409);
+    const ok = await api('PUT', '/api/auth/email', { email: ' Novo.Edu@teste.com ', senha: 'senha123' }, t);
+    assert.equal(ok.status, 200, JSON.stringify(ok.dados));
+    assert.equal(ok.dados.user.email, 'novo.edu@teste.com');
+    assert.equal((await api('POST', '/api/auth/login', { email: 'edu.mail@teste.com', senha: 'senha123' })).status, 401);
+    assert.equal((await api('POST', '/api/auth/login', { email: 'novo.edu@teste.com', senha: 'senha123' })).status, 200);
+    assert.equal((await api('GET', '/api/auth/me', undefined, t)).status, 200); // continua logado
+    assert.ok(r2.dados.token);
+  });
+
   test('sair de todos os aparelhos invalida o token antigo', async () => {
     const t = contas.caio.token;
     assert.equal((await api('POST', '/api/auth/logout-all', {}, t)).status, 204);

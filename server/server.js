@@ -93,6 +93,7 @@ app.use('/api/board', boardRoutes);
 app.use('/api/columns', columnRoutes);
 app.use('/api/cards', cardRoutes);
 app.use('/api/tasks', taskRoutes);
+app.use('/api/resumo-diario', require('./routes/resumoDiario'));
 app.use('/api/calendar', calendarRoutes);
 app.use('/api/comissoes', comissoesRoutes);
 app.use('/api/regras-comissao', regrasComissaoRoutes);
@@ -155,6 +156,7 @@ const { enviarLembretesFinanceiros } = require('./utils/lembreteFinanceiro');
 const { sincronizarPendentes: conferirAssinaturas, cobrancaLigada } = require('./utils/assinatura');
 const { problemaNaConfiguracao } = require('./utils/asaas');
 const { enviarBackupsSemanais } = require('./utils/backupScheduler');
+const { enviarResumosDiarios } = require('./utils/resumoDiario');
 const UMA_HORA = 60 * 60 * 1000;
 const CINCO_MINUTOS = 5 * 60 * 1000;
 
@@ -208,6 +210,9 @@ async function start() {
     setInterval(avisarComSeguranca, UMA_HORA);
     setTimeout(enviarBackupsSemanais, 90 * 1000);
     setInterval(enviarBackupsSemanais, 6 * UMA_HORA);
+    // resumo do dia por e-mail (dias úteis, a partir das 8h de Brasília; confere de 10 em 10 min)
+    setTimeout(enviarResumosDiarios, 2 * 60 * 1000);
+    setInterval(enviarResumosDiarios, 10 * 60 * 1000);
   } catch (err) {
     console.error('Falha ao conectar no PostgreSQL:', err.message);
     enviarAlertaTelegram(`Não foi possível conectar ao banco de dados (PostgreSQL) — o servidor não vai subir.\n${err.message}`);

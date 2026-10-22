@@ -947,6 +947,23 @@ tr.membro-supervisor-destaque td:last-child{ border-right:1px solid var(--gold);
 .btn-arquivo{ display:inline-flex; align-items:center; gap:8px; }
 .btn-arquivo:focus-within{ outline:2px solid var(--accent); outline-offset:2px; }
 .arquivo-nome{ font-size:12px; color:var(--ink-soft); }
+/* Importar/Exportar: modelo à direita; planilha escolhida com "×"; as informações descem e sobem */
+.arquivo-linha .arquivo-modelo{ margin-left:auto; }
+.arquivo-escolhido{ display:inline-flex; align-items:center; gap:4px; max-width:min(360px, 100%); padding:3px 4px 3px 12px; border:1px solid var(--line); border-radius:999px; font-size:12px; color:var(--ink); background:var(--paper); }
+.arquivo-escolhido-nome{ overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.arquivo-tirar{ flex-shrink:0; width:26px; height:26px; border:0; border-radius:50%; background:transparent; color:var(--ink-soft); font-size:17px; line-height:1; cursor:pointer; display:inline-flex; align-items:center; justify-content:center; }
+.arquivo-tirar:hover{ background:var(--badge-neutral-bg); color:var(--ink); }
+.arquivo-escolhido.entrando{ animation: arquivoAparece .25s ease-out both; }
+.arquivo-escolhido.saindo{ animation: arquivoSome .18s ease-in both; }
+.import-detalhe.entrando > *{ animation: maisDesce .34s cubic-bezier(.2,.75,.3,1) both; }
+.import-detalhe.entrando > :nth-child(2){ animation-delay:.05s; }
+.import-detalhe.entrando > :nth-child(3){ animation-delay:.10s; }
+.import-detalhe.entrando > :nth-child(n+4){ animation-delay:.15s; }
+.import-detalhe.saindo > *{ animation: maisSobe .22s ease-in both; }
+@keyframes arquivoAparece{ from{ opacity:0; transform:scale(.92); } to{ opacity:1; transform:none; } }
+@keyframes arquivoSome{ to{ opacity:0; transform:scale(.92); } }
+@media (pointer: coarse){ .arquivo-tirar{ width:40px; height:40px; } }
+@media (max-width:640px){ .arquivo-linha .arquivo-modelo{ margin-left:0; } }
 .btn-link{ background:none; border:none; padding:0; color:var(--ink); font-size:12px; font-weight:600; cursor:pointer; text-decoration:underline; text-underline-offset:3px; }
 
 /* ---------- tela de toque: alvos de pelo menos 40px (no computador nada muda) ---------- */

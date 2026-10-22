@@ -79,6 +79,7 @@ const ICON_AUTOMACOES = `<svg width="17" height="17" viewBox="0 0 24 24" fill="n
 const ICON_FLUXOS = `<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="5" cy="6" r="2"/><circle cx="5" cy="18" r="2"/><circle cx="19" cy="12" r="2"/><path d="M5 8v8"/><path d="M7 6h6a4 4 0 0 1 4 4"/><path d="M7 18h6a4 4 0 0 0 4-4"/></svg>`;
 const ICON_IMPORT_EXPORT = `<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 17l-4-4 4-4"/><path d="M4 13h11a4 4 0 0 0 4-4V7"/><path d="M16 7l4 4-4 4"/><path d="M20 11H9a4 4 0 0 0-4 4v2"/></svg>`;
 const ICON_LOGOUT = `<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>`;
+const ICON_MAIL = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-10 6L2 7"/></svg>`;
 const ICON_EDIT = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4Z"/></svg>`;
 const ICON_REORDER = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 6h13"/><path d="M8 12h13"/><path d="M8 18h13"/><path d="M3 6h.01"/><path d="M3 12h.01"/><path d="M3 18h.01"/></svg>`;
 const ICON_FUNNEL = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="4" y1="6" x2="20" y2="6"/><line x1="7" y1="12" x2="17" y2="12"/><line x1="10" y1="18" x2="14" y2="18"/></svg>`;
@@ -264,6 +265,7 @@ let possiveisLeadsCarregados = false;
 let importPlanilhaLinhas = [];
 let importPlanilhaColunas = [];
 let importPlanilhaNomeArquivo = '';
+let importAnimarEntrada = false; // a planilha acabou de ser escolhida: as informações descem
 let importMapNome = '';
 let importMapTelefone = '';
 let importMapServico = '';
@@ -1606,9 +1608,46 @@ async function handlePlanilhaFileSelected(file){
       importPlanilhaLinhas = [];
       importPlanilhaColunas = [];
     }
+    importAnimarEntrada = true;
     renderApp();
   };
   reader.readAsArrayBuffer(file);
+}
+// as informações da planilha descem (ao escolher) e sobem (ao tirar)
+function alturaAnimada(el, de, para, ms, fim){
+  el.style.overflow = 'hidden'; el.style.maxHeight = de + 'px';
+  void el.offsetHeight;
+  el.style.transition = `max-height ${ms}ms cubic-bezier(.2,.75,.3,1)`;
+  el.style.maxHeight = para + 'px';
+  let feito = false;
+  const acabar = ()=>{ if(feito) return; feito = true; el.style.transition = el.style.maxHeight = el.style.overflow = ''; if(fim) fim(); };
+  el.addEventListener('transitionend', (e)=>{ if(e.target === el) acabar(); }, { once:true });
+  setTimeout(acabar, ms + 80);
+}
+function semMovimento(){
+  return document.documentElement.classList.contains('a11y-sem-movimento') || (window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches);
+}
+function animarEntradaPlanilha(){
+  const el = document.getElementById('import-detalhe');
+  importAnimarEntrada = false;
+  if(!el || semMovimento()) return;
+  el.classList.add('entrando');
+  alturaAnimada(el, 0, el.scrollHeight, 380);
+  setTimeout(()=> el.classList.remove('entrando'), 700);
+}
+function tirarPlanilha(){
+  const limpar = ()=>{
+    importPlanilhaNomeArquivo = ''; importPlanilhaLinhas = []; importPlanilhaColunas = [];
+    importMapNome = importMapTelefone = importMapServico = ''; importPlanilhaMsg = null;
+    renderApp();
+  };
+  const el = document.getElementById('import-detalhe');
+  const chip = app.querySelector('.arquivo-escolhido');
+  if(semMovimento()) return limpar();
+  if(chip) chip.classList.add('saindo');
+  if(!el || !el.offsetHeight) return setTimeout(limpar, 180);
+  el.classList.add('saindo');
+  alturaAnimada(el, el.offsetHeight, 0, 300, limpar);
 }
 async function confirmarImportPlanilha(){
   if(!importMapNome && !importMapTelefone){
@@ -5404,6 +5443,7 @@ const CONFIG_CATEGORIAS = [
   ]},
   { grupo: 'Integrações', itens: [
     ['google-agenda', 'Google Agenda'],
+    ['email', 'E-mail'],
     ['webhooks', 'Webhooks'],
     ['agendamento', 'Link de agendamento'],
   ]},
@@ -5489,7 +5529,7 @@ function renderConfigPerfil(){
       </div>
       ${avatarMsg ? `<p class="settings-page-msg ${avatarMsg.tipo}">${esc(avatarMsg.texto)}</p>` : ''}
       <div class="settings-page-row"><span>Nome</span><span>${esc((currentUser && currentUser.nome) || '—')}</span></div>
-      <div class="settings-page-row"><span>E-mail</span><span>${esc((currentUser && currentUser.email) || '—')}</span></div>
+      <div class="settings-page-row"><span>E-mail</span><span class="settings-row-valor">${esc((currentUser && currentUser.email) || '—')}${(!acessoCrm || acessoCrm.tipo === 'dono') ? ` <button class="btn-link" data-action="trocar-email">Trocar</button>` : ''}</span></div>
 
       <div class="settings-sep-line"></div>
 
@@ -5859,6 +5899,115 @@ function renderConfigNotificacoes(){
   `;
 }
 
+/* ---------- Resumo diário por e-mail ---------- */
+let resumoDiario = { carregado:false, disponivel:false, ativo:false, email:'', ocupado:false, msg:null };
+async function carregarResumoDiario(){
+  resumoDiario.carregado = true;
+  try{
+    const d = await apiRequest('GET', '/resumo-diario');
+    resumoDiario = { ...resumoDiario, ativo: !!d.ativo, disponivel: !!d.emailDisponivel, email: d.email || '' };
+  }catch(e){ resumoDiario.disponivel = false; }
+  renderApp();
+}
+async function alternarResumoDiario(){
+  if(resumoDiario.ocupado) return;
+  resumoDiario.ocupado = true; resumoDiario.msg = null; renderApp();
+  try{
+    const d = await apiRequest('PUT', '/resumo-diario', { ativo: !resumoDiario.ativo });
+    resumoDiario.ativo = !!d.ativo;
+    resumoDiario.msg = { tipo:'ok', texto: resumoDiario.ativo ? 'Pronto: você vai receber o resumo todo dia útil de manhã.' : 'Resumo diário desativado.' };
+  }catch(e){
+    resumoDiario.msg = { tipo:'erro', texto: e.message || 'Não foi possível alterar.' };
+  }
+  resumoDiario.ocupado = false; renderApp();
+}
+async function enviarResumoDiarioAgora(){
+  if(resumoDiario.ocupado) return;
+  resumoDiario.ocupado = true; resumoDiario.msg = null; renderApp();
+  try{
+    await apiRequest('POST', '/resumo-diario/enviar-agora', undefined, 60000);
+    resumoDiario.msg = { tipo:'ok', texto:'Resumo enviado para ' + (resumoDiario.email || 'o seu e-mail') + '.' };
+  }catch(e){
+    resumoDiario.msg = { tipo:'erro', texto: e.message || 'Não foi possível enviar agora.' };
+  }
+  resumoDiario.ocupado = false; renderApp();
+}
+function renderBlocoResumoDiario(){
+  if(!resumoDiario.carregado){ carregarResumoDiario(); return ''; }
+  if(!resumoDiario.disponivel) return '';
+  return `
+    <div class="settings-page-section">
+      <h3>Resumo diário</h3>
+      <p class="settings-page-note">Todo dia útil, a partir das 8h, enviamos para <strong>${esc(resumoDiario.email)}</strong> um resumo: tarefas de hoje e atrasadas, negociações paradas há mais de 7 dias na mesma etapa, contatos novos das últimas 24h e a meta do mês.${equipe && equipe.souSupervisor ? ' Como gestor da equipe, você também recebe um quadro com os números de cada pessoa.' : ''}</p>
+      <p class="settings-page-note">Situação: <strong>${resumoDiario.ativo?'ligado':'desligado'}</strong></p>
+      ${resumoDiario.msg ? `<p class="settings-page-msg ${resumoDiario.msg.tipo}">${esc(resumoDiario.msg.texto)}</p>` : ''}
+      <div class="settings-btn-row">
+        <button class="btn-outline" data-action="resumo-diario-alternar" ${resumoDiario.ocupado?'disabled':''}>${resumoDiario.ativo?'Desligar resumo diário':'Ligar resumo diário'}</button>
+        <button class="btn-outline" data-action="resumo-diario-agora" ${resumoDiario.ocupado?'disabled':''}>${resumoDiario.ocupado?'Aguarde…':'Enviar um agora (teste)'}</button>
+      </div>
+    </div>
+  `;
+}
+
+/* ---------- Tarefas por e-mail ---------- */
+let emailTarefas = { carregado:false, disponivel:false, ativo:false, email:'', ocupado:false, msg:null };
+async function carregarEmailTarefas(){
+  emailTarefas.carregado = true;
+  try{
+    const d = await apiRequest('GET', '/tasks/config/email');
+    emailTarefas = { ...emailTarefas, ativo: !!d.ativo, disponivel: !!d.emailDisponivel, email: d.email || '' };
+  }catch(e){ emailTarefas.disponivel = false; }
+  renderApp();
+}
+async function alternarEmailTarefas(){
+  if(emailTarefas.ocupado) return;
+  emailTarefas.ocupado = true; emailTarefas.msg = null; renderApp();
+  try{
+    const d = await apiRequest('PUT', '/tasks/config/email', { ativo: !emailTarefas.ativo });
+    emailTarefas.ativo = !!d.ativo;
+    emailTarefas.msg = { tipo:'ok', texto: emailTarefas.ativo ? 'Pronto: você vai receber as tarefas por e-mail.' : 'E-mails de tarefas desligados.' };
+  }catch(e){
+    emailTarefas.msg = { tipo:'erro', texto: e.message || 'Não foi possível alterar.' };
+  }
+  emailTarefas.ocupado = false; renderApp();
+}
+function renderBlocoEmailTarefas(){
+  if(!emailTarefas.carregado){ carregarEmailTarefas(); return ''; }
+  if(!emailTarefas.disponivel) return '';
+  return `
+    <div class="settings-page-section">
+      <h3>Tarefas por e-mail</h3>
+      <p class="settings-page-note">Ao criar uma tarefa com data, enviamos um e-mail para <strong>${esc(emailTarefas.email)}</strong> com um arquivo que adiciona o compromisso ao seu calendário. No dia da tarefa (ou 15 minutos antes, se ela tiver hora) chega o lembrete, junto com o aviso aqui no CRM.</p>
+      <p class="settings-page-note">Situação: <strong>${emailTarefas.ativo?'ligado':'desligado'}</strong></p>
+      ${emailTarefas.msg ? `<p class="settings-page-msg ${emailTarefas.msg.tipo}">${esc(emailTarefas.msg.texto)}</p>` : ''}
+      <button class="btn-outline" data-action="email-tarefas-alternar" ${emailTarefas.ocupado?'disabled':''}>${emailTarefas.ativo?'Desligar e-mails de tarefas':'Ligar e-mails de tarefas'}</button>
+    </div>
+  `;
+}
+
+// Aba "E-mail" (Integrações): tudo que o Livro-Caixa manda por e-mail e como ligar/desligar.
+// (Trocar o e-mail da conta fica em "Seu perfil".)
+function renderConfigEmail(){
+  const blocos = [renderBlocoResumoDiario(), renderBlocoEmailTarefas(), renderBlocoBackupAuto()]; // carregam o estado sozinhos
+  const carregando = !resumoDiario.carregado || !emailTarefas.carregado || !backupAuto.carregado;
+  const ligado = resumoDiario.disponivel || emailTarefas.disponivel || backupAuto.disponivel || integracoesConfig.emailRecuperacao;
+  return `
+    <div class="settings-page-section">
+      <h3>E-mail</h3>
+      <p class="settings-page-note">Escolha o que o Livro-Caixa envia para <strong>${esc((currentUser && currentUser.email) || 'o seu e-mail')}</strong>. Para trocar o e-mail da conta, vá em <button class="btn-link" data-action="set-config-categoria" data-categoria="perfil">Seu perfil</button>.</p>
+      ${carregando ? `<p class="settings-page-note">Carregando…</p>` : (!ligado
+        ? `<p class="settings-page-msg erro">O envio de e-mail ainda não está ligado neste servidor. Quem administra o sistema precisa configurar <code>RESEND_API_KEY</code>, <code>EMAIL_FROM</code> e <code>APP_URL</code> no Render.</p>`
+        : '')}
+    </div>
+    ${blocos.join('')}
+    ${(!carregando && ligado) ? `
+    <div class="settings-page-section">
+      <h3>E-mails automáticos</h3>
+      <p class="settings-page-note">Estes saem sozinhos, sem precisar ligar: recuperação de senha, aviso de senha alterada, aviso de e-mail da conta alterado e os avisos da assinatura (teste acabando, pagamento).</p>
+    </div>` : ''}
+  `;
+}
+
 /* ---------- Backup automático por e-mail ---------- */
 let backupAuto = { carregado:false, disponivel:false, ativo:false, ultimoEnvio:null, email:'', ocupado:false, msg:null };
 async function carregarBackupAuto(){
@@ -5875,7 +6024,7 @@ async function alternarBackupAuto(){
   try{
     const d = await apiRequest('PUT', '/backup/automatico', { ativo: !backupAuto.ativo });
     backupAuto.ativo = !!d.ativo;
-    backupAuto.msg = { tipo:'ok', texto: backupAuto.ativo ? 'Backup semanal ativado.' : 'Backup semanal desativado.' };
+    backupAuto.msg = { tipo:'ok', texto: backupAuto.ativo ? 'Backup semanal ligado.' : 'Backup semanal desligado.' };
   }catch(e){
     backupAuto.msg = { tipo:'erro', texto: e.message || 'Não foi possível alterar.' };
   }
@@ -5899,11 +6048,14 @@ function renderBlocoBackupAuto(){
   const ult = backupAuto.ultimoEnvio ? new Date(backupAuto.ultimoEnvio).toLocaleString('pt-BR') : 'nunca';
   return `
     <div class="settings-page-section">
-      <h3>Backup automático por e-mail</h3>
-      <p class="settings-page-note">Toda semana enviamos uma cópia dos seus dados (clientes, tarefas, comissões, mensagens e configurações) para <strong>${esc(backupAuto.email || 'o seu e-mail')}</strong>. Os anexos dos clientes não entram nesse arquivo — para eles use o botão Backup acima. Último envio: ${esc(ult)}.</p>
+      <h3>Backup semanal</h3>
+      <p class="settings-page-note">Toda semana enviamos uma cópia dos seus dados (clientes, tarefas, comissões, mensagens e configurações) para <strong>${esc(backupAuto.email || 'o seu e-mail')}</strong>. Os anexos dos clientes não entram nesse arquivo — para eles use o Backup em Manutenção. Último envio: ${esc(ult)}.</p>
       ${backupAuto.msg ? `<p class="settings-page-msg ${backupAuto.msg.tipo}">${esc(backupAuto.msg.texto)}</p>` : ''}
-      <button class="btn-outline" data-action="backup-auto-alternar" ${backupAuto.ocupado?'disabled':''}>${backupAuto.ativo?'Desativar backup semanal':'Ativar backup semanal'}</button>
-      <button class="btn-outline" data-action="backup-auto-agora" ${backupAuto.ocupado?'disabled':''}>${backupAuto.ocupado?'Aguarde…':'Enviar backup agora'}</button>
+      <p class="settings-page-note">Situação: <strong>${backupAuto.ativo?'ligado':'desligado'}</strong></p>
+      <div class="settings-btn-row">
+        <button class="btn-outline" data-action="backup-auto-alternar" ${backupAuto.ocupado?'disabled':''}>${backupAuto.ativo?'Desligar backup semanal':'Ligar backup semanal'}</button>
+        <button class="btn-outline" data-action="backup-auto-agora" ${backupAuto.ocupado?'disabled':''}>${backupAuto.ocupado?'Aguarde…':'Enviar um agora'}</button>
+      </div>
     </div>
   `;
 }
@@ -5914,8 +6066,8 @@ function renderConfigManutencao(){
       <h3>Backup dos seus dados</h3>
       <p class="settings-page-note">Guarda ou restaura uma cópia de todos os seus clientes, tarefas, comissões, mensagens e configurações.</p>
       <button class="btn-outline" data-action="abrir-backup-modal">📦 Backup</button>
+      <p class="settings-page-note" style="margin-top:10px;">Quer receber uma cópia toda semana por e-mail? Ligue em <button class="btn-link" data-action="set-config-categoria" data-categoria="email">Integrações → E-mail</button>.</p>
     </div>
-    ${renderBlocoBackupAuto()}
     <div class="settings-page-section">
       <h3>Atualizações</h3>
       <p class="settings-page-note">Se o painel parecer desatualizado (algo que já mudou e não aparece), use esse botão pra forçar buscar a versão mais nova — principalmente útil no app instalado no celular.</p>
@@ -5933,6 +6085,7 @@ function renderConfiguracoesPage(){
     'aparencia': renderConfigAparencia,
     'notificacoes': renderConfigNotificacoes,
     'google-agenda': renderConfigGoogleAgenda,
+    'email': renderConfigEmail,
     'webhooks': renderConfigWebhooks,
     'agendamento': renderConfigAgendamento,
     'campos': renderConfigCampos,
@@ -6010,6 +6163,14 @@ function bindAppEvents(){
   if(pushDesativarBtn) pushDesativarBtn.addEventListener('click', desativarPush);
   const pushTestarBtn = app.querySelector('[data-action="push-testar"]');
   if(pushTestarBtn) pushTestarBtn.addEventListener('click', testarPush);
+  const resumoAlternarBtn = app.querySelector('[data-action="resumo-diario-alternar"]');
+  if(resumoAlternarBtn) resumoAlternarBtn.addEventListener('click', alternarResumoDiario);
+  const resumoAgoraBtn = app.querySelector('[data-action="resumo-diario-agora"]');
+  if(resumoAgoraBtn) resumoAgoraBtn.addEventListener('click', enviarResumoDiarioAgora);
+  const emailTarefasBtn = app.querySelector('[data-action="email-tarefas-alternar"]');
+  if(emailTarefasBtn) emailTarefasBtn.addEventListener('click', alternarEmailTarefas);
+  const trocarEmailBtn = app.querySelector('[data-action="trocar-email"]');
+  if(trocarEmailBtn) trocarEmailBtn.addEventListener('click', abrirAlterarEmailModal);
   const backupAutoAlternarBtn = app.querySelector('[data-action="backup-auto-alternar"]');
   if(backupAutoAlternarBtn) backupAutoAlternarBtn.addEventListener('click', alternarBackupAuto);
   const backupAutoAgoraBtn = app.querySelector('[data-action="backup-auto-agora"]');
@@ -6240,6 +6401,9 @@ function bindAppEvents(){
   if(importArquivoInput) importArquivoInput.addEventListener('change', ()=>{ const n = document.getElementById('import-arquivo-nome'); if(n) n.textContent = importArquivoInput.files[0] ? importArquivoInput.files[0].name : 'Nenhum arquivo escolhido'; });
   const modeloLeadsBtn = app.querySelector('[data-action="modelo-planilha-leads"]');
   if(modeloLeadsBtn) modeloLeadsBtn.addEventListener('click', baixarModeloLeads);
+  const tirarPlanilhaBtn = app.querySelector('[data-action="tirar-planilha"]');
+  if(tirarPlanilhaBtn) tirarPlanilhaBtn.addEventListener('click', tirarPlanilha);
+  if(importAnimarEntrada) animarEntradaPlanilha();
   const planilhaInput = document.getElementById('planilha-input');
   if(planilhaInput) planilhaInput.addEventListener('change', (e)=>{
     const file = e.target.files && e.target.files[0];
@@ -7781,6 +7945,13 @@ function renderEditarPerfilModal(){
               <span class="opcao-perfil-nota">Como seu nome aparece pro resto da equipe.</span>
             </span>
           </button>
+          ${(!acessoCrm || acessoCrm.tipo === 'dono') ? `<button type="button" class="opcao-perfil-btn" data-action="editar-perfil-email">
+            <span class="opcao-perfil-icon">${ICON_MAIL}</span>
+            <span>
+              <strong>Trocar e-mail</strong>
+              <span class="opcao-perfil-nota">O e-mail com que você entra e recebe os avisos.</span>
+            </span>
+          </button>` : ''}
         </div>
       </div>
     </div>
@@ -7796,6 +7967,84 @@ function renderEditarPerfilModal(){
     closeEditarPerfilModal();
     abrirAlterarNomeModal();
   });
+  const emailOpcao = document.querySelector('[data-action="editar-perfil-email"]');
+  if(emailOpcao) emailOpcao.addEventListener('click', ()=>{ closeEditarPerfilModal(); abrirAlterarEmailModal(); });
+}
+
+/* ---------- trocar o e-mail da conta (pede a senha; o e-mail antigo recebe um aviso) ---------- */
+let modalAlterarEmailAberto = false;
+let emailTroca = { novo:'', senha:'', salvando:false, msg:null };
+function abrirAlterarEmailModal(){
+  emailTroca = { novo:'', senha:'', salvando:false, msg:null };
+  modalAlterarEmailAberto = true;
+  renderAlterarEmailModal();
+  const el = document.getElementById('s-email-novo'); if(el) el.focus();
+}
+function closeAlterarEmailModal(){
+  modalAlterarEmailAberto = false;
+  const root = document.getElementById('modal-root');
+  if(root) root.innerHTML = '';
+}
+function renderAlterarEmailModal(){
+  const root = document.getElementById('modal-root');
+  if(!modalAlterarEmailAberto){ root.innerHTML=''; return; }
+  const semSenha = currentUser && currentUser.temSenha === false;
+  root.innerHTML = `
+    <div class="overlay" id="alterar-email-overlay">
+      <div class="modal" role="dialog" aria-modal="true" aria-labelledby="alterar-email-titulo">
+        <div class="modal-head">
+          <h3 id="alterar-email-titulo">Trocar e-mail</h3>
+          <button id="alterar-email-close" aria-label="Fechar">✕</button>
+        </div>
+        <div class="modal-body">
+          <p class="settings-page-note" style="margin-top:0;">Hoje você entra com <strong>${esc((currentUser && currentUser.email) || '')}</strong>. Depois da troca, o login, a recuperação de senha e todos os avisos passam a usar o e-mail novo, e o antigo recebe um aviso de que a troca foi feita.</p>
+          ${semSenha ? `<p class="settings-page-msg erro">Sua conta entra com o Google e ainda não tem senha. Crie uma senha em Login e segurança para poder trocar o e-mail.</p>` : `
+          <div class="field">
+            <label for="s-email-novo">E-mail novo</label>
+            <input type="email" id="s-email-novo" value="${esc(emailTroca.novo)}" placeholder="voce@exemplo.com" autocomplete="email" />
+          </div>
+          <div class="field">
+            <label for="s-email-senha">Sua senha atual</label>
+            <input type="password" id="s-email-senha" value="${esc(emailTroca.senha)}" autocomplete="current-password" />
+          </div>`}
+          ${emailTroca.msg ? `<p class="settings-page-msg ${emailTroca.msg.tipo}" role="alert">${esc(emailTroca.msg.texto)}</p>` : ''}
+        </div>
+        <div class="modal-foot">
+          <span></span>
+          <div class="modal-foot-actions">
+            <button class="btn-outline" id="alterar-email-cancelar">${semSenha ? 'Fechar' : 'Cancelar'}</button>
+            ${semSenha ? '' : `<button class="btn-save" id="s-email-salvar" ${emailTroca.salvando?'disabled':''}>${emailTroca.salvando?'Salvando…':'Trocar e-mail'}</button>`}
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+  document.getElementById('alterar-email-close').addEventListener('click', closeAlterarEmailModal);
+  document.getElementById('alterar-email-cancelar').addEventListener('click', closeAlterarEmailModal);
+  document.getElementById('alterar-email-overlay').addEventListener('click', (e)=>{ if(e.target.id==='alterar-email-overlay') closeAlterarEmailModal(); });
+  const novo = document.getElementById('s-email-novo'); const senha = document.getElementById('s-email-senha');
+  if(novo) novo.addEventListener('input', (e)=> emailTroca.novo = e.target.value);
+  if(senha){ senha.addEventListener('input', (e)=> emailTroca.senha = e.target.value); senha.addEventListener('keydown', (e)=>{ if(e.key === 'Enter') salvarEmailNovo(); }); }
+  const salvar = document.getElementById('s-email-salvar'); if(salvar) salvar.addEventListener('click', salvarEmailNovo);
+}
+async function salvarEmailNovo(){
+  const novo = emailTroca.novo.trim();
+  if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(novo)){ emailTroca.msg = { tipo:'erro', texto:'Digite um e-mail válido.' }; renderAlterarEmailModal(); return; }
+  if(!emailTroca.senha){ emailTroca.msg = { tipo:'erro', texto:'Digite a sua senha atual.' }; renderAlterarEmailModal(); return; }
+  emailTroca.salvando = true; emailTroca.msg = null; renderAlterarEmailModal();
+  try{
+    await apiRequest('PUT', '/auth/email', { email: novo, senha: emailTroca.senha });
+    await refreshCurrentUser();
+    // as opções da aba E-mail mostram o endereço: carrega de novo
+    resumoDiario.carregado = false; emailTarefas.carregado = false; backupAuto.carregado = false;
+    closeAlterarEmailModal();
+    avatarMsg = { tipo:'ok', texto:'E-mail trocado. Daqui em diante, entre com ' + novo.toLowerCase() + '.' };
+    renderApp();
+  }catch(e){
+    emailTroca.salvando = false;
+    emailTroca.msg = { tipo:'erro', texto: e.message || 'Não foi possível trocar o e-mail.' };
+    renderAlterarEmailModal();
+  }
 }
 
 /* ---------- visualização grande da foto (toque-e-segure no avatar) ---------- */
@@ -8564,9 +8813,12 @@ function renderImportExportPage(){
       <h3>1. Importar planilha</h3>
       <div class="arquivo-linha">
         <label class="btn-outline btn-arquivo">Escolher planilha (.xlsx ou .csv)<input type="file" id="planilha-input" accept=".csv,.xlsx,.xls" hidden /></label>
-        <span class="arquivo-nome">${importPlanilhaNomeArquivo ? esc(importPlanilhaNomeArquivo) : 'Nenhum arquivo escolhido'}</span>
-        <button class="btn-link" data-action="modelo-planilha-leads">Baixar planilha modelo</button>
+        ${importPlanilhaNomeArquivo
+          ? `<span class="arquivo-escolhido ${importAnimarEntrada?'entrando':''}"><span class="arquivo-escolhido-nome" title="${esc(importPlanilhaNomeArquivo)}">${esc(importPlanilhaNomeArquivo)}</span><button type="button" class="arquivo-tirar" data-action="tirar-planilha" aria-label="Tirar a planilha ${esc(importPlanilhaNomeArquivo)}" title="Tirar a planilha">×</button></span>`
+          : `<span class="arquivo-nome">Nenhum arquivo escolhido</span>`}
+        <button class="btn-link arquivo-modelo" data-action="modelo-planilha-leads">Baixar planilha modelo</button>
       </div>
+      ${importPlanilhaNomeArquivo ? `<div class="import-detalhe" id="import-detalhe">` : ''}
       ${importPlanilhaColunas.length ? `
         <p class="settings-page-note" style="margin-top:10px;">${importPlanilhaLinhas.length} linha(s) encontrada(s) em "${esc(importPlanilhaNomeArquivo)}". Escolha qual coluna da planilha é qual campo:</p>
         <div class="field-row">
@@ -8595,6 +8847,7 @@ function renderImportExportPage(){
         ${importPlanilhaMsg ? `<p class="settings-page-msg ${importPlanilhaMsg.tipo}">${esc(importPlanilhaMsg.texto)}</p>` : ''}
         <button class="btn-primary" id="confirmar-import-planilha" ${importandoPlanilha?'disabled':''}>${importandoPlanilha?'Importando…':'Importar planilha'}</button>
       ` : (importPlanilhaMsg ? `<p class="settings-page-msg ${importPlanilhaMsg.tipo}">${esc(importPlanilhaMsg.texto)}</p>` : '')}
+      ${importPlanilhaNomeArquivo ? `</div>` : ''}
     </div>
 
     <div class="settings-page-section">

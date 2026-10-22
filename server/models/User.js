@@ -70,6 +70,9 @@ module.exports = definirModelo('User', {
         ultimoEnvio: { type: 'date', default: null },
       },
     },
+    resumoDiarioEmail: { type: 'boolean', default: false }, // resumo do dia por e-mail (dias úteis, 8h)
+    resumoDiarioUltimo: { type: 'string', default: null }, // AAAA-MM-DD do último resumo enviado
+    emailTarefas: { type: 'boolean', default: false }, // e-mail ao criar tarefa (.ics) + lembrete no dia
     tokenVersion: { type: 'int', default: 0 }, // incrementar invalida todos os tokens já emitidos (logout geral)
     icsToken: { type: 'string', default: null }, // segredo do link de agenda (.ics)
     avatarUrl: { type: 'string', default: null }, // imagem pequena em base64 (data URL)

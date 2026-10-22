@@ -12,6 +12,7 @@ module.exports = definirModelo('Task', {
     concluida: { type: 'boolean', default: false },
     googleEventId: { type: 'string', default: null },
     lembretePushEnviado: { type: 'boolean', default: false }, // já avisamos por notificação push
+    lembreteEmailEnviado: { type: 'boolean', default: false }, // já avisamos por e-mail
   },
   transformJSON: jsonPadrao((ret) => {
     ret.leadId = ret.leadId && typeof ret.leadId === 'object' ? ret.leadId : str(ret.leadId);
