@@ -67,11 +67,10 @@ if [ -z "$VERSAO_ATUAL" ]; then
 fi
 VERSAO_NOVA=$((VERSAO_ATUAL + 1))
 
-for arquivo in public/index.html public/login.html public/inicio.html public/assinatura.html public/dono.html public/financeiro/index.html public/estoque/index.html; do
-  if [ -f "$arquivo" ]; then
-    sed -i "s/?v=${VERSAO_ATUAL}/?v=${VERSAO_NOVA}/g" "$arquivo"
-    echo "  $arquivo: ?v=${VERSAO_ATUAL} → ?v=${VERSAO_NOVA}"
-  fi
+# todas as páginas .html do site (páginas novas entram sozinhas; qualquer número antigo vira o novo)
+for arquivo in $(grep -rl '?v=[0-9]\{8\}' public --include='*.html'); do
+  sed -i "s/?v=[0-9]\{8\}/?v=${VERSAO_NOVA}/g" "$arquivo"
+  echo "  $arquivo → ?v=${VERSAO_NOVA}"
 done
 
 echo "✔ Versão nova: ${VERSAO_NOVA}"

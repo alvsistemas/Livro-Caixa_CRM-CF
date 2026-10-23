@@ -30,8 +30,8 @@
   const inicial = (s) => esc(String(s || "?").trim().charAt(0).toUpperCase());
   const CATEGORIAS_GASTO = ["Aluguel Comercial", "Fornecedores", "Salários", "Comissões", "Marketing", "Impostos", "Frete", "Taxas de pagamento", "Ferramentas/Software", "Transporte", "Alimentação", "Moradia", "Outros"];
 
-  function sair() {
-    if (window.Acesso) return Acesso.sair();
+  function sair(completo) {
+    if (window.Acesso) return Acesso.sair(completo === true);
     localStorage.removeItem("token");
     localStorage.removeItem("user");
     window.location.href = "../login.html";
@@ -49,7 +49,7 @@
     }
     if (S.offline && res.status < 500) { S.offline = false; setTimeout(() => { desenharFaixaOffline(); sincronizarFila(); }, 0); }
     if (res.status < 500 && tokOp && tokOp.local) setTimeout(encerrarSessaoLocal, 0); // o servidor respondeu: volta a valer o PIN online
-    if (res.status === 401) { sair(); throw new Error("Sessão expirada."); }
+    if (res.status === 401) { sair(true); throw new Error("Sessão expirada."); }
     if (res.status === 402) { window.location.href = "../assinatura.html?de=estoque"; throw new Error("Sua assinatura não está ativa."); }
     let dados = null;
     try { dados = await res.json(); } catch (e) { /* sem corpo */ }
@@ -87,6 +87,8 @@
   function pode(k) { const p = permsAtuais(); return !p || !!p[k]; }
   const PERM_ABA = { vender: ["vender"], caixa: ["vender", "caixa"], produtos: ["produtosVer", "produtos"], compras: ["compras"], relatorios: ["relatorios"], clientes: ["clientes"], config: ["config"], mesas: ["mesas"], cozinha: ["mesas"], pedidos: ["mesas"], cardapio: ["config"] };
   const podeAba = (t) => !PERM_ABA[t] || PERM_ABA[t].some(pode);
+  // gestor ou gerente (cancelar, excluir produto): o dono sem PIN de funcionário também
+  const ehChefia = () => { if (!permsAtuais()) return true; const o = typeof operadorAtual === "function" ? operadorAtual() : null; return !!(o && ["gestor", "gerente"].includes(o.papel)); };
   const ehGestor = () => !ACESSO || (ACESSO.tipo === "dono" ? !(ACESSO.pdv && lerOperador()) || ACESSO.pdv.operador.papel === "gestor" : !!ACESSO.gestor);
   async function carregarAcesso() {
     try { ACESSO = await api("GET", "/acesso"); } catch (e) { if (!ACESSO) ACESSO = null; }
@@ -285,6 +287,22 @@
     const ult = new Date(a, m, 0).getDate();
     S.vendas = (await api("GET", `/estoque/vendas?de=${S.mesVendas}-01&ate=${S.mesVendas}-${String(ult).padStart(2, "0")}`)).vendas;
   }
+  /* ---------- lixeira de produtos (60 dias para voltar atrás) ---------- */
+  let LX = { lista: null, dias: 60, erro: "" };
+  async function abrirLixeira() {
+    LX = { lista: null, dias: 60, erro: "" };
+    abrirModal("Lixeira de produtos", lixeiraHtml());
+    try { const r = await api("GET", "/estoque/produtos/lixeira"); LX.lista = r.produtos; LX.dias = r.dias || 60; } catch (e) { LX.erro = e.message; }
+    corpoModal(lixeiraHtml());
+  }
+  function lixeiraHtml() {
+    if (LX.erro) return `<p class="erro-form">${esc(LX.erro)}</p>`;
+    if (!LX.lista) return `<p class="sub">Carregando…</p>`;
+    const intro = `<p class="sub" style="margin-top:0">Produtos excluídos ficam aqui por ${LX.dias} dias. Restaurar traz de volta com o estoque, as variações e o histórico. Depois do prazo, são apagados de vez.</p>`;
+    if (!LX.lista.length) return intro + `<div class="vazio" style="padding:24px 0;text-align:center">A lixeira está vazia.</div>`;
+    return intro + `<ul class="lista-simples">${LX.lista.map((x) => `<li><span><b>${esc(x.nome)}</b><small class="sub" style="display:block">${esc(x.categoria || "Sem categoria")} · excluído em ${new Date(x.excluidoEm).toLocaleDateString("pt-BR")}${x.excluidoPor ? ` por ${esc(x.excluidoPor)}` : ""} · ${x.diasRestantes === 1 ? "falta 1 dia" : `faltam ${x.diasRestantes} dias`}</small></span>
+      <span class="linha"><button class="btn mini claro" data-a="lx-restaurar" data-id="${x.id}">Restaurar</button>${ehChefia() ? `<button class="btn mini perigo" data-a="lx-apagar" data-id="${x.id}">Apagar de vez</button>` : ""}</span></li>`).join("")}</ul>`;
+  }
   async function recarregarProdutos() { S.produtos = (await api("GET", "/estoque/produtos")).produtos; atualizarSeloEstoque(); }
   function atualizarSeloEstoque() {
     const n = S.produtos.filter((p) => p.ativo && (p.situacao === "acabou" || p.situacao === "baixo")).length;
@@ -348,6 +366,10 @@
     }
     const cx = c.caixa;
     const hora = new Date(cx.abertoEm).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+    // a função não cuida do caixa: o servidor não manda os valores (vendas, gaveta, movimentos)
+    if (c.restrito) return `<div class="card caixa-card aberto">
+      <div class="caixa-status"><span class="caixa-luz"></span><div><h2 class="secao" style="margin:0">Caixa #${cx.numero} aberto</h2><p class="sub">desde ${hora}${cx.abertoPor ? ` · por ${esc(cx.abertoPor)}` : ""}. Os valores do caixa ficam com quem cuida dele.</p></div></div>
+    </div>`;
     const outros = MEIOS_CAIXA.filter((m) => m !== "dinheiro" && c.esperado[m]).map((m) => `<li><span>${meioCurto(m)}</span><b class="num">${fmt(c.esperado[m])}</b></li>`).join("");
     const movs = c.movimentos.lista.slice().reverse().slice(0, 8);
     return `<div class="card caixa-card aberto">
@@ -373,13 +395,27 @@
   function telaCaixa() {
     const r = S.resumo;
     const mes = MESES[new Date().getMonth()];
-    let html = topo(`Olá${S.negocio.nome ? `, ${esc(S.negocio.nome)}` : ""}!`, "O caixa do dia e o resumo do mês. Vendas, despesas e fiado já entram sozinhos no Controle financeiro.",
+    const quem = operadorAtual();
+    let html = topo(`Olá, ${esc(quem ? String(quem.nome).trim().split(/\s+/)[0] : (S.negocio.nome || ""))}!`, r && r.restrito ? "O caixa e o que precisa da sua atenção hoje." : "O caixa do dia e o resumo do mês. Vendas, despesas e fiado já entram sozinhos no Controle financeiro.",
       `${pode("compras") ? `<button class="btn claro so-desk" data-a="nova-compra">Registrar compra</button>` : ""}${pode("vender") ? `<button class="btn acento so-desk" data-a="ir" data-tab="vender">Nova venda</button>` : ""}`);
     html += primeirosPassos();
     html += blocoCaixaHtml() + `<div class="espaco"></div>`;
     if (!r) return html + carregandoHtml;
     if (r.fiado && r.fiado.total) html += `<div class="faixa"><span><b>${fmt(r.fiado.total)}</b> em fiado a receber de ${r.fiado.clientes === 1 ? "1 cliente" : `${r.fiado.clientes} clientes`}.</span><button class="btn mini claro" data-a="ver-fiado">Ver quem deve</button></div>`;
     if (restaurante() && r.pedidosNovos) html += `<div class="faixa"><span><b>${r.pedidosNovos === 1 ? "1 pedido novo" : `${r.pedidosNovos} pedidos novos`}</b> ${r.pedidosNovos === 1 ? "chegou" : "chegaram"} pelo cardápio digital.</span><button class="btn mini acento" data-a="ir" data-tab="pedidos">Ver pedidos</button></div>`;
+    if (r.restrito) {
+      const baixo = S.produtos.filter((p) => p.ativo && (p.situacao === "baixo" || p.situacao === "acabou")).length;
+      const m = r.minhasHoje || { vendas: 0, total: 0 };
+      html += `<div class="grade grade-2">
+        <div class="card"><p class="kpi-rotulo">Suas vendas hoje</p><p class="kpi-valor">${fmt(m.total)}</p><p class="kpi-nota">${m.vendas === 1 ? "1 venda" : `${m.vendas} vendas`} com o seu nome</p></div>
+        <div class="card"><p class="kpi-rotulo">Estoque baixo</p><p class="kpi-valor">${baixo}</p><p class="kpi-nota">${baixo === 1 ? "produto para repor" : "produtos para repor"}</p></div>
+      </div><div class="espaco"></div>
+      <div class="grade grade-2">
+        <div class="card"><h2 class="secao">Estoque pedindo atenção</h2>${r.alertas.length ? `<ul class="lista-simples">${r.alertas.map((a) => `<li><span>${esc(a.nome)}</span><span class="linha"><span class="num">${fmtN(a.estoque)} ${unid(a.unidade)}</span></span></li>`).join("")}</ul>` : `<p class="vazio" style="padding:18px 0">Tudo certo: nenhum produto abaixo do mínimo.</p>`}</div>
+        <div class="card"><h2 class="secao">Mais vendidos em ${mes}</h2>${r.maisVendidos.length ? `<ul class="lista-simples">${r.maisVendidos.map((x, i) => `<li><span>${i + 1}. ${esc(x.nome)}</span><span class="sub">${fmtN(x.qtd)}×</span></li>`).join("")}</ul>` : `<p class="vazio" style="padding:18px 0">Ainda sem vendas este mês.</p>`}</div>
+      </div>`;
+      return html;
+    }
     html += `<div class="grade grade-4">
       <div class="card"><p class="kpi-rotulo">Vendas hoje</p><p class="kpi-valor">${fmt(r.hoje.total)}</p><p class="kpi-nota">${r.hoje.vendas === 1 ? "1 venda" : `${r.hoje.vendas} vendas`}</p></div>
       <div class="card"><p class="kpi-rotulo">Vendido em ${mes}</p><p class="kpi-valor">${fmt(r.mes.total)}</p><p class="kpi-nota">${r.mes.vendas === 1 ? "1 venda" : `${r.mes.vendas} vendas`}${r.mes.vendas ? ` · ticket médio ${fmt(r.mes.total / r.mes.vendas)}` : ""}</p></div>
@@ -1007,7 +1043,7 @@
       && (!S.filtroProd || (S.filtroProd === "atencao" ? p.ativo && (p.situacao === "baixo" || p.situacao === "acabou") : S.filtroProd === "inativos" ? !p.ativo : p.ativo)));
     const atencao = S.produtos.filter((p) => p.ativo && (p.situacao === "baixo" || p.situacao === "acabou")).length;
     let html = topo("Produtos e estoque", `${S.produtos.length === 1 ? "1 produto" : `${S.produtos.length} produtos`} cadastrados. Para entrada de mercadoria comprada, use Compras: o custo médio se atualiza sozinho.`,
-      !pode("produtos") ? "" : `${pode("custos") ? `<button class="btn claro so-desk" data-a="importar-prod" title="Cadastrar ou atualizar vários produtos de uma vez por planilha">Importar planilha</button><button class="btn claro so-desk" data-a="exportar-prod">Exportar (.xlsx)</button>` : ""}<button class="btn acento" data-a="novo-produto">Novo produto</button>`);
+      !pode("produtos") ? "" : `<button class="btn claro" data-a="lixeira-prod" title="Produtos excluídos nos últimos 60 dias">Lixeira</button>${pode("custos") ? `<button class="btn claro so-desk" data-a="importar-prod" title="Cadastrar ou atualizar vários produtos de uma vez por planilha">Importar planilha</button><button class="btn claro so-desk" data-a="exportar-prod">Exportar (.xlsx)</button>` : ""}<button class="btn acento" data-a="novo-produto">Novo produto</button>`);
     html += `<div class="linha" style="margin-bottom:14px"><input class="inp" style="max-width:340px" data-busca-prod value="${esc(S.buscaProd)}" placeholder="Buscar produto" />
       <div class="chips"><button class="chip ${!S.filtroProd ? "ativo" : ""}" data-a="filtro-prod" data-v="">Ativos</button><button class="chip ${S.filtroProd === "atencao" ? "ativo" : ""}" data-a="filtro-prod" data-v="atencao">Estoque baixo${atencao ? ` (${atencao})` : ""}</button><button class="chip ${S.filtroProd === "inativos" ? "ativo" : ""}" data-a="filtro-prod" data-v="inativos">Inativos</button></div></div>`;
     if (!S.produtos.length) return html + `<div class="card vazio"><b>Nenhum produto ainda</b>Cadastre o que você vende: nome, preço, custo e, se quiser, variações como tamanho ou cor.<br/><br/><button class="btn acento" data-a="novo-produto">Cadastrar o primeiro produto</button></div>`;
@@ -1112,7 +1148,7 @@
       ${novo ? "" : `<div class="bloco"><label class="check"><input type="checkbox" data-pf="ativo" ${f.ativo ? "checked" : ""} /><span>Produto ativo <small>Desmarque para esconder das vendas sem apagar o histórico.</small></span></label></div>`}
       ${f.erro ? `<p class="erro-form">${esc(f.erro)}</p>` : ""}
       <div class="modal-rodape">
-        ${novo ? "" : `<button class="btn perigo esq" data-a="excluir-produto">Excluir</button>`}
+        ${novo || !ehChefia() ? "" : `<button class="btn perigo esq" data-a="excluir-produto">Excluir</button>`}
         <button class="btn claro" data-a="fechar-modal">Cancelar</button>
         <button class="btn acento" data-a="salvar-produto" ${f.salvando ? "disabled" : ""}>${f.salvando ? "Salvando…" : "Salvar"}</button>
       </div>`;
@@ -2972,9 +3008,22 @@
       case "filtro-prod": S.filtroProd = el.dataset.v; render(); break;
       case "ajustar": ev.stopPropagation(); abrirAjuste(id); break;
       case "salvar-produto": salvarProduto(); break;
+      case "lixeira-prod": abrirLixeira(); break;
+      case "lx-restaurar": {
+        try { S.produtos = (await api("POST", `/estoque/produtos/${el.dataset.id}/restaurar`)).produtos; atualizarSeloEstoque(); LX.lista = LX.lista.filter((x) => x.id !== el.dataset.id); corpoModal(lixeiraHtml()); toast("Produto restaurado.", "ok"); if (S.tab === "produtos") render(); }
+        catch (e) { toast(esc(e.message), "erro"); }
+        break;
+      }
+      case "lx-apagar": {
+        const x = LX.lista.find((i) => i.id === el.dataset.id); if (!x) break;
+        if (!(await confirmarAcao({ titulo: "Apagar de vez?", mensagem: `“${x.nome}” vai ser apagado para sempre, com o histórico de estoque. As vendas já feitas continuam.`, botao: "Apagar de vez", sempre: true }))) break;
+        try { await api("DELETE", `/estoque/produtos/lixeira/${x.id}`); LX.lista = LX.lista.filter((i) => i.id !== x.id); corpoModal(lixeiraHtml()); toast("Produto apagado."); }
+        catch (e) { toast(esc(e.message), "erro"); }
+        break;
+      }
       case "excluir-produto": {
-        if (!(await confirmarAcao({ mensagem: `Excluir “${PF.nome}”? O histórico de estoque some; as vendas já feitas continuam. Prefere só desativar? Desmarque “Produto ativo”.`, botao: "Excluir", cancelar: "Voltar", sempre: true }))) break;
-        try { await api("DELETE", `/estoque/produtos/${PF.id}`); await recarregarProdutos(); fecharModal(); toast("Produto excluído."); render(); } catch (e) { toast(esc(e.message), "erro"); }
+        if (!(await confirmarAcao({ mensagem: `Excluir “${PF.nome}”? Ele vai para a lixeira e pode ser restaurado por 60 dias, com estoque e histórico. Prefere só tirar das vendas? Desmarque “Produto ativo”.`, botao: "Mandar para a lixeira", cancelar: "Voltar", sempre: true }))) break;
+        try { await api("DELETE", `/estoque/produtos/${PF.id}`); await recarregarProdutos(); fecharModal(); toast("Produto na lixeira. Para desfazer, abra Produtos → Lixeira.", "ok"); render(); } catch (e) { toast(esc(e.message), "erro"); }
         break;
       }
       case "tirar-foto": if (!(await confirmarAcao({ mensagem: "Tirar a foto deste produto?", botao: "Tirar foto", cancelar: "Voltar", chave: "foto-produto" }))) break; if (PF.id && PF.foto) { try { await api("PUT", `/estoque/produtos/${PF.id}/foto`, { foto: null }); await recarregarProdutos(); } catch (e) { toast(esc(e.message), "erro"); break; } } PF.foto = ""; PF.fotoNova = null; redesenharProduto(); break;

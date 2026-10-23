@@ -1937,6 +1937,28 @@ describe('API com PostgreSQL (integração)', { skip: pular }, () => {
     const tg = (await api('POST', '/api/acesso/entrar', { codigo, id: gestor.id, pin: '1111' })).dados.token;
     assert.equal((await api('GET', '/api/financeiro', undefined, tg)).status, 200);
     assert.equal((await api('POST', `/api/estoque/vendas/${venda.dados.venda.id}/cancelar`, {}, tg)).status, 200);
+    // totais da loja: o vendedor vê só as vendas dele; os valores do caixa ficam com quem cuida do caixa
+    const resV = (await api('GET', '/api/estoque/resumo', undefined, tv)).dados;
+    assert.equal(resV.restrito, true);
+    assert.equal(resV.mes, undefined);
+    assert.equal(resV.hoje, undefined);
+    assert.ok(resV.minhasHoje);
+    assert.equal((await api('GET', '/api/estoque/resumo', undefined, t)).dados.restrito, undefined);
+    const cxV = (await api('GET', '/api/estoque/caixa', undefined, tv)).dados.aberto;
+    assert.equal(cxV.restrito, true);
+    assert.equal(cxV.vendas, undefined);
+    assert.ok((await api('GET', '/api/estoque/caixa', undefined, tc)).dados.aberto.vendas, 'o caixa vê os valores');
+    // excluir produto: o estoquista não; o gestor manda para a lixeira; dá para restaurar
+    assert.equal((await api('DELETE', `/api/estoque/produtos/${prod.id}`, undefined, te)).status, 403);
+    assert.equal((await api('DELETE', `/api/estoque/produtos/${prod.id}`, undefined, tg)).status, 200);
+    assert.ok(!(await api('GET', '/api/estoque', undefined, t)).dados.produtos.some((p) => p.id === prod.id), 'sumiu da lista');
+    const lx = (await api('GET', '/api/estoque/produtos/lixeira', undefined, te)).dados;
+    assert.equal(lx.produtos[0].id, prod.id);
+    assert.equal(lx.produtos[0].excluidoPor, 'Ana');
+    assert.equal((await api('DELETE', `/api/estoque/produtos/lixeira/${prod.id}`, undefined, te)).status, 403, 'apagar de vez é do gestor');
+    assert.equal((await api('POST', `/api/estoque/produtos/${prod.id}/restaurar`, {}, te)).status, 200);
+    const volta = (await api('GET', '/api/estoque', undefined, t)).dados.produtos.find((p) => p.id === prod.id);
+    assert.equal(volta.custo, 52, 'voltou com custo e tudo');
     // mudou o PIN do vendedor: o acesso do celular dele cai
     assert.equal((await api('PUT', `/api/estoque/operadores/${vend.id}`, { nome: 'Bruno', papel: 'vendedor', pin: '5555' }, t)).status, 200);
     assert.equal((await api('GET', '/api/board', undefined, tv)).status, 401);
@@ -1958,7 +1980,12 @@ describe('API com PostgreSQL (integração)', { skip: pular }, () => {
     const pinG = (await api('POST', '/api/estoque/operadores/entrar', { id: gestor.id, pin: '1111' }, tl)).dados.token;
     const normal = await api('POST', '/api/acesso/aparelho-normal', {}, tl, { 'x-operador': pinG });
     assert.equal(normal.status, 200);
-    assert.equal((await api('GET', '/api/acesso', undefined, normal.dados.token)).dados.tipo, 'dono');
+    assert.equal(normal.dados.token, undefined, 'sair do modo loja não entrega acesso de dono');
+    // o gestor, entrando pelo próprio celular, também transforma um aparelho em aparelho da loja
+    const tlG = await api('POST', '/api/acesso/aparelho-loja', {}, tg);
+    assert.equal(tlG.status, 200, JSON.stringify(tlG.dados));
+    assert.equal((await api('GET', '/api/acesso', undefined, tlG.dados.token)).dados.tipo, 'loja');
+    assert.equal((await api('POST', '/api/acesso/aparelho-loja', {}, tc2)).status, 403, 'o caixa não');
   });
 
   test('e-mail: configurações da aba E-mail e trocar o e-mail da conta', async () => {

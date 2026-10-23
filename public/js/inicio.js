@@ -5,8 +5,8 @@
   const token = localStorage.getItem('token');
   if(!token){ window.location.href = 'login.html'; return; }
 
-  function sair(){
-    if(window.Acesso){ Acesso.sair(); return; }
+  function sair(completo){
+    if(window.Acesso){ Acesso.sair(completo === true); return; }
     localStorage.removeItem('token');
     localStorage.removeItem('user');
     window.location.href = 'login.html';
@@ -22,7 +22,7 @@
   // confere se a sessão ainda vale (e atualiza o nome, se mudou em outro aparelho)
   fetch('/api/auth/me', { headers:{ Authorization:'Bearer ' + token } })
     .then((res)=>{
-      if(res.status === 401){ sair(); return null; }
+      if(res.status === 401){ sair(true); return null; }
       return res.ok ? res.json() : null;
     })
     .then((data)=>{
@@ -69,7 +69,7 @@
 
   // Equipe: aparelho da loja pede quem vai usar; funcionário vê só os aplicativos da função dele
   if(window.Acesso){
-    Acesso.garantirPessoa().then(()=> Acesso.info(true)).then((i)=>{
+    const aplicar = (i)=>{
       const esc = (t)=> String(t == null ? '' : t).replace(/[&<>"']/g, (c)=>({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
       const cartoes = { crm:'.inicio-app-crm', financeiro:'.inicio-app-fin', pdv:'.inicio-app-est' };
       Object.entries(cartoes).forEach(([app, sel])=>{ if(i.apps && i.apps[app] === false){ const el = document.querySelector(sel); if(el) el.remove(); } });
@@ -83,11 +83,16 @@
           const t = document.getElementById('inicio-trocar'); if(t) t.addEventListener('click', ()=> Acesso.trocarPessoa());
           document.getElementById('inicio-nome').textContent = `, ${String(i.operador.nome).trim().split(/\s+/)[0]}`;
         }
+        if(i.tipo === 'loja'){ const s = document.getElementById('inicio-sair'); if(s) s.textContent = 'Encerrar minha vez'; }
         if(!document.querySelector('.inicio-app')){
           document.querySelector('.inicio-apps').innerHTML = '<p class="inicio-sub">A sua função ainda não tem nenhum aplicativo liberado. Fale com o gestor.</p>';
         }
       }
-    }).catch(()=>{});
+    };
+    // o acesso guardado neste aparelho já arruma a tela; o servidor confere logo em seguida
+    const guardada = Acesso.guardada && Acesso.guardada();
+    if(guardada && guardada.tipo !== 'dono') aplicar(guardada);
+    Acesso.garantirPessoa().then(()=> Acesso.info(true)).then(aplicar).catch(()=>{});
   }
 
   // Acessibilidade: abre numa janela por cima (a tela de trás não mexe)

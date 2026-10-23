@@ -186,7 +186,7 @@ const COLS_PRODUTO = `user_id, id, nome, categoria, descricao, codigo, unidade, 
 async function listarProdutos(userId, { ids = null } = {}) {
   const filtro = ids ? 'AND id = ANY($2::uuid[])' : '';
   const params = ids ? [userId, ids] : [userId];
-  const { rows } = await query(`SELECT ${COLS_PRODUTO} FROM estoque_produtos WHERE user_id = $1::uuid ${filtro} ORDER BY categoria, posicao, nome`, params);
+  const { rows } = await query(`SELECT ${COLS_PRODUTO} FROM estoque_produtos WHERE user_id = $1::uuid AND excluido_em IS NULL ${filtro} ORDER BY categoria, posicao, nome`, params);
   const vs = await query(`SELECT * FROM estoque_variacoes WHERE user_id = $1::uuid ${ids ? 'AND produto_id = ANY($2::uuid[])' : ''} ORDER BY posicao, nome`, params);
   const porProduto = new Map();
   for (const v of vs.rows) { if (!porProduto.has(v.produto_id)) porProduto.set(v.produto_id, []); porProduto.get(v.produto_id).push(v); }
@@ -288,7 +288,7 @@ async function salvarProduto(userId, d = {}, id = null) {
       const r = await query(
         `UPDATE estoque_produtos SET nome = $3, categoria = $4, descricao = $5, codigo = $6, unidade = $7, preco = $8, custo = $9,
            controla_estoque = $10, estoque_minimo = $11, opcoes = $12::jsonb, no_cardapio = $13, destaque = $14, ativo = $15, cozinha = $16, fiscal = COALESCE($17::jsonb, fiscal), updated_at = now()
-         WHERE user_id = $1::uuid AND id = $2::uuid RETURNING id`, [userId, pid, ...campos]);
+         WHERE user_id = $1::uuid AND id = $2::uuid AND excluido_em IS NULL RETURNING id`, [userId, pid, ...campos]);
       if (!r.rows.length) throw erro('Produto não encontrado.');
     } else {
       const { rows: c } = await query('SELECT count(*)::int AS n FROM estoque_produtos WHERE user_id = $1::uuid', [userId]);
@@ -328,10 +328,37 @@ async function salvarProduto(userId, d = {}, id = null) {
   });
 }
 
-async function excluirProduto(userId, id) {
+/* Lixeira: excluir só esconde o produto (com estoque, variações e histórico). Dá para restaurar
+   por DIAS_LIXEIRA dias; depois disso o agendador apaga de vez (limparLixeiraDeProdutos). */
+const DIAS_LIXEIRA = 60;
+async function excluirProduto(userId, id, quem = '') {
   if (!ehUuid(id)) throw erro('Produto não encontrado.');
-  const r = await query('DELETE FROM estoque_produtos WHERE user_id = $1::uuid AND id = $2::uuid RETURNING id', [userId, id]);
+  const r = await query('UPDATE estoque_produtos SET excluido_em = now(), excluido_por = $3, updated_at = now() WHERE user_id = $1::uuid AND id = $2::uuid AND excluido_em IS NULL RETURNING id', [userId, id, texto(quem, 60)]);
   if (!r.rows.length) throw erro('Produto não encontrado.');
+}
+async function lixeiraDeProdutos(userId) {
+  const { rows } = await query(
+    `SELECT id, nome, categoria, preco, excluido_em, excluido_por,
+            GREATEST(0, ${DIAS_LIXEIRA} - floor(extract(epoch FROM now() - excluido_em) / 86400))::int AS dias_restantes
+       FROM estoque_produtos WHERE user_id = $1::uuid AND excluido_em IS NOT NULL ORDER BY excluido_em DESC`, [userId]);
+  return rows.map((r) => ({ id: r.id, nome: r.nome, categoria: r.categoria, preco: Number(r.preco), excluidoEm: r.excluido_em, excluidoPor: r.excluido_por, diasRestantes: r.dias_restantes }));
+}
+async function restaurarProduto(userId, id) {
+  if (!ehUuid(id)) throw erro('Produto não encontrado na lixeira.');
+  const r = await query('UPDATE estoque_produtos SET excluido_em = NULL, excluido_por = \'\', updated_at = now() WHERE user_id = $1::uuid AND id = $2::uuid AND excluido_em IS NOT NULL RETURNING id', [userId, id]);
+  if (!r.rows.length) throw erro('Produto não encontrado na lixeira.');
+}
+async function excluirDeVez(userId, id) {
+  if (!ehUuid(id)) throw erro('Produto não encontrado na lixeira.');
+  const r = await query('DELETE FROM estoque_produtos WHERE user_id = $1::uuid AND id = $2::uuid AND excluido_em IS NOT NULL RETURNING id', [userId, id]);
+  if (!r.rows.length) throw erro('Produto não encontrado na lixeira.');
+}
+// agendador (como sistema): apaga de vez o que está na lixeira há mais de DIAS_LIXEIRA dias
+async function limparLixeiraDeProdutos() {
+  try {
+    const r = await query(`DELETE FROM estoque_produtos WHERE excluido_em IS NOT NULL AND excluido_em < now() - interval '${DIAS_LIXEIRA} days'`);
+    if (r.rowCount) console.log(`Lixeira de produtos: ${r.rowCount} apagado(s) de vez.`);
+  } catch (e) { console.error('Erro ao limpar a lixeira de produtos:', e.message); }
 }
 
 async function salvarFoto(userId, id, dataUrl) {
@@ -987,7 +1014,7 @@ async function venderPedido(userId, id, d = {}, agora = new Date()) {
     const [pag] = String(p.pagamento || '').split('|');
     const meio = MEIOS_VENDA.includes(d.meio) ? d.meio : (pag === 'cartao' ? 'credito' : pag === 'dinheiro' ? 'dinheiro' : 'pix');
     // produto apagado depois do pedido: entra como item avulso com o mesmo preço
-    const existentes = new Set((await query('SELECT id FROM estoque_produtos WHERE user_id = $1::uuid AND id = ANY($2::uuid[])',
+    const existentes = new Set((await query('SELECT id FROM estoque_produtos WHERE user_id = $1::uuid AND id = ANY($2::uuid[]) AND excluido_em IS NULL',
       [userId, p.itens.map((i) => i.produtoId).filter(ehUuid)])).rows.map((r) => r.id));
     const itens = p.itens.map((i) => (existentes.has(i.produtoId)
       ? { produtoId: i.produtoId, variacaoId: i.variacaoId, qtd: i.qtd, unit: i.unit, opcoes: i.opcoes }
@@ -1000,6 +1027,7 @@ async function venderPedido(userId, id, d = {}, agora = new Date()) {
 }
 
 module.exports = {
+  DIAS_LIXEIRA, lixeiraDeProdutos, restaurarProduto, excluirDeVez, limparLixeiraDeProdutos,
   ErroEstoque, TIPOS_NEGOCIO, UNIDADES, MEIOS_VENDA, NOME_MEIO, nomeComVar,
   slugDe, lerNegocio, salvarNegocio, marcarChecklist,
   listarProdutos, produtoPorId, salvarProduto, excluirProduto, salvarFoto, ajustarEstoque, movimentosDe,

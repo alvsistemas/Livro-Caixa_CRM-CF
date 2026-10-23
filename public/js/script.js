@@ -137,8 +137,8 @@ function getCurrentUser(){
   try{ return JSON.parse(localStorage.getItem('user') || 'null'); }
   catch(e){ return null; }
 }
-function logout(){
-  if(window.Acesso){ Acesso.sair(); return; }
+function logout(completo){
+  if(window.Acesso){ Acesso.sair(completo === true); return; }
   localStorage.removeItem('token');
   localStorage.removeItem('user');
   window.location.href = 'login.html';
@@ -439,7 +439,7 @@ async function apiRequestUmaVez(method, path, body, timeoutMs){
     clearTimeout(timeoutId);
   }
   if(res.status === 401){
-    logout();
+    logout(true);
     throw new Error('Sessão expirada.');
   }
   if(res.status === 402){
@@ -3918,7 +3918,7 @@ async function desconectarTodosDispositivos(){
   renderApp();
   try{
     await apiRequest('POST', '/auth/logout-all');
-    logout(); // esse dispositivo também precisa entrar de novo
+    logout(true); // esse dispositivo também precisa entrar de novo
   }catch(e){
     logoutAllMsg = { tipo:'erro', texto: e.message || 'Não foi possível desconectar os dispositivos.' };
     logoutAllEnviando = false;
@@ -9810,7 +9810,9 @@ function closeConfirm(){ if(confirmState && confirmState.soltar) confirmState.so
 
 /* ---------- start ---------- */
 /* Equipe: o que cada função vê no CRM (o servidor confere tudo; aqui só some da tela) */
-var acessoCrm = { tipo:'dono', permissoes:{}, gestor:true }; // var: as telas podem desenhar antes desta linha rodar
+// var: as telas podem desenhar antes desta linha rodar. Começa com o acesso guardado neste aparelho
+// (equipe), para o menu já abrir só com o que a função permite; o servidor confere de novo logo depois.
+var acessoCrm = (function(){ const g = window.Acesso && Acesso.guardada && Acesso.guardada(); return g ? { tipo:g.tipo, permissoes:g.permissoes || {}, gestor:!!g.gestor } : { tipo:'dono', permissoes:{}, gestor:true }; })();
 const PERM_DA_PAGINA = { comissoes:'comissoes', automacoes:'config', fluxos:'config', 'import-export':'config', equipe:'config' };
 function podeNaPagina(pg){ if(!acessoCrm || acessoCrm.tipo === 'dono') return true; const k = PERM_DA_PAGINA[pg] || 'crm'; return !!acessoCrm.permissoes[k]; }
 function aplicarFuncaoNaTela(){
@@ -9820,6 +9822,7 @@ function aplicarFuncaoNaTela(){
   const r = document.querySelector('[data-action="abrir-reordenar-nav"]'); if(r) r.remove();
 }
 new MutationObserver(()=> aplicarFuncaoNaTela()).observe(document.body, { childList:true, subtree:true });
+aplicarFuncaoNaTela();
 
 async function iniciarCrm(){
   if(window.Acesso){

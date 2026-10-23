@@ -88,8 +88,9 @@ async function versaoDoToken(userId) {
   const { rows } = await query('SELECT token_version FROM usuarios WHERE id = $1::uuid', [userId]);
   return rows[0] ? rows[0].token_version || 0 : 0;
 }
+// dono, ou um gestor (pelo próprio celular, ou com o PIN no PDV do dono)
 router.post('/aparelho-loja', async (req, res) => {
-  if (!podeMudarAparelho(req) || req.acesso.tipo === 'funcionario') return res.status(403).json({ error: 'Só o gestor, no aparelho dele ou da loja, faz isso.' });
+  if (!podeMudarAparelho(req)) return res.status(403).json({ error: 'Só o dono ou um gestor faz isso. Entre com o PIN de um gestor.' });
   const tv = await comoSistema(() => versaoDoToken(req.userId));
   res.json({ token: jwt.sign({ sub: req.userId, tv, loja: 1 }, JWT_SECRET(), { expiresIn: '365d' }) });
 });
@@ -97,8 +98,8 @@ router.post('/aparelho-normal', async (req, res) => {
   if (!req.acesso || req.acesso.tipo !== 'loja' || !req.acesso.operador || req.acesso.operador.papel !== 'gestor') {
     return res.status(403).json({ error: 'Para tirar o modo loja, entre com o PIN de um gestor.' });
   }
-  const tv = await comoSistema(() => versaoDoToken(req.userId));
-  res.json({ token: jwt.sign({ sub: req.userId, tv }, JWT_SECRET(), { expiresIn: '30d' }) });
+  // não entrega um acesso de dono: o aparelho só sai da conta (para voltar, entra com e-mail e senha ou pelo link da equipe)
+  res.json({ ok: true });
 });
 
 module.exports = router;

@@ -82,6 +82,7 @@ function permissaoDoEstoque(m, p) {
   if (/^\/caixa\/(abrir|fechar|movimento)$/.test(p)) return 'caixa';
   if (/^\/caixa(\/|$)/.test(p)) return 'relatorios';
   if (p === '/resumo') return 'livre';
+  if (/^\/produtos\/lixeira(\/|$)/.test(p) || /^\/produtos\/[^/]+\/restaurar$/.test(p)) return 'produtos';
   if (/^\/produtos\/[^/]+\/movimentos$/.test(p)) return 'produtosVer';
   if (/^\/produtos(\/|$)/.test(p)) return g ? 'livre' : 'produtos';
   if (/^\/(ajuste|importar\/produtos|exportar\/produtos\.xlsx)(\/|$)/.test(p)) return 'produtos';

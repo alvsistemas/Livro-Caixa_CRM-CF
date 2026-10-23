@@ -15,6 +15,14 @@
   if (!localStorage.getItem('token')) { window.location.href = 'login.html'; return; }
 
   let D = null; let ED = null;
+  /* Abas: Resumo, Equipe e Acessos. A escolhida fica no endereço (#equipe) e neste aparelho. */
+  const ABAS = [['resumo', 'Resumo'], ['equipe', 'Equipe'], ['acessos', 'Acessos']];
+  let aba = (() => {
+    const h = (location.hash || '').slice(1);
+    if (ABAS.some(([id]) => id === h)) return h;
+    try { const g = localStorage.getItem('painel-aba'); if (ABAS.some(([id]) => id === g)) return g; } catch (e) { /* nada */ }
+    return 'resumo';
+  })();
 
   // chamada com o PIN, quando o servidor pedir (PDV com PIN exigido): mostra "quem está usando" e tenta de novo
   async function api(metodo, caminho, corpo, tentou = false) {
@@ -46,12 +54,14 @@
   function resumoHtml() {
     const r = D.resumo;
     const kpi = (rot, val, sub, cls = '') => `<div class="dono-kpi ${cls}"><p class="dono-kpi-rotulo">${rot}</p><p class="dono-kpi-valor">${val}</p>${sub ? `<p class="dono-kpi-sub">${sub}</p>` : ''}</div>`;
-    return `<section aria-labelledby="t-resumo"><h2 class="ass-h2" id="t-resumo">Hoje e neste mês</h2><div class="dono-kpis">
-      ${kpi('Vendas hoje', fmt(r.hoje.total), `${r.hoje.vendas} ${r.hoje.vendas === 1 ? 'venda' : 'vendas'} no balcão`)}
-      ${kpi('Vendas no mês', fmt(r.mes.total), `${r.mes.vendas} vendas · ticket médio ${fmt(r.mes.ticket)}`)}
+    return `<section aria-labelledby="t-vendas"><h2 class="pd-h3" id="t-vendas">Vendas</h2><div class="dono-kpis pd-kpis">
+      ${kpi('Hoje', fmt(r.hoje.total), `${r.hoje.vendas} ${r.hoje.vendas === 1 ? 'venda' : 'vendas'} no balcão`)}
+      ${kpi('No mês', fmt(r.mes.total), `${r.mes.vendas} vendas · ticket médio ${fmt(r.mes.ticket)}`)}
       ${r.mes.lucro !== undefined ? kpi('Lucro bruto no mês', fmt(r.mes.lucro), 'vendas menos o custo da mercadoria e as taxas', r.mes.lucro < 0 ? 'alerta' : '') : ''}
-      ${kpi('Caixa', r.caixa ? `Aberto` : 'Fechado', r.caixa ? `nº ${r.caixa.numero}${r.caixa.abertoPor ? ` · por ${esc(r.caixa.abertoPor)}` : ''} · ${quando(r.caixa.desde)}` : 'nenhum caixa aberto agora')}
-      ${kpi('Contatos novos no CRM', String(r.crm.novos), `${r.crm.ganhos} ${r.crm.ganhos === 1 ? 'negociação ganha' : 'negociações ganhas'} · ${fmt(r.crm.ganhosValor)}`)}
+    </div></section>
+    <section aria-labelledby="t-agora"><h2 class="pd-h3" id="t-agora">Agora</h2><div class="dono-kpis pd-kpis">
+      ${kpi('Caixa', r.caixa ? 'Aberto' : 'Fechado', r.caixa ? `nº ${r.caixa.numero}${r.caixa.abertoPor ? ` · por ${esc(r.caixa.abertoPor)}` : ''} · ${quando(r.caixa.desde)}` : 'nenhum caixa aberto agora')}
+      ${kpi('CRM no mês', `${r.crm.novos} ${r.crm.novos === 1 ? 'contato novo' : 'contatos novos'}`, `${r.crm.ganhos} ${r.crm.ganhos === 1 ? 'negociação ganha' : 'negociações ganhas'} · ${fmt(r.crm.ganhosValor)}`)}
       ${kpi('Cancelamentos no mês', String(r.canceladas.vendas), `${fmt(r.canceladas.total)} · descontos ${fmt(r.mes.descontos)}`, r.canceladas.vendas >= 5 ? 'alerta' : '')}
     </div></section>`;
   }
@@ -61,14 +71,14 @@
         <p class="ass-texto">Cadastre a equipe com funções (gerente, vendedor, estoquista, caixa, garçom), escolha o que cada pessoa pode ver e deixe cada uma entrar pelo próprio celular com um PIN. Faz parte do plano Completo.</p>
         <div class="ass-acoes"><a class="ass-btn ass-btn-forte" href="assinatura.html">Ver planos</a></div></div></section>`;
     }
-    const linhas = D.equipe.map((o) => `<tr>
+    const linhas = D.equipe.map((o) => `<tr class="pd-linha" data-a="editar" data-id="${esc(o.id)}">
       <td><b>${esc(o.nome)}</b>${o.ativo ? '' : ' <span class="ass-selo">inativo</span>'}</td>
       <td>${esc(o.funcao)}${Object.keys(o.permissoes || {}).length ? ' <span class="pd-ajuste" title="Com ajustes nesta pessoa">ajustado</span>' : ''}</td>
       <td>${quando(o.ultimoAcesso)}</td>
-      <td class="num">${o.mes.vendas ? `${o.mes.vendas} · ${fmt(o.mes.total)}` : '—'}</td>
+      <td class="num pd-so-largo">${o.mes.vendas ? `${o.mes.vendas} · ${fmt(o.mes.total)}` : '—'}</td>
       <td><button type="button" class="ass-btn pd-mini" data-a="editar" data-id="${esc(o.id)}">Editar</button></td></tr>`).join('');
-    return `<section aria-labelledby="t-equipe"><div class="pd-titulo-linha"><h2 class="ass-h2" id="t-equipe">Equipe</h2><button type="button" class="ass-btn ass-btn-forte" data-a="novo">+ Adicionar pessoa</button></div>
-      ${D.equipe.length ? `<div class="dono-tabela-wrap"><table class="dono-tabela pd-tabela"><thead><tr><th>Nome</th><th>Função</th><th>Último acesso</th><th>Vendas no mês</th><th></th></tr></thead><tbody>${linhas}</tbody></table></div>`
+    return `<section aria-labelledby="t-equipe"><div class="pd-titulo-linha"><div><h2 class="pd-h3" id="t-equipe">Quem trabalha com você</h2><p class="ass-miudo" style="margin:2px 0 0">Cada pessoa tem uma função e um PIN. Toque em Editar para trocar a função, o PIN ou o que ela pode ver.</p></div><button type="button" class="ass-btn ass-btn-forte" data-a="novo">+ Adicionar pessoa</button></div>
+      ${D.equipe.length ? `<div class="dono-tabela-wrap"><table class="dono-tabela pd-tabela"><thead><tr><th>Nome</th><th>Função</th><th>Último acesso</th><th class="pd-so-largo">Vendas no mês</th><th><span class="sr-only">Ações</span></th></tr></thead><tbody>${linhas}</tbody></table></div>`
         : `<div class="ass-cartao"><p class="ass-texto" style="margin:0">Ninguém cadastrado ainda. Adicione as pessoas que trabalham com você: cada uma recebe uma função e um PIN.</p></div>`}
       ${D.semOperador.vendas ? `<p class="ass-miudo">Vendas sem funcionário identificado no mês: ${D.semOperador.vendas} · ${fmt(D.semOperador.total)} (feitas com a sua conta, sem PIN).</p>` : ''}
       <details class="pd-funcoes"><summary>O que cada função pode fazer</summary>${matrizHtml()}</details>
@@ -86,7 +96,7 @@
     if (D.recursos && D.recursos.equipe === false) return '';
     const link = `${location.origin}/funcionario.html?c=${encodeURIComponent(D.codigo)}`;
     const msg = `Para entrar no sistema da ${D.negocio.nome || 'loja'} pelo seu celular: ${link} (código ${D.codigo}). Use o PIN que eu te passei.`;
-    return `<section aria-labelledby="t-entrada"><h2 class="ass-h2" id="t-entrada">Entrada pelo celular</h2><div class="ass-cartao">
+    return `<section aria-labelledby="t-entrada"><h2 class="pd-h3" id="t-entrada">Entrada pelo celular</h2><div class="ass-cartao">
       <p class="ass-texto" style="margin-top:0">Cada pessoa abre o link no próprio celular, escolhe o nome e digita o PIN. Não precisa da sua senha, e ela só vê o que a função permite.</p>
       <div class="pd-codigo"><span class="pd-codigo-rotulo">Código da loja</span><span class="pd-codigo-valor">${esc(D.codigo)}</span></div>
       <p class="ass-miudo pd-link">${esc(link)}</p>
@@ -95,17 +105,23 @@
         <a class="ass-btn" href="https://wa.me/?text=${encodeURIComponent(msg)}" target="_blank" rel="noopener">Enviar pelo WhatsApp</a>
         <button type="button" class="ass-btn ass-btn-perigo" data-a="novo-codigo">Gerar outro código</button>
       </div>
-      <label class="settings-toggle-row pd-toggle"><span><b>Vendedores veem os contatos de todos no CRM</b><small>Desligado, cada vendedor vê só os contatos que ele mesmo cadastrou.</small></span>
-        <button type="button" class="switch ${D.opcoes.crmTodos !== false ? 'on' : ''}" data-a="crm-todos" role="switch" aria-checked="${D.opcoes.crmTodos !== false}"><span class="switch-knob"></span></button></label>
+    </div></section>`;
+  }
+  function opcoesHtml() {
+    if (D.recursos && D.recursos.equipe === false) return '';
+    const ligado = D.opcoes.crmTodos !== false;
+    return `<section aria-labelledby="t-opcoes"><h2 class="pd-h3" id="t-opcoes">Contatos no CRM</h2><div class="ass-cartao">
+      <label class="settings-toggle-row pd-toggle pd-toggle-solto"><span><b>Vendedores veem os contatos de todos</b><small>${ligado ? 'Ligado: todo vendedor vê todos os contatos e negociações da loja.' : 'Desligado: cada vendedor vê só os contatos que ele mesmo cadastrou.'}</small></span>
+        <button type="button" class="switch ${ligado ? 'on' : ''}" data-a="crm-todos" role="switch" aria-checked="${ligado}" aria-label="Vendedores veem os contatos de todos"><span class="switch-knob"></span></button></label>
     </div></section>`;
   }
   function aparelhoHtml() {
     if (D.recursos && D.recursos.equipe === false) return '';
     const loja = Acesso.tipoLocal() === 'loja';
-    return `<section aria-labelledby="t-aparelho"><h2 class="ass-h2" id="t-aparelho">Aparelho da loja</h2><div class="ass-cartao">
+    return `<section aria-labelledby="t-aparelho"><h2 class="pd-h3" id="t-aparelho">Aparelho da loja</h2><div class="ass-cartao">
       ${loja ? `<p class="ass-texto" style="margin-top:0"><b>Este aparelho é da loja.</b> Quem for usar escolhe o nome e digita o PIN, e só vê o que a função dele permite (vale para o PDV, o CRM e o Controle financeiro).</p>
         <div class="ass-acoes pd-acoes-esq"><button type="button" class="ass-btn" data-a="aparelho-normal">Voltar a ser um aparelho normal</button></div>
-        <p class="ass-miudo">Para voltar ao normal, precisa estar entrado com o PIN de um gestor.</p>`
+        <p class="ass-miudo">Só um gestor, entrado com o PIN, tira o modo loja. O "Sair" do dia a dia só encerra a vez de quem estava usando.</p>`
       : `<p class="ass-texto" style="margin-top:0">O computador do caixa ou o tablet do balcão é usado por várias pessoas? Transforme-o em aparelho da loja: cada um entra com o próprio PIN e não consegue abrir o que a função não permite, como o lucro e o Controle financeiro.</p>
         <p class="ass-miudo">Use no aparelho da loja, não no seu celular. Antes, cadastre você mesmo na equipe com a função Gestor, para conseguir entrar com tudo liberado.</p>
         <div class="ass-acoes pd-acoes-esq"><button type="button" class="ass-btn ass-btn-forte" data-a="aparelho-loja">Usar este aparelho como aparelho da loja</button></div>`}
@@ -114,12 +130,35 @@
   function atividadeHtml() {
     const NOME = { cancelada: 'Venda cancelada', desconto: 'Desconto na venda', caixa: 'Diferença no fechamento do caixa' };
     const itens = D.atividade.map((a) => `<li class="dono-linha"><span>${NOME[a.tipo] || a.tipo} nº ${a.numero}${a.quem ? ` · ${esc(a.quem)}` : ''}</span><span>${fmt(a.valor)} · ${quando(a.quando)}</span></li>`).join('');
-    return `<section aria-labelledby="t-ativ"><h2 class="ass-h2" id="t-ativ">Para ficar de olho</h2><div class="ass-cartao">
+    return `<section aria-labelledby="t-ativ"><h2 class="pd-h3" id="t-ativ">Para ficar de olho</h2><div class="ass-cartao">
       ${itens ? `<ul class="pd-lista">${itens}</ul>` : '<p class="ass-texto" style="margin:0">Nenhum cancelamento, desconto ou diferença de caixa recente.</p>'}</div></section>`;
   }
-  function desenhar() {
-    $('#pd-conteudo').innerHTML = resumoHtml() + equipeHtml() + entradaHtml() + aparelhoHtml() + atividadeHtml();
+  function abasHtml() {
+    const conta = { equipe: D.equipe.filter((o) => o.ativo).length, resumo: D.atividade.length };
+    return `<div class="pd-abas" role="tablist" aria-label="Partes do painel">${ABAS.map(([id, nome]) => `<button type="button" role="tab" class="pd-aba" id="aba-${id}" data-aba="${id}" aria-selected="${aba === id}" aria-controls="painel-aba" tabindex="${aba === id ? 0 : -1}">${nome}${id === 'equipe' && conta.equipe ? ` <span class="pd-conta">${conta.equipe}</span>` : ''}${id === 'resumo' && conta.resumo ? ` <span class="pd-conta pd-conta-alerta" title="Itens para ficar de olho">${conta.resumo}</span>` : ''}</button>`).join('')}</div>`;
   }
+  function desenhar() {
+    const corpo = aba === 'equipe' ? equipeHtml()
+      : aba === 'acessos' ? `<div class="pd-grade">${entradaHtml()}${aparelhoHtml()}</div>${opcoesHtml()}`
+      : resumoHtml() + atividadeHtml();
+    $('#pd-conteudo').innerHTML = abasHtml() + `<div class="pd-painel" id="painel-aba" role="tabpanel" aria-labelledby="aba-${aba}">${corpo}</div>`;
+  }
+  function trocarAba(id, foco) {
+    if (!ABAS.some(([x]) => x === id) || !D) return;
+    aba = id;
+    try { localStorage.setItem('painel-aba', id); } catch (e) { /* nada */ }
+    try { history.replaceState(null, '', '#' + id); } catch (e) { /* nada */ }
+    desenhar();
+    if (foco) { const b = document.getElementById('aba-' + id); if (b) b.focus(); }
+  }
+  document.addEventListener('click', (e) => { const b = e.target.closest('[data-aba]'); if (b) trocarAba(b.dataset.aba); });
+  window.addEventListener('hashchange', () => { const h = (location.hash || '').slice(1); if (h !== aba) trocarAba(h); });
+  document.addEventListener('keydown', (e) => {
+    const b = e.target.closest && e.target.closest('[data-aba]'); if (!b) return;
+    const i = ABAS.findIndex(([x]) => x === b.dataset.aba);
+    if (e.key === 'ArrowRight') { e.preventDefault(); trocarAba(ABAS[(i + 1) % ABAS.length][0], true); }
+    if (e.key === 'ArrowLeft') { e.preventDefault(); trocarAba(ABAS[(i + ABAS.length - 1) % ABAS.length][0], true); }
+  });
 
   /* ---------------- editar pessoa ---------------- */
   function modal(html) {
@@ -199,7 +238,8 @@
         try { const r = await api('POST', '/acesso/aparelho-loja'); localStorage.setItem('token', r.token); localStorage.removeItem('pdv-operador'); window.location.href = '/'; } catch (e) { alertar(e.message); }
         break;
       case 'aparelho-normal':
-        try { const r = await api('POST', '/acesso/aparelho-normal'); localStorage.setItem('token', r.token); window.location.reload(); } catch (e) { alertar(e.message); }
+        if (!(await confirmarAcao({ titulo: 'Voltar a ser um aparelho normal?', mensagem: 'Este aparelho sai da conta. Para usar de novo, entre com o e-mail e a senha do dono (ou pelo link da equipe, com o seu PIN).', botao: 'Sair do modo loja', perigo: false, sempre: true }))) break;
+        try { await api('POST', '/acesso/aparelho-normal'); ['token', 'user', 'pdv-operador'].forEach((k) => localStorage.removeItem(k)); window.location.href = '/login.html'; } catch (e) { alertar(e.message); }
         break;
       default: break;
     }
@@ -214,7 +254,7 @@
     modal(editarHtml());
   });
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && ED) fecharModal(); });
-  function alertar(t) { confirmarAcao({ titulo: 'Atenção', mensagem: t, botao: 'Entendi', perigo: false, sempre: true }); }
+  function alertar(t) { confirmarAcao({ titulo: 'Atenção', mensagem: t, botao: 'Entendi', cancelar: false, perigo: false, sempre: true }); }
   $('#pd-atualizar').addEventListener('click', carregar);
 
   Acesso.garantirPessoa().then(carregar);

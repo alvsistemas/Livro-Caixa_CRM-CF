@@ -24,13 +24,39 @@
     return d;
   }
   let cache = null;
+  /* O último acesso fica guardado neste aparelho (para a mesma conta e a mesma pessoa): as telas
+     já abrem só com o que a função permite, sem mostrar tudo por um instante. O servidor confere
+     tudo de novo; isto só evita o "pisca". */
+  const CHAVE_GUARDADO = 'acesso-guardado';
+  const assinatura = () => lerToken().slice(-24) + '|' + (((tipoLocal() === 'funcionario' ? null : sessaoOp()) || {}).token || '').slice(-24);
+  function guardada() {
+    try { const o = JSON.parse(localStorage.getItem(CHAVE_GUARDADO) || 'null'); return o && o.a === assinatura() ? o.d : null; } catch (e) { return null; }
+  }
+  function pronto() { document.documentElement.classList.remove('acesso-pendente'); }
   async function info(forcar = false) {
     if (cache && !forcar) return cache;
-    try { cache = await chamar('GET', '/acesso'); }
-    catch (e) { cache = { tipo: tipoLocal(), apps: { pdv: true, crm: true, financeiro: true }, permissoes: {}, gestor: tipoLocal() === 'dono', erro: e }; }
+    try {
+      cache = await chamar('GET', '/acesso');
+      try { localStorage.setItem(CHAVE_GUARDADO, JSON.stringify({ a: assinatura(), d: cache })); } catch (e) { /* sem armazenamento */ }
+    } catch (e) { cache = { tipo: tipoLocal(), apps: { pdv: true, crm: true, financeiro: true }, permissoes: {}, gestor: tipoLocal() === 'dono', erro: e }; }
+    pronto();
     return cache;
   }
-  function sair() {
+  // equipe sem acesso guardado: esconde menus e cartões até saber o que a função permite
+  if (tipoLocal() !== 'dono' && !guardada()) {
+    document.documentElement.classList.add('acesso-pendente');
+    const s = document.createElement('style');
+    s.textContent = 'html.acesso-pendente [data-action="nav"],html.acesso-pendente .nav-mais,html.acesso-pendente .inicio-app,html.acesso-pendente #inicio-painel{visibility:hidden}';
+    document.head.appendChild(s);
+    setTimeout(pronto, 8000); // sem resposta do servidor: mostra o que tiver
+  }
+  // completo === true: sai da conta (sessão expirou). No aparelho da loja, o "Sair" normal só
+  // encerra a vez de quem estava usando: o aparelho continua da loja e pede "Quem vai usar?".
+  function sair(completo) {
+    if (completo !== true && tipoLocal() === 'loja') {
+      try { localStorage.removeItem(CHAVE_OP); } catch (e) { /* nada */ }
+      cache = null; window.location.href = '/'; return;
+    }
     try { ['token', 'user', CHAVE_OP].forEach((k) => localStorage.removeItem(k)); } catch (e) { /* nada */ }
     window.location.href = tipoLocal() === 'funcionario' ? '/funcionario.html' : '/login.html';
   }
@@ -117,5 +143,5 @@
     return true;
   }
 
-  window.Acesso = { info, tipoLocal, sessaoOp, cabecalhos, garantirPessoa, exigirApp, sair, trocarPessoa, chamar };
+  window.Acesso = { info, guardada, tipoLocal, sessaoOp, cabecalhos, garantirPessoa, exigirApp, sair, trocarPessoa, chamar };
 })();

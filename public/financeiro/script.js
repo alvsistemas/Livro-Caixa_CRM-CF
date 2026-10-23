@@ -114,8 +114,8 @@ const API_BASE = "/api";
 const sessionToken = localStorage.getItem("token");
 if (!sessionToken) window.location.href = "../login.html";
 
-function sair() {
-  if (window.Acesso) return Acesso.sair();
+function sair(completo) {
+  if (window.Acesso) return Acesso.sair(completo === true);
   localStorage.removeItem("token");
   localStorage.removeItem("user");
   window.location.href = "../login.html";
@@ -126,7 +126,7 @@ async function api(method, path, body, tentativa = 0) {
   const opts = { method, headers: { Authorization: "Bearer " + sessionToken, ...(window.Acesso ? Acesso.cabecalhos() : {}) } };
   if (body !== undefined) { opts.headers["Content-Type"] = "application/json"; opts.body = JSON.stringify(body); }
   const res = await fetch(API_BASE + path, opts);
-  if (res.status === 401) { sair(); throw new Error("Sessão expirada."); }
+  if (res.status === 401) { sair(true); throw new Error("Sessão expirada."); }
   if (res.status === 402) { window.location.href = "../assinatura.html?de=financeiro"; throw new Error("Sua assinatura não está ativa."); }
   let data = null;
   try { data = await res.json(); } catch (e) {}

@@ -25,16 +25,28 @@ function urlDoBanco() {
   return process.env.DATABASE_URL || 'postgres://livro:livro@127.0.0.1:5432/livro_caixa';
 }
 
+function tirarSslmode(url) {
+  try {
+    const u = new URL(url);
+    ['sslmode', 'uselibpqcompat'].forEach((k) => u.searchParams.delete(k));
+    return u.toString();
+  } catch (e) { return url; }
+}
+
 function opcoesDoPool() {
   const url = urlDoBanco();
   const local = /@(localhost|127\.0\.0\.1)(:\d+)?\//.test(url);
+  const semSsl = local || /sslmode=disable/.test(url);
   return {
-    connectionString: url,
+    // o "sslmode" sai do endereço: o SSL é definido logo abaixo (com o sslmode no endereço, o pg
+    // avisa "SECURITY WARNING" a cada início, porque o significado de "require" vai mudar)
+    connectionString: semSsl ? url : tirarSslmode(url),
     max: parseInt(process.env.DB_POOL_MAX || '5', 10),
     idleTimeoutMillis: 30000,
     connectionTimeoutMillis: 15000,
-    // Neon exige SSL; em banco local não precisa
-    ssl: local || /sslmode=disable/.test(url) ? false : { rejectUnauthorized: false },
+    // Neon exige SSL e o certificado é conferido (verify-full). Em banco local não precisa.
+    // Saída de emergência se algum provedor usar certificado próprio: DB_SSL_SEM_VERIFICAR=1
+    ssl: semSsl ? false : { rejectUnauthorized: process.env.DB_SSL_SEM_VERIFICAR !== '1' },
   };
 }
 

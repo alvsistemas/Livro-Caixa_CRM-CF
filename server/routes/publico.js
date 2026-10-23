@@ -84,7 +84,7 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 router.get('/foto/:userId/:produtoId', async (req, res) => {
   if (!UUID.test(req.params.userId) || !UUID.test(req.params.produtoId)) return res.status(404).end();
   try {
-    const { rows } = await query('SELECT foto, foto_tipo FROM estoque_produtos WHERE user_id = $1::uuid AND id = $2::uuid AND foto IS NOT NULL', [req.params.userId, req.params.produtoId]);
+    const { rows } = await query('SELECT foto, foto_tipo FROM estoque_produtos WHERE user_id = $1::uuid AND id = $2::uuid AND foto IS NOT NULL AND excluido_em IS NULL', [req.params.userId, req.params.produtoId]);
     if (!rows.length) return res.status(404).end();
     res.set('Content-Type', rows[0].foto_tipo || 'image/jpeg');
     res.set('Cache-Control', 'public, max-age=604800, immutable');

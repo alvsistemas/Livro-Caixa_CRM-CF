@@ -90,9 +90,12 @@
     document.querySelectorAll('[data-filtro]').forEach((b) => b.addEventListener('click', () => { filtro = b.dataset.filtro; desenharFiltros(); desenharTabela(); }));
   }
 
+  // a lista mostra 25 por vez ("Mostrar mais"), para a página não virar um rolo sem fim
+  const POR_VEZ = 25; let mostrar = POR_VEZ; let chaveLista = '';
   function desenharTabela(){
     const f = (FILTROS.find((x) => x[0] === filtro) || FILTROS[0])[2];
     const q = busca.trim().toLowerCase();
+    if(chaveLista !== filtro + '|' + q){ chaveLista = filtro + '|' + q; mostrar = POR_VEZ; }
     const nomeDoPlano = (id) => { const p = (resumo.planos || []).find((x) => x.id === id); return p ? p.nome : '—'; };
     const lista = resumo.clientes.filter(f).filter((c) => !q || `${c.nome} ${c.email}`.toLowerCase().includes(q));
     const ate = (c) => {
@@ -104,7 +107,7 @@
     const podeDesconto = (c) => resumo.cobranca && !['dono', 'cortesia', 'livre'].includes(c.situacao);
     const textoDesc = (d) => d ? `${String(d.percentual).replace('.', ',')}% ${d.ate ? `até ${data(d.ate)}` : d.meses ? `por ${d.meses} ${d.meses === 1 ? 'mês' : 'meses'}` : 'para sempre'}${d.origem === 'promocao' ? ' · promoção' : ''}` : '';
     $('dono-tabela').innerHTML = `<thead><tr><th>Cliente</th><th>Cadastro</th><th>Situação</th><th>Plano</th><th>Período</th><th>Vencimento</th><th><span class="sr-only">Ações</span></th></tr></thead><tbody>${
-      lista.length ? lista.map((c) => `<tr>
+      lista.length ? lista.slice(0, mostrar).map((c) => `<tr>
         <td><div>${esc(c.nome || '(sem nome)')}</div><div class="email">${esc(c.email)}</div></td>
         <td class="num">${data(c.cadastro)}</td>
         <td><span class="ass-selo ${SELO[c.situacao] || ''}">${esc(c.rotulo)}</span></td>
@@ -116,7 +119,9 @@
     }</tbody>`;
     document.querySelectorAll('[data-desconto]').forEach((b) => b.addEventListener('click', () => abrirDesconto(resumo.clientes.find((c) => c.id === b.dataset.desconto))));
     document.querySelectorAll('[data-regras]').forEach((b) => b.addEventListener('click', () => abrirRegras(resumo.clientes.find((c) => c.id === b.dataset.regras))));
-    $('dono-tabela-rodape').textContent = `${lista.length} ${lista.length === 1 ? 'cliente' : 'clientes'}${resumo.clientes.length >= 500 ? ' (mostrando os 500 cadastros mais recentes)' : ''}.`;
+    const rod = $('dono-tabela-rodape');
+    rod.innerHTML = `${Math.min(mostrar, lista.length)} de ${lista.length} ${lista.length === 1 ? 'cliente' : 'clientes'}${resumo.clientes.length >= 500 ? ' (dos 500 cadastros mais recentes)' : ''}.${lista.length > mostrar ? ` <button type="button" class="ass-btn dono-btn-mini" id="dono-mais">Mostrar mais ${Math.min(POR_VEZ, lista.length - mostrar)}</button>` : ''}`;
+    const mais = document.getElementById('dono-mais'); if(mais) mais.addEventListener('click', () => { mostrar += POR_VEZ; desenharTabela(); });
   }
 
   $('dono-busca').addEventListener('input', (e) => { busca = e.target.value; if(resumo) desenharTabela(); });
@@ -226,6 +231,9 @@
           ? `<ul class="dono-erros">${s.erros.recentes.map((e) => `<li><div class="quando">${esc(dataHora(e.quando))}${e.rota ? ` · ${esc(e.rota)}` : ''}${e.tipo !== 'rota' ? ` · ${esc(e.tipo.replace(/_/g, ' '))}` : ''}</div><div class="msg">${esc(e.mensagem)}</div></li>`).join('')}</ul>`
           : '<p class="ass-texto" style="margin:0">Nenhum erro registrado.</p>', true),
     ].join('');
+    // a aba Saúde avisa quando algo pede atenção
+    const ruins = [estadoCobranca, estadoErros, s.banco.ok ? 'ok' : 'ruim'].filter((e) => e === 'ruim' || e === 'atencao').length;
+    const conta = $('dev-saude-conta'); if (conta){ conta.textContent = String(ruins); conta.hidden = !ruins; conta.title = ruins ? 'Itens pedindo atenção' : ''; }
   }
 
   /* ---------- donos ---------- */
@@ -385,5 +393,23 @@
     }
   }
   $('dono-atualizar').addEventListener('click', carregar);
+
+  /* ---------- abas: uma parte por vez (Clientes, Promoção, Equipes, Saúde, Ferramentas) ---------- */
+  const ABAS_DEV = ['clientes', 'promocao', 'equipes', 'saude', 'ferramentas'];
+  function mostrarAba(id, foco){
+    if(!ABAS_DEV.includes(id)) id = 'clientes';
+    document.querySelectorAll('[data-dev-aba]').forEach((b) => { const sel = b.dataset.devAba === id; b.setAttribute('aria-selected', String(sel)); b.tabIndex = sel ? 0 : -1; if(sel && foco) b.focus(); });
+    document.querySelectorAll('[data-dev-sec]').forEach((sec) => { sec.hidden = sec.dataset.devSec !== id; });
+    try{ localStorage.setItem('dev-aba', id); history.replaceState(null, '', '#' + id); }catch(e){ /* nada */ }
+  }
+  document.getElementById('dev-abas').addEventListener('click', (e) => { const b = e.target.closest('[data-dev-aba]'); if(b) mostrarAba(b.dataset.devAba); });
+  document.getElementById('dev-abas').addEventListener('keydown', (e) => {
+    const b = e.target.closest('[data-dev-aba]'); if(!b) return;
+    const i = ABAS_DEV.indexOf(b.dataset.devAba);
+    if(e.key === 'ArrowRight'){ e.preventDefault(); mostrarAba(ABAS_DEV[(i + 1) % ABAS_DEV.length], true); }
+    if(e.key === 'ArrowLeft'){ e.preventDefault(); mostrarAba(ABAS_DEV[(i + ABAS_DEV.length - 1) % ABAS_DEV.length], true); }
+  });
+  window.addEventListener('hashchange', () => mostrarAba((location.hash || '').slice(1)));
+  mostrarAba((location.hash || '').slice(1) || (() => { try{ return localStorage.getItem('dev-aba'); }catch(e){ return null; } })() || 'clientes');
   carregar();
 })();

@@ -35,3 +35,32 @@
 .pd-acoes-modal{ justify-content:space-between; margin-top:18px; }
 .pd-dir{ display:flex; gap:8px; }
 @media (max-width:640px){ .pd-perms{ grid-template-columns:1fr; } .pd-codigo-valor{ font-size:28px; } }
+
+/* abas do painel (também no Painel do dev): poucas, curtas, roláveis no celular */
+.pd-abas{ position:sticky; top:0; z-index:5; display:flex; gap:2px; margin:18px 0 22px; border-bottom:1px solid var(--line); background:var(--bg); overflow-x:auto; scrollbar-width:none; }
+.pd-abas::-webkit-scrollbar{ display:none; }
+.pd-aba{ flex:0 0 auto; display:inline-flex; align-items:center; gap:7px; min-height:46px; padding:0 14px; margin-bottom:-1px; border:0; border-bottom:2px solid transparent; background:transparent; color:var(--ink-soft); font:600 14px 'IBM Plex Sans',system-ui,sans-serif; cursor:pointer; white-space:nowrap; }
+.pd-aba:hover{ color:var(--ink); }
+.pd-aba[aria-selected="true"]{ color:var(--ink); border-bottom-color:var(--ink); }
+.pd-aba:focus-visible{ outline:2px solid var(--ink); outline-offset:-2px; border-radius:6px; }
+.pd-conta{ font:600 11px/1 'IBM Plex Mono',monospace; padding:3px 7px; border-radius:999px; background:var(--badge-neutral-bg); color:var(--ink); }
+.pd-conta-alerta{ background:#B42318; color:#fff; }
+.pd-painel{ display:grid; gap:26px; }
+.pd-painel > section{ display:grid; gap:12px; }
+.pd-h3{ font:600 13px/1.2 'IBM Plex Sans',system-ui,sans-serif; letter-spacing:.06em; text-transform:uppercase; color:var(--ink-soft); margin:0; }
+.pd-kpis{ grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); }
+.pd-grade{ display:grid; grid-template-columns:repeat(auto-fit,minmax(320px,1fr)); gap:26px 20px; align-items:start; }
+.pd-grade > section{ display:grid; gap:12px; min-width:0; }
+.pd-grade .ass-cartao{ height:100%; box-sizing:border-box; }
+.pd-toggle-solto{ margin-top:0; padding-top:0; border-top:0; }
+@media (max-width:640px){ .pd-grade{ grid-template-columns:1fr; } }
+
+[data-dev-sec] > .ass-h2:first-child, [data-dev-sec] > section > .ass-h2:first-child{ margin-top:0; }
+[data-dev-sec][hidden]{ display:none !important; }
+.pd-linha{ cursor:pointer; }
+.pd-linha:hover td{ background:color-mix(in srgb, var(--ink) 4%, transparent); }
+@media (max-width:640px){
+  .pd-tabela{ min-width:0; }
+  .pd-so-largo{ display:none; }
+  .pd-tabela th, .pd-tabela td{ padding-left:10px; padding-right:10px; }
+}

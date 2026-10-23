@@ -5,7 +5,12 @@
      certo para o navegador que a pessoa está usando (Safari, Chrome, Edge, Firefox).
    - Outros navegadores sem o recurso: explica o caminho pelo menu.
    "Agora não" esconde o convite por 14 dias; o link "Instalar o aplicativo" no rodapé continua
-   lá para quem mudar de ideia. Já instalado (ou aberto pelo ícone), nada disso aparece. */
+   lá para quem mudar de ideia. Já instalado (ou aberto pelo ícone), nada disso aparece.
+   Como o site sabe que já foi instalado, mesmo aberto depois pelo navegador:
+   - aberto pelo ícone uma vez, fica anotado neste aparelho ("instalar-feito");
+   - Chrome/Edge: pergunta ao navegador (getInstalledRelatedApps, "related_applications" no manifest);
+   - iPhone: o Safari não conta e não divide a memória com o app instalado, então o convite
+     tem o botão "Já instalei", que esconde de vez. */
 (function () {
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => { navigator.serviceWorker.register('/sw.js').catch(() => { /* o site funciona sem */ }); });
@@ -20,6 +25,16 @@
   const gravar = (k, v) => { try { localStorage.setItem(k, v); } catch (e) { /* sem armazenamento */ } };
   const adiado = () => Number(ler(CHAVE) || 0) > Date.now();
   let pedido = null; // o evento do navegador que abre a janela de instalação
+  if (abertoComoApp()) gravar(CHAVE_OK, '1'); // aberto pelo ícone: este aparelho tem o app
+  // pergunta ao navegador se o app está instalado (Chrome/Edge); null = o navegador não sabe dizer
+  async function instaladoNoNavegador() {
+    try {
+      if (!navigator.getInstalledRelatedApps) return null;
+      const apps = await navigator.getInstalledRelatedApps();
+      return apps.length > 0;
+    } catch (e) { return null; }
+  }
+  instaladoNoNavegador().then((sim) => { if (sim) { gravar(CHAVE_OK, '1'); atualizar(); } });
 
   const caixa = () => document.getElementById('instalar-app');
   const semMovimento = () => window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -67,7 +82,12 @@
     setTimeout(() => recolher(el), 2600);
   }
 
-  window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); pedido = e; try { localStorage.removeItem(CHAVE_OK); } catch (x) { /* nada */ } atualizar(); });
+  window.addEventListener('beforeinstallprompt', async (e) => {
+    e.preventDefault(); pedido = e;
+    // o navegador oferece instalar: só esquece o "já instalado" se ele confirmar que o app saiu
+    if (ler(CHAVE_OK) === '1' && (await instaladoNoNavegador()) === false) { try { localStorage.removeItem(CHAVE_OK); } catch (x) { /* nada */ } }
+    atualizar();
+  });
   window.addEventListener('appinstalled', () => { pedido = null; mostrarFeito(); });
 
   const ICONE_COMPARTILHAR = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-3px"><path d="M12 3v12"/><path d="M8 7l4-4 4 4"/><path d="M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-7"/></svg>';
@@ -113,8 +133,14 @@
     if (ev.target.closest('[data-instalar]')) { ev.preventDefault(); instalar(); }
     else if (ev.target.closest('[data-instalar-depois]')) { gravar(CHAVE, String(Date.now() + 14 * 86400000)); recolher(caixa()); }
     else if (ev.target.closest('[data-instalar-fechar]')) recolher(caixa());
+    else if (ev.target.closest('[data-instalar-ja]')) { gravar(CHAVE_OK, '1'); const l = linkRodape(); if (l) l.hidden = true; recolher(caixa()); }
   });
-  document.addEventListener('DOMContentLoaded', atualizar);
+  document.addEventListener('DOMContentLoaded', () => {
+    // no iPhone não dá para saber se já instalou: a pessoa avisa
+    const b = caixa() && caixa().querySelector('.instalar-botoes');
+    if (ios && b && !b.querySelector('[data-instalar-ja]')) b.insertAdjacentHTML('beforeend', '<button type="button" class="instalar-depois" data-instalar-ja>Já instalei</button>');
+    atualizar();
+  });
   // aberto pelo ícone depois de instalar: nunca mostra o convite
   window.matchMedia('(display-mode: standalone)').addEventListener?.('change', atualizar);
 })();

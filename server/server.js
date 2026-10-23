@@ -213,6 +213,10 @@ async function start() {
     // resumo do dia por e-mail (dias úteis, a partir das 8h de Brasília; confere de 10 em 10 min)
     setTimeout(enviarResumosDiarios, 2 * 60 * 1000);
     setInterval(enviarResumosDiarios, 10 * 60 * 1000);
+    // lixeira de produtos do PDV: apaga de vez o que passou do prazo (uma vez por dia)
+    const { limparLixeiraDeProdutos } = require('./utils/estoque');
+    setTimeout(limparLixeiraDeProdutos, 3 * 60 * 1000);
+    setInterval(limparLixeiraDeProdutos, 24 * UMA_HORA);
   } catch (err) {
     console.error('Falha ao conectar no PostgreSQL:', err.message);
     enviarAlertaTelegram(`Não foi possível conectar ao banco de dados (PostgreSQL) — o servidor não vai subir.\n${err.message}`);

@@ -1,6 +1,7 @@
 /* Confirmação antes de apagar — a mesma janela nos três aplicativos.
 
-   confirmarAcao({ mensagem, titulo, botao, perigo, chave, sempre }) -> Promise<boolean>
+   confirmarAcao({ mensagem, titulo, botao, cancelar, perigo, chave, sempre }) -> Promise<boolean>
+   - cancelar: false -> só um botão (aviso, sem escolha)
    - sempre: true  -> coisas importantes (cliente/contato, lançamento, venda, produto…): pergunta sempre,
                       sem a opção de "não perguntar de novo".
    - chave: 'tarefa' (sem "sempre") -> mostra "Não perguntar de novo"; marcado, da próxima vez apaga direto.
@@ -33,7 +34,7 @@
         <p class="cf-msg" id="${id}-m">${esc(o.mensagem || '')}</p>
         ${podePular ? `<label class="cf-pular"><input type="checkbox" /> <span>Não perguntar de novo para isto</span></label>` : ''}
         <div class="cf-botoes">
-          <button type="button" class="cf-nao">${esc(o.cancelar || 'Cancelar')}</button>
+          ${o.cancelar === false ? '' : `<button type="button" class="cf-nao">${esc(o.cancelar || 'Cancelar')}</button>`}
           <button type="button" class="cf-sim ${o.perigo === false ? '' : 'cf-perigo'}">${esc(o.botao || 'Excluir')}</button>
         </div>
       </div>`;
@@ -56,9 +57,10 @@
       aberta = { fechar };
       document.addEventListener('keydown', tecla, true);
       raiz.addEventListener('click', (ev) => { if (ev.target === raiz) fechar(false); });
-      raiz.querySelector('.cf-nao').addEventListener('click', () => fechar(false));
+      const nao = raiz.querySelector('.cf-nao');
+      if (nao) nao.addEventListener('click', () => fechar(false));
       raiz.querySelector('.cf-sim').addEventListener('click', () => fechar(true));
-      raiz.querySelector('.cf-nao').focus(); // o padrão é não apagar
+      (nao || raiz.querySelector('.cf-sim')).focus(); // o padrão é não apagar
     });
   }
 

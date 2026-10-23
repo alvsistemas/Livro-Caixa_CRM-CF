@@ -310,7 +310,7 @@ async function fecharComanda(userId, id, d = {}, operador = '', extras = {}, ago
     const c = await comandaAberta(userId, id);
     const { rows } = await query('SELECT * FROM estoque_comanda_itens WHERE user_id = $1::uuid AND comanda_id = $2::uuid AND NOT cancelado ORDER BY criado_em, id', [userId, c.id]);
     if (!rows.length) throw erro('A conta está vazia. Lance os itens ou cancele a comanda.');
-    const existentes = new Set((await query('SELECT id FROM estoque_produtos WHERE user_id = $1::uuid AND id = ANY($2::uuid[])',
+    const existentes = new Set((await query('SELECT id FROM estoque_produtos WHERE user_id = $1::uuid AND id = ANY($2::uuid[]) AND excluido_em IS NULL',
       [userId, rows.map((r) => r.produto_id).filter(Boolean)])).rows.map((r) => r.id));
     const itens = rows.map((r) => {
       const opcoes = [...(r.opcoes || []), ...(r.obs ? [`obs: ${r.obs}`] : [])];

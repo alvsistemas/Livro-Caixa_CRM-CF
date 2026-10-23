@@ -19,6 +19,7 @@ const NF = require('../utils/fiscal');
 const { hojeBR } = require('../utils/fechamento');
 const { criarMiddlewareLimite } = require('../utils/limiteTaxa');
 const A = require('../utils/acesso');
+const { query } = require('../db/pool');
 
 const router = express.Router();
 router.use(auth);
@@ -93,7 +94,29 @@ router.get('/', rota(async (req) => ({
   fiscal: await NF.lerConfig(req.userId),
 }), 'Erro ao carregar o PDV'));
 
-router.get('/resumo', rota(async (req) => ({ ...(await E.resumo(req.userId)), fiado: await C.fiadoEmAberto(req.userId) }), 'Erro ao carregar o resumo'));
+// o que a pessoa que está usando pode ver (null = tudo: o dono, sem PIN de funcionário)
+function permsDoPedido(req) {
+  if (req.acesso && req.acesso.tipo !== 'dono') return req.acesso.perm || A.NADA;
+  if (req.op && req.pdv && req.pdv.exigirOperador) return A.permissoesDe(req.op);
+  return null;
+}
+router.get('/resumo', rota(async (req) => {
+  const r = { ...(await E.resumo(req.userId)), fiado: await C.fiadoEmAberto(req.userId) };
+  const p = permsDoPedido(req);
+  if (!p) return r;
+  // totais da loja (dia, mês, valor do estoque, quanto rende cada produto) só com "Relatórios"
+  if (!p.relatorios) {
+    const nome = req.op ? req.op.nome : '';
+    const hoje = hojeBR();
+    const minhas = nome ? (await query(`SELECT count(*)::int AS n, COALESCE(sum(total), 0)::float AS t FROM estoque_vendas WHERE user_id = $1::uuid AND NOT cancelada AND data = $2 AND operador = $3`, [req.userId, hoje, nome])).rows[0] : { n: 0, t: 0 };
+    r.minhasHoje = { vendas: minhas.n, total: Math.round(minhas.t * 100) / 100 };
+    r.maisVendidos = r.maisVendidos.map((m) => ({ nome: m.nome, qtd: m.qtd }));
+    delete r.hoje; delete r.mes; delete r.valorEstoque;
+    r.restrito = true;
+  }
+  if (!p.clientes) delete r.fiado;
+  return r;
+}, 'Erro ao carregar o resumo'));
 
 router.put('/negocio', rota(async (req) => ({ negocio: await E.salvarNegocio(req.userId, req.body || {}) }), 'Erro ao salvar', 'gerente'));
 router.put('/pdv', rota(async (req) => {
@@ -114,7 +137,13 @@ const limitePin = criarMiddlewareLimite({ janelaMs: 10 * 60 * 1000, max: 10, cha
 router.post('/operadores/entrar', limitePin, rota((req) => C.entrarOperador(req.userId, req.body || {}), 'Erro ao entrar'));
 
 // Caixa do dia
-router.get('/caixa', rota((req) => C.situacaoCaixa(req.userId), 'Erro ao carregar o caixa'));
+router.get('/caixa', rota(async (req) => {
+  const sit = await C.situacaoCaixa(req.userId);
+  const p = permsDoPedido(req);
+  // os valores do caixa (vendas, gaveta, movimentos) ficam com quem cuida do caixa
+  if (p && !p.caixa && sit.aberto) sit.aberto = { caixa: { id: sit.aberto.caixa.id, numero: sit.aberto.caixa.numero, abertoEm: sit.aberto.caixa.abertoEm, abertoPor: sit.aberto.caixa.abertoPor }, restrito: true };
+  return sit;
+}, 'Erro ao carregar o caixa'));
 router.get('/caixa/historico', rota(async (req) => ({ caixas: await C.historicoCaixas(req.userId) }), 'Erro ao carregar os fechamentos'));
 router.get('/caixa/:id', rota((req) => C.caixaPorId(req.userId, req.params.id), 'Erro ao carregar o caixa'));
 router.post('/caixa/abrir', rota((req) => C.abrirCaixa(req.userId, req.body || {}, nomeDoOperador(req)), 'Erro ao abrir o caixa', 'caixa'));
@@ -176,9 +205,14 @@ router.post('/compras/nfe', rota((req) => N.importar(req.userId, req.body || {})
 
 // Produtos
 router.get('/produtos', rota(async (req) => ({ produtos: await E.listarProdutos(req.userId) }), 'Erro ao carregar os produtos'));
+// lixeira: quem edita produtos vê e restaura; apagar de vez é do gestor ou gerente
+router.get('/produtos/lixeira', rota(async (req) => ({ produtos: await E.lixeiraDeProdutos(req.userId), dias: E.DIAS_LIXEIRA }), 'Erro ao carregar a lixeira', 'gerente'));
+router.post('/produtos/:id/restaurar', rota(async (req) => { await E.restaurarProduto(req.userId, req.params.id); return { produtos: await E.listarProdutos(req.userId) }; }, 'Erro ao restaurar o produto', 'gerente'));
+router.delete('/produtos/lixeira/:id', rota(async (req) => { await E.excluirDeVez(req.userId, req.params.id); return { ok: true }; }, 'Erro ao apagar o produto', 'cancelar'));
 router.post('/produtos', rota(async (req) => ({ produto: await E.salvarProduto(req.userId, await semMexerNoCusto(req)) }), 'Erro ao salvar o produto', 'gerente'));
 router.put('/produtos/:id', rota(async (req) => ({ produto: await E.salvarProduto(req.userId, await semMexerNoCusto(req), req.params.id) }), 'Erro ao salvar o produto', 'gerente'));
-router.delete('/produtos/:id', rota(async (req) => { await E.excluirProduto(req.userId, req.params.id); return { ok: true }; }, 'Erro ao excluir o produto', 'gerente'));
+// excluir manda para a lixeira (dá para restaurar); só gestor ou gerente
+router.delete('/produtos/:id', rota(async (req) => { await E.excluirProduto(req.userId, req.params.id, nomeDoOperador(req)); return { ok: true, dias: E.DIAS_LIXEIRA }; }, 'Erro ao excluir o produto', 'cancelar'));
 router.put('/produtos/:id/foto', rota(async (req) => {
   await E.salvarFoto(req.userId, req.params.id, req.body ? req.body.foto : undefined);
   return { produto: await E.produtoPorId(req.userId, req.params.id) };

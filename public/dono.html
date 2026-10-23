@@ -8,9 +8,10 @@
 <meta name="theme-color" content="#141414" />
 <link rel="icon" href="icons/icon-192.png" />
 <script>try{document.documentElement.setAttribute('data-theme',localStorage.getItem('darkMode')==='1'?'dark':'light');}catch(e){}</script>
-<link rel="stylesheet" href="css/style.css?v=20261155" />
-<link rel="stylesheet" href="css/assinatura.css?v=20261155" />
-<link rel="stylesheet" href="css/dono.css?v=20261155" />
+<link rel="stylesheet" href="css/style.css?v=20261158" />
+<link rel="stylesheet" href="css/assinatura.css?v=20261158" />
+<link rel="stylesheet" href="css/dono.css?v=20261158" />
+<link rel="stylesheet" href="css/painel.css?v=20261158" />
 </head>
 <body class="ass-body">
   <main class="ass-wrap dono-wrap">
@@ -26,7 +27,15 @@
 
     <div id="dono-aviso" class="ass-faixa ass-faixa-teste" hidden></div>
 
-    <section aria-labelledby="t-clientes">
+    <div class="pd-abas" role="tablist" aria-label="Partes do painel" id="dev-abas">
+      <button type="button" role="tab" class="pd-aba" id="aba-clientes" data-dev-aba="clientes" aria-controls="sec-clientes">Clientes</button>
+      <button type="button" role="tab" class="pd-aba" id="aba-promocao" data-dev-aba="promocao" aria-controls="sec-promocao">Promoção</button>
+      <button type="button" role="tab" class="pd-aba" id="aba-equipes" data-dev-aba="equipes" aria-controls="sec-equipes">Equipes</button>
+      <button type="button" role="tab" class="pd-aba" id="aba-saude" data-dev-aba="saude" aria-controls="sec-saude">Saúde <span class="pd-conta pd-conta-alerta" id="dev-saude-conta" hidden></span></button>
+      <button type="button" role="tab" class="pd-aba" id="aba-ferramentas" data-dev-aba="ferramentas" aria-controls="sec-ferramentas">Ferramentas</button>
+    </div>
+
+    <section aria-labelledby="t-clientes" id="sec-clientes" role="tabpanel" data-dev-sec="clientes">
       <h2 class="ass-h2" id="t-clientes">Clientes</h2>
       <div class="dono-kpis" id="dono-kpis"></div>
       <div class="dono-filtros" id="dono-filtros" role="tablist" aria-label="Filtrar clientes"></div>
@@ -35,7 +44,7 @@
       <p class="ass-miudo" id="dono-tabela-rodape"></p>
     </section>
 
-    <section aria-labelledby="t-promo">
+    <section aria-labelledby="t-promo" id="sec-promocao" role="tabpanel" data-dev-sec="promocao">
       <h2 class="ass-h2" id="t-promo">Promoção para novos clientes</h2>
       <div class="ass-cartao">
         <p class="ass-texto" style="margin-top:0" id="promo-status"></p>
@@ -56,7 +65,7 @@
       </div>
     </section>
 
-    <section aria-labelledby="t-equipes">
+    <section aria-labelledby="t-equipes" id="sec-equipes" role="tabpanel" data-dev-sec="equipes">
       <h2 class="ass-h2" id="t-equipes">Equipes</h2>
       <div class="ass-cartao">
         <p class="ass-texto" style="margin-top:0">O gestor de cada equipe escolhe o que os membros podem usar (aba Equipe → Permissões). Aqui você também pode ajustar, para ajudar. Cada mudança fica no histórico da conta do gestor.</p>
@@ -64,11 +73,12 @@
       </div>
     </section>
 
-    <section aria-labelledby="t-saude">
+    <section aria-labelledby="t-saude" id="sec-saude" role="tabpanel" data-dev-sec="saude">
       <h2 class="ass-h2" id="t-saude">Saúde do sistema</h2>
       <div class="dono-saude" id="dono-saude"><p class="ass-carregando">Conferindo…</p></div>
     </section>
 
+    <div id="sec-ferramentas" role="tabpanel" data-dev-sec="ferramentas" class="pd-grade">
     <section aria-labelledby="t-demo">
       <h2 class="ass-h2" id="t-demo">Restaurante de exemplo</h2>
       <div class="ass-cartao">
@@ -94,6 +104,7 @@
         <p class="ass-erro" id="dono-add-erro" role="alert" hidden></p>
       </div>
     </section>
+    </div>
   </main>
 
   <div class="ass-modal-fundo" id="desc-modal" hidden>
@@ -164,6 +175,6 @@
       </div>
     </div>
   </div>
-  <script src="js/dono.js?v=20261155"></script>
+  <script src="js/dono.js?v=20261158"></script>
 </body>
 </html>
