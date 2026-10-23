@@ -10,13 +10,13 @@
 <link rel="apple-touch-icon" href="icons/icon-192.png" />
 <meta name="apple-mobile-web-app-capable" content="yes" />
 <meta name="apple-mobile-web-app-title" content="Livro-Caixa" />
-<link rel="stylesheet" href="css/style.css?v=20261158" />
-<link rel="stylesheet" href="css/inicio.css?v=20261158" />
-<link rel="stylesheet" href="css/transicao-apps.css?v=20261158" />
-<link rel="stylesheet" href="css/acessibilidade.css?v=20261158" />
-<script src="js/acessibilidade.js?v=20261158"></script>
-<script src="js/confirmacao.js?v=20261158"></script>
-<script src="js/transicao-apps.js?v=20261158"></script>
+<link rel="stylesheet" href="css/style.css?v=20261159" />
+<link rel="stylesheet" href="css/inicio.css?v=20261159" />
+<link rel="stylesheet" href="css/transicao-apps.css?v=20261159" />
+<link rel="stylesheet" href="css/acessibilidade.css?v=20261159" />
+<script src="js/acessibilidade.js?v=20261159"></script>
+<script src="js/confirmacao.js?v=20261159"></script>
+<script src="js/transicao-apps.js?v=20261159"></script>
 </head>
 <body class="inicio-body">
   <main class="inicio-wrap">
@@ -69,7 +69,23 @@
       <a class="inicio-assinatura" id="instalar-link" href="#" data-instalar hidden>Instalar o aplicativo</a>
       <button type="button" class="inicio-sair" id="inicio-sair">Sair da conta</button>
     </footer>
-    <div class="inicio-a11y"><button type="button" class="inicio-a11y-abrir" id="a11y-abrir" aria-haspopup="dialog">Acessibilidade: letra maior, alto contraste…</button></div>
+    <!-- Ferramentas: acessibilidade e, depois que o app já foi instalado, o "Instalar o aplicativo" -->
+    <div class="ferr">
+      <button type="button" class="ferr-abrir" id="ferramentas-abrir" aria-haspopup="true" aria-expanded="false" aria-controls="ferramentas-menu">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
+        <span>Ferramentas</span>
+      </button>
+      <div class="ferr-menu" id="ferramentas-menu" hidden>
+        <button type="button" class="ferr-item" id="a11y-abrir" aria-haspopup="dialog">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="4.5" r="1.8"/><path d="M5 8.5l7 1.5 7-1.5"/><path d="M12 10v5"/><path d="M9 21l3-6 3 6"/></svg>
+          <span><b>Acessibilidade</b><small>Letra maior, alto contraste, menos animação</small></span>
+        </button>
+        <button type="button" class="ferr-item" id="instalar-ferr" data-instalar hidden>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="2" width="14" height="20" rx="2"/><path d="M12 7v7"/><path d="M9 11l3 3 3-3"/></svg>
+          <span><b>Instalar o aplicativo</b><small>Já está neste aparelho · instalar em outro</small></span>
+        </button>
+      </div>
+    </div>
     <dialog class="a11y-janela" id="a11y-janela" aria-labelledby="a11y-janela-titulo">
       <div class="a11y-janela-topo">
         <h2 id="a11y-janela-titulo">Acessibilidade</h2>
@@ -79,8 +95,8 @@
       <div class="a11y-janela-rodape"><button type="button" class="a11y-janela-pronto" data-a11y-fechar>Pronto</button></div>
     </dialog>
   </main>
-  <script src="js/acesso.js?v=20261158"></script>
-  <script src="js/instalar.js?v=20261158"></script>
-  <script src="js/inicio.js?v=20261158"></script>
+  <script src="js/acesso.js?v=20261159"></script>
+  <script src="js/instalar.js?v=20261159"></script>
+  <script src="js/inicio.js?v=20261159"></script>
 </body>
 </html>

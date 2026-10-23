@@ -95,6 +95,28 @@
     Acesso.garantirPessoa().then(()=> Acesso.info(true)).then(aplicar).catch(()=>{});
   }
 
+  // Ferramentas: menu que abre para cima, embaixo da página
+  const ferrBtn = document.getElementById('ferramentas-abrir');
+  const ferrMenu = document.getElementById('ferramentas-menu');
+  if(ferrBtn && ferrMenu){
+    const fechar = (foco)=>{ ferrMenu.hidden = true; ferrBtn.setAttribute('aria-expanded', 'false'); if(foco) ferrBtn.focus(); };
+    ferrBtn.addEventListener('click', ()=>{
+      const abrir = ferrMenu.hidden;
+      ferrMenu.hidden = !abrir; ferrBtn.setAttribute('aria-expanded', String(abrir));
+      if(abrir){ const p = ferrMenu.querySelector('.ferr-item:not([hidden])'); if(p) p.focus(); }
+    });
+    document.addEventListener('click', (e)=>{ if(!ferrMenu.hidden && !e.target.closest('.ferr')) fechar(false); });
+    ferrMenu.addEventListener('click', (e)=>{ if(e.target.closest('.ferr-item')) fechar(false); });
+    document.addEventListener('keydown', (e)=>{
+      if(ferrMenu.hidden) return;
+      if(e.key === 'Escape'){ e.preventDefault(); fechar(true); return; }
+      if(e.key === 'ArrowDown' || e.key === 'ArrowUp'){
+        const itens = [...ferrMenu.querySelectorAll('.ferr-item:not([hidden])')]; const i = itens.indexOf(document.activeElement);
+        e.preventDefault(); itens[(i + (e.key === 'ArrowDown' ? 1 : itens.length - 1)) % itens.length].focus();
+      }
+    });
+  }
+
   // Acessibilidade: abre numa janela por cima (a tela de trás não mexe)
   const janela = document.getElementById('a11y-janela');
   const abrirA11y = document.getElementById('a11y-abrir');

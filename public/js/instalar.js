@@ -61,10 +61,20 @@
       { duration: 420, easing: 'cubic-bezier(.2,.8,.2,1)' }).finished.then(() => { el.style.overflow = ''; }).catch(() => { el.style.overflow = ''; });
   }
   const linkRodape = () => document.getElementById('instalar-link');
+  /* Chrome e Edge avisam "dá para instalar" (beforeinstallprompt) toda vez que a página abre, a não
+     ser que o app JÁ esteja instalado (é quando aparece "Abrir no app" na barra de endereço). Então:
+     o navegador sabe instalar, a página abriu há alguns segundos e o aviso não veio = instalado. */
+  const sabeInstalar = 'onbeforeinstallprompt' in window;
+  let semAvisoDoNavegador = false;
+  setTimeout(() => { semAvisoDoNavegador = sabeInstalar && !pedido && !ios; atualizar(); }, 4000);
+  const instalado = () => abertoComoApp() || ler(CHAVE_OK) === '1' || semAvisoDoNavegador;
   function atualizar() {
     const el = caixa(); const link = linkRodape();
-    const jaFeito = abertoComoApp() || ler(CHAVE_OK) === '1';
-    if (link) link.hidden = jaFeito;
+    const jaFeito = instalado();
+    // não instalado: o link fica na página; instalado: sai da página e fica só em Ferramentas
+    // (Chrome/Edge: o link só aparece quando o navegador avisar que dá para instalar, sem piscar)
+    if (link) link.hidden = jaFeito || (sabeInstalar && !pedido && !ios);
+    const ferr = document.getElementById('instalar-ferr'); if (ferr) ferr.hidden = !jaFeito;
     if (!el) return;
     const esconder = jaFeito || adiado() || (!pedido && !ios);
     if (esconder) { if (!el.hidden && !el.classList.contains('instalar-feito')) recolher(el); }
@@ -111,7 +121,7 @@
         () => { gravar(CHAVE, String(Date.now() + 14 * 86400000)); recolher(caixa()); });
       return;
     }
-    janela('Instalar o aplicativo', `<ol>
+    janela('Instalar o aplicativo', `${instalado() ? '<p><b>Neste aparelho o Livro-Caixa já está instalado.</b> Abra pelo ícone ou pelo botão "Abrir no app", na barra de endereço. Para instalar em outro aparelho, abra o site nele e siga os passos:</p>' : ''}<ol>
       <li>Abra o <b>menu do navegador</b> (os três pontinhos <b>⋮</b> ou <b>…</b>, no canto de cima).</li>
       <li>Procure <b>Instalar Livro-Caixa</b>, <b>Instalar aplicativo</b> ou <b>Adicionar à tela inicial</b>.</li>
       <li>Confirme em <b>Instalar</b>.</li></ol>
@@ -133,7 +143,7 @@
     if (ev.target.closest('[data-instalar]')) { ev.preventDefault(); instalar(); }
     else if (ev.target.closest('[data-instalar-depois]')) { gravar(CHAVE, String(Date.now() + 14 * 86400000)); recolher(caixa()); }
     else if (ev.target.closest('[data-instalar-fechar]')) recolher(caixa());
-    else if (ev.target.closest('[data-instalar-ja]')) { gravar(CHAVE_OK, '1'); const l = linkRodape(); if (l) l.hidden = true; recolher(caixa()); }
+    else if (ev.target.closest('[data-instalar-ja]')) { gravar(CHAVE_OK, '1'); recolher(caixa()); atualizar(); }
   });
   document.addEventListener('DOMContentLoaded', () => {
     // no iPhone não dá para saber se já instalou: a pessoa avisa
