@@ -12,6 +12,7 @@ const MetaVendas = require('../models/MetaVendas');
 const Task = require('../models/Task');
 const { registrarAuditoria } = require('../utils/auditoria');
 const P = require('../utils/permissoes');
+const EQ = require('../utils/equipesDoUsuario');
 
 const router = express.Router();
 router.use(auth); // todas as rotas de equipe exigem login
@@ -21,14 +22,27 @@ router.use((req, res, next) => { if (req.method !== 'GET') res.on('finish', P.li
 // GET /api/equipe -> dados da equipe do usuário logado (null se ele não fizer parte de nenhuma)
 router.get('/', async (req, res) => {
   try {
-    const user = await User.findById(req.userId);
+    let user = await User.findById(req.userId);
+    // conta de antes das várias equipes (ou espelho sem a linha): garante a participação
+    if (user && user.equipeId && !(await EQ.membroDe(user.equipeId, req.userId))) {
+      if (await Equipe.findById(user.equipeId)) await EQ.entrar(req.userId, user.equipeId, user.papelEquipe, user.supervisorDeDados);
+      else await EQ.espelhar(req.userId, null);
+      user = await User.findById(req.userId);
+    }
+    // nenhuma aberta mas faz parte de alguma: abre a primeira
+    let minhasEquipes = user ? await EQ.equipesDe(req.userId) : [];
+    if (user && !user.equipeId && minhasEquipes.length) {
+      await EQ.abrir(req.userId, minhasEquipes[0].id);
+      user = await User.findById(req.userId);
+    }
+    minhasEquipes = minhasEquipes.map((e) => ({ ...e, ativa: !!user && String(user.equipeId) === e.id }));
     const minhasPermissoes = await P.permissoesDe(req.userId);
-    if (!user || !user.equipeId) return res.json({ equipe: null, minhasPermissoes });
+    if (!user || !user.equipeId) return res.json({ equipe: null, minhasEquipes, limiteEquipes: EQ.LIMITE_EQUIPES, minhasPermissoes });
 
     const equipe = await Equipe.findById(user.equipeId);
-    if (!equipe) return res.json({ equipe: null, minhasPermissoes });
+    if (!equipe) return res.json({ equipe: null, minhasEquipes, limiteEquipes: EQ.LIMITE_EQUIPES, minhasPermissoes });
 
-    const membros = await User.find({ equipeId: equipe._id }).select('nome email papelEquipe supervisorDeDados');
+    const membros = await EQ.membrosDe(equipe._id);
     const souSupervisor = user.papelEquipe === 'supervisor';
 
     res.json({
@@ -51,6 +65,8 @@ router.get('/', async (req, res) => {
         permissoes: P.normalizar(equipe.permissoes),
         catalogoPermissoes: { abas: P.ABAS, funcoes: P.FUNCOES },
       },
+      minhasEquipes,
+      limiteEquipes: EQ.LIMITE_EQUIPES,
       minhasPermissoes,
     });
   } catch (err) {
@@ -83,18 +99,16 @@ router.post('/', async (req, res) => {
     const { nome } = req.body;
     if (!nome || !nome.trim()) return res.status(400).json({ error: 'Nome da equipe é obrigatório.' });
 
-    const user = await User.findById(req.userId);
-    if (user.equipeId) return res.status(400).json({ error: 'Você já faz parte de uma equipe. Saia dela antes de criar outra.' });
+    if ((await EQ.quantasEquipes(req.userId)) >= EQ.LIMITE_EQUIPES) {
+      return res.status(400).json({ error: `Você pode fazer parte de até ${EQ.LIMITE_EQUIPES} equipes. Saia de alguma antes de criar outra.` });
+    }
 
     const equipe = await Equipe.create({ nome: nome.trim(), donoId: req.userId });
-    user.equipeId = equipe._id;
-    user.papelEquipe = 'supervisor';
-    user.supervisorDeDados = true;
-    await user.save();
+    await EQ.entrar(req.userId, equipe._id, 'supervisor', true);
 
     res.status(201).json({ id: equipe._id.toString(), nome: equipe.nome, codigoConvite: equipe.codigoConvite });
   } catch (err) {
-    res.status(500).json({ error: 'Erro ao criar equipe.' });
+    res.status(err.status || 500).json({ error: err.status ? err.message : 'Erro ao criar equipe.' });
   }
 });
 
@@ -104,51 +118,56 @@ router.post('/entrar', async (req, res) => {
     const { codigo } = req.body;
     if (!codigo || !codigo.trim()) return res.status(400).json({ error: 'Informe o código de convite.' });
 
-    const user = await User.findById(req.userId);
-    if (user.equipeId) return res.status(400).json({ error: 'Você já faz parte de uma equipe. Saia dela antes de entrar em outra.' });
-
     const equipe = await Equipe.findOne({ codigoConvite: codigo.trim().toUpperCase() });
     if (!equipe) return res.status(404).json({ error: 'Código de convite inválido.' });
+    if (await EQ.membroDe(equipe._id, req.userId)) return res.status(400).json({ error: `Você já faz parte da equipe "${equipe.nome}".` });
 
-    user.equipeId = equipe._id;
-    user.papelEquipe = 'membro';
-    await user.save();
-
+    // entra e já abre a equipe nova; as outras continuam na lista "Minhas equipes"
+    await EQ.entrar(req.userId, equipe._id, 'membro', false);
     res.status(204).end();
   } catch (err) {
-    res.status(500).json({ error: 'Erro ao entrar na equipe.' });
+    res.status(err.status || 500).json({ error: err.status ? err.message : 'Erro ao entrar na equipe.' });
   }
 });
 
-// POST /api/equipe/sair -> sai da equipe atual (o funil da pessoa continua intocado)
+// POST /api/equipe/abrir { equipeId } -> troca a equipe aberta (a pessoa continua em todas)
+router.post('/abrir', async (req, res) => {
+  try {
+    const { equipeId } = req.body || {};
+    if (!equipeId || !isValidId(equipeId)) return res.status(400).json({ error: 'Equipe inválida.' });
+    if (!(await EQ.abrir(req.userId, equipeId))) return res.status(404).json({ error: 'Você não faz parte dessa equipe.' });
+    res.status(204).end();
+  } catch (err) {
+    res.status(500).json({ error: 'Erro ao abrir a equipe.' });
+  }
+});
+
+// POST /api/equipe/sair { equipeId? } -> sai de uma equipe (sem equipeId: a aberta).
+// O funil da pessoa continua intocado; se era a aberta, a próxima da lista abre.
 router.post('/sair', async (req, res) => {
   try {
     const user = await User.findById(req.userId);
-    if (!user.equipeId) return res.status(400).json({ error: 'Você não faz parte de nenhuma equipe.' });
+    const alvoId = (req.body && req.body.equipeId) || user.equipeId;
+    if (!alvoId) return res.status(400).json({ error: 'Você não faz parte de nenhuma equipe.' });
+    if (!isValidId(alvoId)) return res.status(400).json({ error: 'Equipe inválida.' });
+    if (!(await EQ.membroDe(alvoId, req.userId))) return res.status(404).json({ error: 'Você não faz parte dessa equipe.' });
 
-    const equipe = await Equipe.findById(user.equipeId);
+    const equipe = await Equipe.findById(alvoId);
     const eraDono = equipe && equipe.donoId.toString() === req.userId;
 
-    user.equipeId = null;
-    user.papelEquipe = 'membro';
-    await user.save();
+    await EQ.sair(req.userId, alvoId);
 
-    if (eraDono && equipe) {
-      const restantes = await User.find({ equipeId: equipe._id });
-      if (!restantes.length) {
-        // ninguém mais na equipe — apaga a equipe e o histórico do chat dela
-        await Equipe.findByIdAndDelete(equipe._id);
-        await ChatMensagem.deleteMany({ equipeId: equipe._id });
-      } else {
-        // passa a "dona" pra outro supervisor, ou promove o primeiro membro que sobrou
-        const novoDono = restantes.find((m) => m.papelEquipe === 'supervisor') || restantes[0];
-        equipe.donoId = novoDono._id;
-        await equipe.save();
-        if (novoDono.papelEquipe !== 'supervisor') {
-          novoDono.papelEquipe = 'supervisor';
-          await novoDono.save();
-        }
-      }
+    if (equipe && (await EQ.totalDeMembros(equipe._id)) === 0) {
+      // ninguém mais na equipe — apaga a equipe e o histórico do chat dela
+      await ChatMensagem.deleteMany({ equipeId: equipe._id });
+      await Equipe.findByIdAndDelete(equipe._id);
+    } else if (eraDono && equipe) {
+      const restantes = await EQ.membrosDe(equipe._id);
+      // passa a "dona" pra outro supervisor, ou promove o primeiro membro que sobrou
+      const novoDono = restantes.find((m) => m.papelEquipe === 'supervisor') || restantes[0];
+      equipe.donoId = novoDono._id;
+      await equipe.save();
+      if (novoDono.papelEquipe !== 'supervisor') await EQ.definirPapel(equipe._id, novoDono._id, 'supervisor');
     }
 
     res.status(204).end();
@@ -184,11 +203,7 @@ router.put('/membro/:userId/papel', async (req, res) => {
     const { papel } = req.body;
     if (!['supervisor', 'membro'].includes(papel)) return res.status(400).json({ error: 'Papel inválido.' });
 
-    const alvo = await User.findOne({ _id: req.params.userId, equipeId: user.equipeId });
-    if (!alvo) return res.status(404).json({ error: 'Membro não encontrado nesta equipe.' });
-
-    alvo.papelEquipe = papel;
-    await alvo.save();
+    if (!(await EQ.definirPapel(user.equipeId, req.params.userId, papel))) return res.status(404).json({ error: 'Membro não encontrado nesta equipe.' });
     res.status(204).end();
   } catch (err) {
     res.status(500).json({ error: 'Erro ao alterar o papel do membro.' });
@@ -205,11 +220,7 @@ router.put('/membro/:userId/supervisor-dados', async (req, res) => {
       return res.status(403).json({ error: 'Só o gestor da equipe pode conceder esse acesso.' });
     }
     const { ativo } = req.body;
-    const alvo = await User.findOne({ _id: req.params.userId, equipeId: user.equipeId });
-    if (!alvo) return res.status(404).json({ error: 'Membro não encontrado nesta equipe.' });
-
-    alvo.supervisorDeDados = !!ativo;
-    await alvo.save();
+    if (!(await EQ.definirSupervisorDados(user.equipeId, req.params.userId, !!ativo))) return res.status(404).json({ error: 'Membro não encontrado nesta equipe.' });
     res.status(204).end();
   } catch (err) {
     res.status(500).json({ error: 'Erro ao alterar o acesso de supervisor de dados.' });
@@ -227,12 +238,10 @@ router.delete('/membro/:userId', async (req, res) => {
     if (req.params.userId === req.userId) {
       return res.status(400).json({ error: 'Use "Sair da equipe" para se remover.' });
     }
-    const alvo = await User.findOne({ _id: req.params.userId, equipeId: user.equipeId });
+    const alvo = await EQ.membroComoUser(user.equipeId, req.params.userId);
     if (!alvo) return res.status(404).json({ error: 'Membro não encontrado nesta equipe.' });
 
-    alvo.equipeId = null;
-    alvo.papelEquipe = 'membro';
-    await alvo.save();
+    await EQ.sair(alvo._id, user.equipeId);
     registrarAuditoria(req.userId, 'membro_removido', `Removeu "${alvo.nome || alvo.email}" da equipe`);
     res.status(204).end();
   } catch (err) {
@@ -280,7 +289,7 @@ router.get('/chat/:userId', async (req, res) => {
     const user = await User.findById(req.userId);
     if (!user.equipeId) return res.status(400).json({ error: 'Você não faz parte de nenhuma equipe.' });
     const outroId = req.params.userId;
-    const outro = await User.findOne({ _id: outroId, equipeId: user.equipeId });
+    const outro = isValidId(outroId) ? await EQ.membroDe(user.equipeId, outroId) : null;
     if (!outro) return res.status(404).json({ error: 'Esse colega não faz parte da sua equipe.' });
 
     const mensagens = await ChatMensagem.find({
@@ -302,7 +311,7 @@ router.post('/chat/:userId', async (req, res) => {
     const user = await User.findById(req.userId);
     if (!user.equipeId) return res.status(400).json({ error: 'Você não faz parte de nenhuma equipe.' });
     const outroId = req.params.userId;
-    const outro = await User.findOne({ _id: outroId, equipeId: user.equipeId });
+    const outro = isValidId(outroId) ? await EQ.membroDe(user.equipeId, outroId) : null;
     if (!outro) return res.status(404).json({ error: 'Esse colega não faz parte da sua equipe.' });
 
     const { texto } = req.body;
@@ -331,7 +340,7 @@ router.get('/supervisao', async (req, res) => {
       return res.status(403).json({ error: 'Só supervisores podem ver essa página.' });
     }
 
-    const membros = await User.find({ equipeId: user.equipeId });
+    const membros = await EQ.membrosDe(user.equipeId);
     const resultado = [];
     for (const m of membros) {
       // dados de outra pessoa da equipe: leitura como sistema, depois de conferir que é o gestor
@@ -377,7 +386,7 @@ router.get('/supervisao/:userId/dashboard', async (req, res) => {
     if (!user.equipeId || user.papelEquipe !== 'supervisor') {
       return res.status(403).json({ error: 'Só supervisores podem ver essa página.' });
     }
-    const membro = await User.findOne({ _id: req.params.userId, equipeId: user.equipeId });
+    const membro = await EQ.membroComoUser(user.equipeId, req.params.userId);
     if (!membro) return res.status(404).json({ error: 'Membro não encontrado nessa equipe.' });
 
     const mesAtual = new Date().toISOString().slice(0, 7);
@@ -411,7 +420,7 @@ router.get('/meta-vendas/:mes', async (req, res) => {
     if (!/^\d{4}-\d{2}$/.test(mes)) return res.status(400).json({ error: 'Mês inválido.' });
     const [meta, membros] = await Promise.all([
       MetaVendasEquipe.findOne({ equipeId: user.equipeId, mes }),
-      User.find({ equipeId: user.equipeId }),
+      EQ.membrosDe(user.equipeId),
     ]);
 
     let vendidoNoMes = 0;

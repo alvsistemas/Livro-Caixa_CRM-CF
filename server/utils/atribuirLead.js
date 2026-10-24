@@ -10,6 +10,7 @@ const Contrato = require('../models/Contrato');
 const FluxoExecucao = require('../models/FluxoExecucao');
 const { isValidId } = require('../db/ids');
 const { comoSistema } = require('../db/contexto');
+const EQ = require('./equipesDoUsuario');
 
 // Estas funções mexem em dados de duas pessoas da equipe (o gestor e quem recebe o lead).
 // Só são chamadas depois de validarAtribuicao conferir que é o gestor da mesma equipe, e
@@ -24,7 +25,7 @@ async function validarAtribuicao(gestorId, alvoId) {
     throw erro(403, 'Só o gestor da equipe pode atribuir leads para outra pessoa.');
   }
   if (!alvoId || !isValidId(alvoId)) throw erro(400, 'Escolha para quem vai o lead.');
-  const alvo = await User.findOne({ _id: alvoId, equipeId: gestor.equipeId });
+  const alvo = (await EQ.membroDe(gestor.equipeId, alvoId)) ? await User.findById(alvoId) : null;
   if (!alvo) throw erro(404, 'Essa pessoa não faz parte da sua equipe.');
   return { gestor, alvo };
 }

@@ -4,6 +4,36 @@ const { comoUsuario } = require('../db/contexto');
 const { situacaoDe } = require('../utils/assinatura');
 const { permissoesDe, regraDoCaminho, NOMES } = require('../utils/permissoes');
 const A = require('../utils/acesso');
+const { comoSistema } = require('../db/contexto');
+const { isValidId } = require('../db/ids');
+const { registrarAuditoria } = require('../utils/auditoria');
+
+// "Atuar como": o gestor da equipe trabalha no funil de um consultor (vê, cria, edita, exclui
+// e move contatos e tarefas dele). O navegador manda o header X-Atuar-Como com o id do
+// consultor; só vale se quem pede é gestor da equipe aberta e o consultor é dessa MESMA equipe.
+// Só as áreas do funil aceitam o modo (nada de configurações, senha, integrações, backup...).
+// Toda alteração fica registrada na auditoria do gestor e na do consultor.
+const AREAS_ATUAR_COMO = ['/api/board', '/api/columns', '/api/cards', '/api/tasks', '/api/funis', '/api/historico-contato', '/api/campos-personalizados'];
+function areaPermitidaParaAtuarComo(caminho) {
+  return AREAS_ATUAR_COMO.some((p) => caminho === p || caminho.startsWith(p + '/'));
+}
+// Confere o pedido de "atuar como". Devolve { alvo } ou { status, error }.
+async function conferirAtuarComo(gestorId, alvoId, caminho) {
+  if (!isValidId(alvoId)) return { status: 400, error: 'Consultor inválido.' };
+  return comoSistema(async () => {
+    const EQ = require('../utils/equipesDoUsuario');
+    const gestor = await User.findById(gestorId).select('equipeId papelEquipe nome email');
+    if (!gestor || !gestor.equipeId || gestor.papelEquipe !== 'supervisor') {
+      return { status: 403, error: 'Só o gestor da equipe pode atuar no funil de outra pessoa.' };
+    }
+    if (!(await EQ.membroDe(gestor.equipeId, alvoId))) return { status: 404, error: 'Esse consultor não está na sua equipe.' };
+    if (!areaPermitidaParaAtuarComo(caminho)) {
+      return { status: 403, error: 'Isso não está disponível enquanto você atua no funil de outra pessoa. Clique em "Sair do funil".' };
+    }
+    const alvo = await User.findById(alvoId).select('nome email');
+    return alvo ? { gestor, alvo } : { status: 404, error: 'Esse consultor não está na sua equipe.' };
+  });
+}
 
 // Com a assinatura vencida, só estes caminhos continuam abertos: login, a própria tela de
 // assinatura, exportar os dados (os dados são da pessoa, sempre) e desligar notificações.
@@ -123,6 +153,30 @@ module.exports = async function auth(req, res, next) {
         return res.status(403).json({ error: `O gestor da sua equipe não liberou: ${NOMES[regra.chave]}.`, permissao: regra.chave });
       }
     }
+    // Gestor atuando no funil de um consultor: daqui em diante a requisição é do consultor
+    const alvoId = req.headers['x-atuar-como'];
+    if (alvoId && String(alvoId) !== req.userId) {
+      if (acesso.tipo !== 'dono') return res.status(403).json({ error: 'Só o gestor da equipe pode atuar no funil de outra pessoa.' });
+      const r = await conferirAtuarComo(req.userId, String(alvoId), caminho);
+      if (r.error) return res.status(r.status).json({ error: r.error, atuarComo: true });
+      req.realUserId = req.userId;
+      req.atuandoComo = true;
+      req.userId = String(r.alvo._id);
+      if (req.method !== 'GET') {
+        const nomeAlvo = r.alvo.nome || r.alvo.email;
+        const nomeGestor = r.gestor.nome || r.gestor.email || 'O gestor';
+        const area = caminho.split('/')[2];
+        const oQue = { board: 'o funil', cards: 'um contato', columns: 'uma etapa', tasks: 'uma tarefa', funis: 'um funil', 'historico-contato': 'o histórico de um contato', 'campos-personalizados': 'um campo personalizado' }[area] || area;
+        const acao = { POST: /\/(mover|unificar|reordenar)/.test(caminho) ? 'mexeu em' : 'criou ou mudou', PUT: 'alterou', PATCH: 'alterou', DELETE: 'excluiu' }[req.method] || 'mexeu em';
+        res.on('finish', () => {
+          if (res.statusCode >= 400) return;
+          comoSistema(async () => {
+            await registrarAuditoria(req.realUserId, 'gestor_atuou', `Você (gestor) ${acao} ${oQue} no funil de ${nomeAlvo}`);
+            await registrarAuditoria(req.userId, 'gestor_atuou', `O gestor ${nomeGestor} ${acao} ${oQue} no seu funil`);
+          }).catch(() => {});
+        });
+      }
+    }
     // daqui em diante, toda consulta ao banco nesta requisição roda como este usuário
     // (o PostgreSQL só deixa ver e gravar as linhas dele — Row-Level Security)
     comoUsuario(req.userId, () => next());
@@ -137,3 +191,4 @@ module.exports = async function auth(req, res, next) {
 module.exports.JWT_SECRET = JWT_SECRET;
 
 module.exports.recursoDoCaminho = recursoDoCaminho;
+module.exports.areaPermitidaParaAtuarComo = areaPermitidaParaAtuarComo;

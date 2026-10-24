@@ -297,6 +297,12 @@ let equipeNomeNovo = '';
 let equipeCodigoEntrar = '';
 let equipeMsg = null;
 let equipeSubTab = 'chat';
+let minhasEquipes = [];          // todas as equipes de que a pessoa faz parte (uma fica aberta)
+let limiteEquipes = 10;
+// Gestor atuando no funil de um consultor: { userId, nome } enquanto estiver lá dentro
+let atuandoComo = null;
+let metaBackupAtuandoComo = null;
+const PAGINAS_ATUANDO_COMO = ['dashboard','pipeline','leads','equipe'];
 let agendaSubTab = 'calendario';
 let gerotSemanaAtual = inicioDaSemana(new Date());
 let gerotBlocos = [];
@@ -367,6 +373,11 @@ let importResultado = null; // { sucesso, falha }
 let importando = false;
 let aiInsights = [];
 let sidebarOpen = false;
+// celular (até 768px): uma etapa por vez nas Negociações, Configurações em lista
+let pipelineEtapaMobileId = null;
+let configMobileConteudo = false;
+let leadsTipoMobile = ''; // filtro dos cartões de contatos no celular: '' | 'aberto' | 'ganho' | 'perdido'
+function ehCelular(){ return !!(window.matchMedia && window.matchMedia('(max-width: 768px)').matches); }
 let insightsCarregando = false;
 let insightsPipelineExpandido = false;
 let modalForm = null;            // objeto do cliente sendo editado/criado
@@ -420,6 +431,8 @@ async function apiRequestUmaVez(method, path, body, timeoutMs){
   const token = getToken();
   if(token) opts.headers['Authorization'] = 'Bearer ' + token;
   if(window.Acesso) Object.assign(opts.headers, Acesso.cabecalhos()); // aparelho da loja: quem entrou com o PIN
+  // gestor no funil de um consultor: só as rotas do funil vão "como" ele (o servidor confere e registra)
+  if(atuandoComo && /^\/(board|columns|cards|tasks|funis|historico-contato|campos-personalizados)(\/|\?|$)/.test(path)) opts.headers['X-Atuar-Como'] = atuandoComo.userId;
   if(body !== undefined){
     opts.headers['Content-Type'] = 'application/json';
     opts.body = JSON.stringify(body);
@@ -1370,10 +1383,13 @@ async function loadEquipe(){
   try{
     const data = await apiRequest('GET', '/equipe');
     equipe = data.equipe;
+    minhasEquipes = data.minhasEquipes || [];
+    limiteEquipes = data.limiteEquipes || 10;
     permForm = null; // tela de permissões recomeça do que está salvo
     if(typeof definirMinhasPermissoes === 'function') definirMinhasPermissoes(data.minhasPermissoes);
   }catch(e){
     equipe = null;
+    minhasEquipes = [];
   }
   equipeLoaded = true;
   renderApp();
@@ -1805,6 +1821,7 @@ async function criarEquipe(){
     await apiRequest('POST', '/equipe', { nome });
     equipeNomeNovo = '';
     equipeMsg = null;
+    limparDadosDaEquipeAberta(); equipeSubTab = 'chat';
     await loadEquipe();
   }catch(e){
     equipeMsg = { tipo:'erro', texto: e.message || 'Não foi possível criar a equipe.' };
@@ -1818,25 +1835,72 @@ async function entrarNaEquipe(){
     await apiRequest('POST', '/equipe/entrar', { codigo });
     equipeCodigoEntrar = '';
     equipeMsg = null;
+    limparDadosDaEquipeAberta(); equipeSubTab = 'chat';
     await loadEquipe();
   }catch(e){
     equipeMsg = { tipo:'erro', texto: e.message || 'Não foi possível entrar na equipe.' };
     renderApp();
   }
 }
-async function sairDaEquipe(){
+function limparDadosDaEquipeAberta(){
+  chatMensagens = []; chatLoaded = false;
+  supervisaoMembros = []; supervisaoLoaded = false;
+  monitoramentoLoaded = false;
+  dmDestinatarioId = null; dmMensagens = []; dmLoaded = false;
+}
+// sem equipeId: sai da equipe aberta
+async function sairDaEquipe(equipeId){
   try{
-    await apiRequest('POST', '/equipe/sair');
-    equipe = null;
-    chatMensagens = [];
-    chatLoaded = false;
-    supervisaoMembros = [];
-    supervisaoLoaded = false;
-    renderApp();
+    await apiRequest('POST', '/equipe/sair', equipeId ? { equipeId } : {});
+    limparDadosDaEquipeAberta();
+    await loadEquipe();
   }catch(e){
-    errorMsg = 'Não foi possível sair da equipe.';
+    errorMsg = e.message || 'Não foi possível sair da equipe.';
     renderApp();
   }
+}
+// Troca a equipe aberta (a pessoa continua em todas): chat, gestão e permissões passam a ser os da nova
+async function abrirEquipeDaLista(equipeId){
+  if(atuandoComo){ errorMsg = 'Saia do funil de ' + atuandoComo.nome + ' antes de trocar de equipe.'; renderApp(); return; }
+  try{
+    await apiRequest('POST', '/equipe/abrir', { equipeId });
+    limparDadosDaEquipeAberta();
+    equipeMsg = null;
+    equipeSubTab = 'chat';
+    await loadEquipe();
+  }catch(e){
+    errorMsg = e.message || 'Não foi possível abrir a equipe.';
+    renderApp();
+  }
+}
+
+// "Atuar como": o gestor passa a trabalhar no funil de um consultor — vê, cria, edita, exclui e
+// move os contatos e tarefas dele. Só gestor da mesma equipe; o servidor confere e registra tudo.
+async function entrarNoFunilDe(userId, nome){
+  try{
+    let meta = 0;
+    try{ meta = (await apiRequest('GET', `/equipe/supervisao/${userId}/dashboard`)).metaVendasValor || 0; }catch(e){}
+    if(visualizandoDashboardDe) goToPage('equipe'); // devolve os dados do gestor antes
+    if(!atuandoComo) metaBackupAtuandoComo = metaVendasValor;
+    atuandoComo = { userId, nome };
+    metaVendasValor = meta;
+    funilAtualId = null; funis = []; board = { columns: [], cards: [] }; tasks = []; loaded = false;
+    await Promise.all([loadBoard(), loadFunis(), loadTasks(), loadCamposPersonalizados()]);
+    if(currentPage === 'pipeline') renderApp(); else goToPage('pipeline');
+  }catch(e){
+    atuandoComo = null;
+    errorMsg = 'Não foi possível abrir o funil desse consultor.';
+    renderApp();
+  }
+}
+async function sairDoFunilDe(){
+  atuandoComo = null;
+  if(metaBackupAtuandoComo !== null) metaVendasValor = metaBackupAtuandoComo;
+  metaBackupAtuandoComo = null;
+  funilAtualId = null; funis = []; board = { columns: [], cards: [] }; tasks = [];
+  await Promise.all([loadBoard(), loadFunis(), loadTasks(), loadCamposPersonalizados()]);
+  equipeSubTab = 'supervisao';
+  if(currentPage === 'equipe') renderApp(); else goToPage('equipe');
 }
 async function regenerarCodigoEquipe(){
   try{
@@ -3026,6 +3090,81 @@ function aplicarOrdenacaoPipeline(criterio){
     },
   });
 }
+/* ---------- contatos duplicados (mesmo telefone) ---------- */
+// mesma chave do servidor (utils/telefone.js): só dígitos, sem 55, sem o 9 extra do celular
+function chaveTelefone(tel){
+  let d = String(tel || '').replace(/\D/g, '');
+  if((d.length === 12 || d.length === 13) && d.startsWith('55')) d = d.slice(2);
+  if(d.length === 11 && d[2] === '9') d = d.slice(0, 2) + d.slice(3);
+  return d.length === 10 ? d : null;
+}
+function gruposDuplicadosLocal(){
+  const cont = new Map();
+  board.cards.forEach(c=>{ if(c.arquivado) return; const k = chaveTelefone(c.telefone); if(k) cont.set(k, (cont.get(k) || 0) + 1); });
+  return [...cont.values()].filter(n=> n > 1).length;
+}
+let duplicados = null; // { grupos, escolha: {chave: idQueFica}, juntando: chave|null, erro }
+async function abrirDuplicadosModal(){
+  duplicados = { grupos: null, escolha: {}, juntando: null, erro: '' };
+  renderDuplicadosModal();
+  try{
+    const r = await apiRequest('GET', '/cards/duplicados');
+    duplicados.grupos = r.grupos || [];
+    duplicados.grupos.forEach(g=>{ duplicados.escolha[g.chave] = g.contatos[0].id; }); // o mais antigo fica, por padrão
+  }catch(e){ duplicados.erro = e.message || 'Não foi possível procurar os duplicados.'; }
+  renderDuplicadosModal();
+}
+function fecharDuplicadosModal(){
+  duplicados = null;
+  const root = document.getElementById('modal-root'); if(root) root.innerHTML = '';
+}
+function renderDuplicadosModal(){
+  const root = document.getElementById('modal-root');
+  if(!duplicados){ root.innerHTML = ''; return; }
+  const d = duplicados;
+  root.innerHTML = `
+    <div class="overlay" id="dup-overlay">
+      <div class="modal modal-lg" role="dialog" aria-modal="true" aria-labelledby="dup-titulo">
+        <div class="modal-head"><h3 id="dup-titulo">Contatos duplicados</h3><button id="dup-fechar" aria-label="Fechar">✕</button></div>
+        <div class="modal-body">
+          <p class="settings-page-note" style="margin:0;">Contatos com o mesmo telefone. Escolha qual fica: o histórico, os anexos, as tarefas e as etiquetas dos outros passam para ele, e os outros vão para os arquivados.</p>
+          ${d.erro ? `<p class="settings-page-msg erro">${esc(d.erro)}</p>` : ''}
+          ${!d.grupos ? '<p class="settings-page-note">Procurando…</p>' : !d.grupos.length ? '<p class="dash-empty">Nenhum contato duplicado. Tudo certo!</p>' : d.grupos.map(g=>`
+            <fieldset class="dup-grupo">
+              <legend>${esc(g.contatos[0].telefone || g.chave)} · ${g.contatos.length} contatos</legend>
+              ${g.contatos.map(c=>`
+                <label class="dup-opcao">
+                  <input type="radio" name="dup-${g.chave}" value="${c.id}" data-dup-chave="${g.chave}" ${d.escolha[g.chave]===c.id?'checked':''} />
+                  <span><b>${esc(c.cliente || 'Sem nome')}</b><small>${esc(c.etapa || '—')} · ${fmtBRL(c.valor)} · desde ${new Date(c.criadoEm).toLocaleDateString('pt-BR')}${c.etiquetas.length ? ' · ' + c.etiquetas.map(esc).join(', ') : ''}</small></span>
+                </label>`).join('')}
+              <button type="button" class="btn-primary" data-dup-juntar="${g.chave}" ${d.juntando ? 'disabled' : ''}>${d.juntando===g.chave ? 'Juntando…' : 'Juntar neste'}</button>
+            </fieldset>`).join('')}
+        </div>
+      </div>
+    </div>`;
+  document.getElementById('dup-fechar').addEventListener('click', fecharDuplicadosModal);
+  document.getElementById('dup-overlay').addEventListener('click', (e)=>{ if(e.target.id === 'dup-overlay') fecharDuplicadosModal(); });
+  root.querySelectorAll('[data-dup-chave]').forEach(r=> r.addEventListener('change', ()=>{ d.escolha[r.dataset.dupChave] = r.value; }));
+  root.querySelectorAll('[data-dup-juntar]').forEach(b=> b.addEventListener('click', ()=> juntarDuplicados(b.dataset.dupJuntar)));
+}
+async function juntarDuplicados(chave){
+  const d = duplicados; if(!d || d.juntando) return;
+  const g = d.grupos.find(x=> x.chave === chave); if(!g) return;
+  const manterId = d.escolha[chave];
+  const juntarIds = g.contatos.map(c=> c.id).filter(id=> id !== manterId);
+  const fica = g.contatos.find(c=> c.id === manterId);
+  if(!(await confirmarAcao({ titulo:'Juntar contatos?', mensagem:`${juntarIds.length === 1 ? 'O outro contato vai' : `Os outros ${juntarIds.length} contatos vão`} para os arquivados, e tudo deles passa para "${fica ? fica.cliente : ''}".`, botao:'Juntar', perigo:false, sempre:true }))) return;
+  d.juntando = chave; d.erro = ''; renderDuplicadosModal();
+  try{
+    await apiRequest('POST', '/cards/unificar', { manterId, juntarIds });
+    d.grupos = d.grupos.filter(x=> x.chave !== chave);
+    await loadBoard();
+    renderApp();
+  }catch(e){ d.erro = e.message || 'Não foi possível juntar.'; }
+  d.juntando = null;
+  if(duplicados) renderDuplicadosModal();
+}
+
 function filteredLeads(){
   let list = board.cards;
   list = list.filter(c=> mostrarArquivados ? c.arquivado : !c.arquivado);
@@ -3041,6 +3180,12 @@ function filteredLeads(){
 /* ---------- navegação entre páginas ---------- */
 function goToPage(page){
   if(currentPage === page) return;
+  if(atuandoComo && !PAGINAS_ATUANDO_COMO.includes(page)){
+    errorMsg = 'Essa página não está disponível enquanto você atua no funil de ' + atuandoComo.nome + '. Clique em "Sair do funil" para voltar ao seu.';
+    sidebarOpen = false;
+    renderApp();
+    return;
+  }
   // se o gestor estiver vendo o dashboard de outro membro e navegar pra qualquer
   // outra página (não só clicando em "Voltar"), restaura os próprios dados antes —
   // sem isso, ele acabaria vendo os leads/tarefas de outra pessoa numa tela como o
@@ -3054,6 +3199,7 @@ function goToPage(page){
     metaVendasValorBackupGestor = null;
     visualizandoDashboardDe = null;
   }
+  if(page === 'configuracoes' && currentPage !== 'configuracoes') configMobileConteudo = false;
   currentPage = page;
   dateMenuOpen = false;
   openMenuColId = null;
@@ -3421,7 +3567,7 @@ async function addColumn(){
 
 /* ---------- modo gestor: passar o lead pra outra pessoa da equipe ---------- */
 function podeAtribuirLeads(){
-  return !!(equipe && equipe.souSupervisor && (equipe.membros||[]).some(m=>!m.souEu));
+  return !!(!atuandoComo && equipe && equipe.souSupervisor && (equipe.membros||[]).some(m=>!m.souEu));
 }
 
 async function saveCardFromModal(){
@@ -4140,6 +4286,7 @@ function renderApp(){
     <div class="app-shell ${sidebarOpen ? 'sidebar-open' : ''}">
       ${renderSidebar()}
       <div class="sidebar-backdrop" data-action="close-sidebar"></div>
+      ${renderBarraInferior()}
       <div class="main-area ${currentPage==='pipeline' ? 'main-area-pipeline' : ''}">
         <div class="main-topbar">
           <button class="hamburger-btn" data-action="toggle-sidebar" title="Menu">
@@ -4172,6 +4319,11 @@ function renderApp(){
         </div>
         ${erroParaMostrar() ? `<div class="error-banner" data-action="dismiss-error" title="Clique para fechar">⚠ ${esc(errorMsg)}</div>` : ''}
         ${renderFaixaTeste()}
+        ${atuandoComo ? `
+          <div class="atuando-banner" role="status">
+            <span>🛠 Você está no funil de <b>${esc(atuandoComo.nome)}</b> — o que você criar, editar, excluir ou mover aqui vale para o funil dele e fica registrado.</span>
+            <button type="button" class="btn-outline" data-action="sair-funil-de">Sair do funil</button>
+          </div>` : ''}
         ${pageHtml}
       </div>
     </div>
@@ -4309,8 +4461,69 @@ function renderReordenarNavModal(){
 
 // Ícone do botão "Trocar de aplicativo" (CRM ⇄ Controle financeiro)
 const ICON_TROCAR_APP = '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>';
+// Barra fixa embaixo no celular: as 4 telas mais usadas + "Mais" (abre o menu completo)
+function renderBarraInferior(){
+  const ICO = {
+    dashboard: '<rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/>',
+    pipeline: '<rect x="3" y="3" width="5" height="18" rx="1"/><rect x="10" y="3" width="5" height="11" rx="1"/><rect x="17" y="3" width="4" height="14" rx="1"/>',
+    leads: '<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c0-3.6 2.9-6 6.5-6s6.5 2.4 6.5 6"/><path d="M16 4.6a3.5 3.5 0 0 1 0 6.8"/><path d="M18 14.5c2.2.6 3.5 2.4 3.5 5.5"/>',
+    tarefas: '<rect x="3" y="4" width="18" height="17" rx="2"/><path d="M8 2v4M16 2v4M3 10h18"/><path d="M8.5 15l2 2 4-4"/>',
+  };
+  const itens = [['dashboard','Início'],['pipeline','Negociações'],['leads','Contatos'],['tarefas','Agenda']].filter(([k])=> !atuandoComo || PAGINAS_ATUANDO_COMO.includes(k));
+  return `
+    <nav class="bottom-nav" aria-label="Navegação principal">
+      ${itens.map(([k,l])=>`
+        <button type="button" class="bottom-nav-item ${currentPage===k && !sidebarOpen?'active':''}" data-action="nav" data-page="${k}" ${currentPage===k?'aria-current="page"':''}>
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICO[k]}</svg>
+          <span>${l}</span>
+        </button>`).join('')}
+      <button type="button" class="bottom-nav-item ${sidebarOpen?'active':''}" data-action="toggle-sidebar" aria-label="Mais opções" aria-expanded="${sidebarOpen}">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg>
+        <span>Mais</span>
+      </button>
+    </nav>`;
+}
+// etapa visível no celular (uma por vez): a escolhida, ou a primeira do funil
+function etapaAtivaMobile(columnsDoFunil){
+  if(pipelineEtapaMobileId && columnsDoFunil.some(c=>c.id===pipelineEtapaMobileId)) return pipelineEtapaMobileId;
+  return columnsDoFunil.length ? columnsDoFunil[0].id : null;
+}
+// Troca a etapa aberta no celular. Durante o arrasto, só mexe nas classes (sem redesenhar a
+// tela), pra não perder o cliente que está na mão.
+function trocarEtapaMobile(colId, durante){
+  pipelineEtapaMobileId = colId;
+  if(!durante){ renderApp(); return; }
+  document.querySelectorAll('.column').forEach(c=> c.classList.toggle('col-ativa-mobile', c.dataset.colId === colId));
+  document.querySelectorAll('.etapa-chip-mobile').forEach(c=>{
+    const ativo = c.dataset.colId === colId;
+    c.classList.toggle('active', ativo);
+    c.setAttribute('aria-selected', ativo ? 'true' : 'false');
+    if(ativo && c.scrollIntoView) c.scrollIntoView({ inline:'center', block:'nearest' });
+  });
+}
+// arrastando um cliente no celular: parado ~0,4 s em cima do chip de outra etapa, abre aquela etapa
+let chipHoverTimer = null;
+function verificarChipDeEtapaSobDedo(x, y){
+  if(!cardTouchDrag || !ehCelular()) return;
+  const sob = document.elementFromPoint(x, y);
+  const chip = sob && sob.closest ? sob.closest('#etapas-chips-mobile .etapa-chip-mobile') : null;
+  document.querySelectorAll('.etapa-chip-mobile.etapa-chip-alvo').forEach(c=>{ if(c!==chip) c.classList.remove('etapa-chip-alvo'); });
+  const id = chip ? chip.dataset.colId : null;
+  if(id === cardTouchDrag.chipHover) return;
+  clearTimeout(chipHoverTimer);
+  cardTouchDrag.chipHover = id;
+  if(!chip) return;
+  chip.classList.add('etapa-chip-alvo');
+  chipHoverTimer = setTimeout(()=>{
+    if(cardTouchDrag && cardTouchDrag.chipHover === id){
+      trocarEtapaMobile(id, true);
+      if(navigator.vibrate) navigator.vibrate(10);
+    }
+  }, 400);
+}
+
 function renderSidebar(){
-  const NAV = getNavOrdenado();
+  const NAV = getNavOrdenado().filter(([key])=> !atuandoComo || PAGINAS_ATUANDO_COMO.includes(key));
   return `
     <aside class="sidebar">
       <div class="sidebar-brand">
@@ -4335,8 +4548,8 @@ function renderSidebar(){
       </div>
       <div class="sidebar-footer">
         <a class="nav-item trocar-app-item" href="/" title="Abrir o Controle financeiro ou voltar para a escolha de aplicativo">${ICON_TROCAR_APP}<span>Trocar de aplicativo</span></a>
-        <button class="nav-item ${currentPage==='suporte'?'active':''}" data-action="nav" data-page="suporte">${ICON_SUPORTE}<span>Suporte</span></button>
-        <button class="nav-item ${currentPage==='configuracoes'?'active':''}" data-action="nav" data-page="configuracoes">${ICON_SETTINGS}<span>Configurações</span></button>
+        ${atuandoComo ? '' : `<button class="nav-item ${currentPage==='suporte'?'active':''}" data-action="nav" data-page="suporte">${ICON_SUPORTE}<span>Suporte</span></button>
+        <button class="nav-item ${currentPage==='configuracoes'?'active':''}" data-action="nav" data-page="configuracoes">${ICON_SETTINGS}<span>Configurações</span></button>`}
         <button class="nav-item logout-item" data-action="logout">${ICON_LOGOUT}<span>Sair</span></button>
       </div>
     </aside>
@@ -4419,7 +4632,7 @@ function renderDashboardPage(){
   const tarefasSemHora = tasksLoaded ? tasks.filter(t=>!t.concluida && !horaLocalDaTarefaOuNull(t.vencimento)).map(t=>({ tipo:'tarefa', id:t.id, titulo:t.titulo, data:t.vencimento })) : [];
   // eventos do Google são pessoais do próprio gestor — não fazem sentido (e vazariam
   // dados privados) quando ele está olhando o dashboard de outra pessoa
-  const eventosSemHoraDash = (agendaLoaded && !visualizandoDashboardDe) ? agendaEventosGoogle.filter(e=>e.diaInteiro && !e.concluida).map(e=>({ tipo:'evento', id:e.id, titulo:e.titulo, data:e.inicio })) : [];
+  const eventosSemHoraDash = (agendaLoaded && !visualizandoDashboardDe && !atuandoComo) ? agendaEventosGoogle.filter(e=>e.diaInteiro && !e.concluida).map(e=>({ tipo:'evento', id:e.id, titulo:e.titulo, data:e.inicio })) : [];
   const abertas = [...tarefasSemHora, ...eventosSemHoraDash].sort((a,b)=> new Date(a.data||'2999-01-01') - new Date(b.data||'2999-01-01')).slice(0,5);
 
   return `
@@ -4629,9 +4842,15 @@ function renderPipelinePage(){
       ${pipelineOrdenando ? `<span class="settings-page-note">Reordenando…</span>` : ''}
     </div>
 
+    ${(()=>{ const ativa = etapaAtivaMobile(columnsDoFunil); return `
+    <div class="etapas-chips-mobile" id="etapas-chips-mobile" role="tablist" aria-label="Etapas do funil">
+      ${columnsDoFunil.map(col=>`<button type="button" role="tab" class="etapa-chip-mobile ${col.id===ativa?'active':''}" data-action="etapa-mobile" data-col-id="${col.id}" aria-selected="${col.id===ativa}">${esc(col.nome)} <span class="etapa-chip-qtd">${cardsOf(col.id).length}</span></button>`).join('')}
+    </div>
+    <p class="etapas-dica-mobile">Para mudar um cliente de etapa, segure o cartão e arraste até o nome da etapa, em cima.</p>`; })()}
+
     <main class="pipeline-main">
       <div class="board">
-        ${columnsDoFunil.map(col => renderColumn(col)).join('')}
+        ${columnsDoFunil.map(col => renderColumn(col, col.id === etapaAtivaMobile(columnsDoFunil))).join('')}
         <div class="add-col-wrap">
           ${addingCol ? `
             <div class="add-col-form">
@@ -4653,7 +4872,7 @@ function renderPipelinePage(){
   `;
 }
 
-function renderColumn(col){
+function renderColumn(col, ativaNoCelular){
   const cards = cardsOf(col.id);
   const tipo = TIPOS[col.tipo] || TIPOS.aberto;
   const total = cards.reduce((s,c)=> s + (col.tipo==='ganho' ? valorVendido(c) : (Number(c.valor)||0)), 0);
@@ -4661,7 +4880,7 @@ function renderColumn(col){
   const menuOpen = openMenuColId === col.id;
 
   return `
-    <div class="column" data-col-id="${col.id}">
+    <div class="column ${ativaNoCelular ? 'col-ativa-mobile' : ''}" data-col-id="${col.id}">
       <div class="col-head">
         <div class="col-head-top">
           <span class="grip" draggable="true" data-action="drag-col-handle" data-col-id="${col.id}" title="Arraste para reordenar">⠿</span>
@@ -4877,6 +5096,7 @@ function renderLeadsPage(){
       </select>
       ${renderBotaoOrdenar('leads', leadsOrdenarPor)}
       <button class="btn-outline" data-action="exportar-leads" title="Baixa a lista em Excel (.xlsx)">Exportar (.xlsx)</button>
+      ${(()=>{ const n = gruposDuplicadosLocal(); return n && (!acessoCrm || acessoCrm.gestor) ? `<button class="btn-outline" data-action="abrir-duplicados" title="Contatos com o mesmo telefone">Duplicados (${n})</button>` : ''; })()}
     </div>
 
     ${leadsSelecionados.size ? `
@@ -4896,6 +5116,33 @@ function renderLeadsPage(){
         <button class="icon-btn" data-action="leads-bulk-limpar" title="Cancelar seleção" style="margin-left:auto;">✕</button>
       </div>
     ` : ''}
+
+    ${(()=>{
+      const tipoDe = (c)=>{ const col = board.columns.find(k=>k.id===c.columnId); return col ? col.tipo : 'aberto'; };
+      const lista = leadsTipoMobile ? leads.filter(c=> tipoDe(c) === leadsTipoMobile) : leads;
+      const chips = [['', 'Todos'], ['aberto', 'Em negociação'], ['ganho', 'Vendidos'], ['perdido', 'Perdidos']];
+      return `
+    <div class="leads-chips-mobile" role="tablist" aria-label="Filtrar contatos">
+      ${chips.map(([k,l])=>`<button type="button" role="tab" class="etapa-chip-mobile ${leadsTipoMobile===k?'active':''}" data-action="leads-tipo-mobile" data-tipo="${k}" aria-selected="${leadsTipoMobile===k}">${l} <span class="etapa-chip-qtd">${k ? leads.filter(c=> tipoDe(c)===k).length : leads.length}</span></button>`).join('')}
+    </div>
+    <div class="leads-cards-mobile">
+      ${lista.length ? lista.map(c=>{
+        const col = board.columns.find(k=>k.id===c.columnId);
+        const tipo = col ? (TIPOS[col.tipo] || TIPOS.aberto) : TIPOS.aberto;
+        const ini = (String(c.cliente||'?').trim().split(/\s+/).slice(0,2).map(p=>p.charAt(0)).join('') || '?').toUpperCase();
+        return `
+        <div class="lead-card-mobile" data-action="open-edit-card" data-card-id="${c.id}" role="button" tabindex="0">
+          <span class="lead-card-avatar" aria-hidden="true">${esc(ini)}</span>
+          <span class="lead-card-info">
+            <span class="lead-card-top"><span class="lead-card-nome">${c.tipoPessoa==='juridica' ? '🏢 ' : ''}${esc(c.cliente) || 'Sem nome'}</span><span class="lead-card-valor">${fmtBRL(c.valor)}</span></span>
+            <span class="lead-card-bot"><span class="lead-card-tel">${c.telefone ? esc(c.telefone) : 'Sem telefone'}</span><span class="badge" style="color:${tipo.color};background:${tipo.bg};${tipo.strike?'text-decoration:line-through;':''}">${col ? esc(col.nome) : '—'}</span></span>
+          </span>
+          ${c.telefone ? `<button type="button" class="lead-card-wa" data-action="open-whatsapp" data-phone="${esc(c.telefone)}" aria-label="WhatsApp de ${esc(c.cliente||'contato')}">${WA_ICON}</button>` : ''}
+        </div>`;
+      }).join('') : `<p class="dash-empty" style="padding:24px 4px;">Nenhum contato aqui. Cadastre no botão "Novo contato".</p>`}
+    </div>
+    <button type="button" class="fab-novo-lead" data-action="open-new-lead">+ Novo contato</button>`;
+    })()}
 
     <div class="leads-table-wrap">
       <table class="leads-table">
@@ -6101,7 +6348,7 @@ function renderConfiguracoesPage(){
       </div>
     </div>
 
-    <div class="config-layout">
+    <div class="config-layout ${configMobileConteudo ? 'mostrando-conteudo' : 'mostrando-lista'}">
       <div class="config-sidebar">
         ${CONFIG_CATEGORIAS.map(g=>{
           const itens = g.itens.filter(([key])=> !acessoCrm || acessoCrm.gestor || key === 'aparencia'); // equipe: só a aparência
@@ -6111,6 +6358,7 @@ function renderConfiguracoesPage(){
         ` : '';}).join('')}
       </div>
       <div class="config-content">
+        <button type="button" class="config-voltar-mobile" data-action="config-voltar-mobile">‹ Configurações</button>
         ${renderFn()}
       </div>
     </div>
@@ -6121,8 +6369,14 @@ function renderConfiguracoesPage(){
 function bindAppEvents(){
   const app = document.getElementById('app');
 
-  const hamburgerBtn = app.querySelector('[data-action="toggle-sidebar"]');
-  if(hamburgerBtn) hamburgerBtn.addEventListener('click', ()=>{ sidebarOpen = !sidebarOpen; renderApp(); });
+  // o menu abre pelo hambúrguer (tablet) e pelo "Mais" da barra de baixo (celular)
+  app.querySelectorAll('[data-action="toggle-sidebar"]').forEach(b=> b.addEventListener('click', ()=>{ sidebarOpen = !sidebarOpen; renderApp(); }));
+  app.querySelectorAll('[data-action="etapa-mobile"]').forEach(b=> b.addEventListener('click', ()=> trocarEtapaMobile(b.dataset.colId)));
+  app.querySelectorAll('[data-action="leads-tipo-mobile"]').forEach(b=> b.addEventListener('click', ()=>{ leadsTipoMobile = b.dataset.tipo; renderApp(); }));
+  const configVoltar = app.querySelector('[data-action="config-voltar-mobile"]');
+  if(configVoltar) configVoltar.addEventListener('click', ()=>{ configMobileConteudo = false; renderApp(); window.scrollTo(0, 0); });
+  app.querySelectorAll('.lead-card-mobile').forEach(el=> el.addEventListener('keydown', (e)=>{ if(e.key === 'Enter' || e.key === ' '){ e.preventDefault(); el.click(); } }));
+  app.querySelectorAll('.lead-card-wa').forEach(b=> b.addEventListener('click', (e)=> e.stopPropagation()));
   const closeSidebarEl = app.querySelector('[data-action="close-sidebar"]');
   if(closeSidebarEl) closeSidebarEl.addEventListener('click', ()=>{ sidebarOpen = false; renderApp(); });
   const buscaGlobalBtn = app.querySelector('[data-action="abrir-busca-global"]');
@@ -6179,6 +6433,23 @@ function bindAppEvents(){
   if(verificarAtualizacaoBtn) verificarAtualizacaoBtn.addEventListener('click', verificarAtualizacaoApp);
   app.querySelectorAll('[data-action="ver-dashboard-membro"]').forEach(btn=>{
     btn.addEventListener('click', ()=> abrirDashboardDeMembro(btn.dataset.userId, btn.dataset.nome));
+  });
+  app.querySelectorAll('[data-action="atuar-como-membro"]').forEach(btn=>{
+    btn.addEventListener('click', ()=> entrarNoFunilDe(btn.dataset.userId, btn.dataset.nome));
+  });
+  const sairFunilBtn = app.querySelector('[data-action="sair-funil-de"]');
+  if(sairFunilBtn) sairFunilBtn.addEventListener('click', sairDoFunilDe);
+  app.querySelectorAll('[data-action="abrir-equipe-lista"]').forEach(btn=>{
+    btn.addEventListener('click', ()=> abrirEquipeDaLista(btn.dataset.equipeId));
+  });
+  const trocarEquipeSel = app.querySelector('[data-action="trocar-equipe"]');
+  if(trocarEquipeSel) trocarEquipeSel.addEventListener('change', (e)=> abrirEquipeDaLista(e.target.value));
+  app.querySelectorAll('[data-action="sair-equipe-lista"]').forEach(btn=>{
+    btn.addEventListener('click', ()=> showConfirm({
+      message: `Sair da equipe "${btn.dataset.nome}"? Você perde o chat e a gestão dela — seu funil continua intocado e as outras equipes continuam.`,
+      confirmLabel: 'Sair da equipe',
+      onConfirm: ()=>{ closeConfirm(); sairDaEquipe(btn.dataset.equipeId); },
+    }));
   });
   const sairDashboardBtn = app.querySelector('[data-action="sair-dashboard-membro"]');
   if(sairDashboardBtn) sairDashboardBtn.addEventListener('click', sairDashboardDeMembro);
@@ -6543,7 +6814,9 @@ function bindAppEvents(){
   app.querySelectorAll('[data-action="set-config-categoria"]').forEach(btn=>{
     btn.addEventListener('click', ()=>{
       configCategoriaAtiva = btn.dataset.categoria;
+      configMobileConteudo = true;
       renderApp();
+      if(ehCelular()) window.scrollTo(0, 0);
     });
   });
   const avatarInput = document.getElementById('avatar-input');
@@ -6650,8 +6923,9 @@ function bindAppEvents(){
   if(twoFactorSetup) renderizarQrCode2FA();
 
   /* -- Leads -- */
-  const openNewLeadBtn = app.querySelector('[data-action="open-new-lead"]');
-  if(openNewLeadBtn) openNewLeadBtn.addEventListener('click', ()=> openNewCard());
+  app.querySelectorAll('[data-action="open-new-lead"]').forEach(b=> b.addEventListener('click', ()=> openNewCard()));
+  const dupBtn = app.querySelector('[data-action="abrir-duplicados"]');
+  if(dupBtn) dupBtn.addEventListener('click', abrirDuplicadosModal);
   app.querySelectorAll('[data-action="exportar-leads"]').forEach(b=> b.addEventListener('click', ()=> exportarLeads(b.dataset.formato)));
   const toggleArquivadosBtn = app.querySelector('[data-action="toggle-mostrar-arquivados"]');
   if(toggleArquivadosBtn) toggleArquivadosBtn.addEventListener('click', ()=>{ mostrarArquivados = !mostrarArquivados; renderApp(); });
@@ -6889,7 +7163,7 @@ function bindAppEvents(){
       cardTouchDrag = {
         cardId: cardEl.dataset.cardId, cardEl, arrastando:false, modoRolagem:false,
         startX:e.clientX, startY:e.clientY, ultimoX:e.clientX, ultimoY:e.clientY,
-        pointerId:e.pointerId, cardsContainer, scrollInicial: cardsContainer ? cardsContainer.scrollTop : 0,
+        pointerId:e.pointerId, cardsContainer, scrollInicial: cardsContainer ? cardsContainer.scrollTop : 0, scrollJanelaInicial: window.scrollY,
       };
       cardTouchLongPressTimer = setTimeout(()=>{
         if(!cardTouchDrag || cardTouchDrag.modoRolagem) return; // já virou rolagem, não inicia arrastar
@@ -6917,7 +7191,9 @@ function bindAppEvents(){
 
       if(cardTouchDrag.modoRolagem){
         e.preventDefault();
-        if(cardTouchDrag.cardsContainer) cardTouchDrag.cardsContainer.scrollTop = cardTouchDrag.scrollInicial - dyTotal;
+        // no celular a lista de uma etapa rola junto com a página
+        if(ehCelular()) window.scrollTo(0, cardTouchDrag.scrollJanelaInicial - dyTotal);
+        else if(cardTouchDrag.cardsContainer) cardTouchDrag.cardsContainer.scrollTop = cardTouchDrag.scrollInicial - dyTotal;
         return;
       }
 
@@ -7038,6 +7314,7 @@ function atualizarArrastoDeCard(x, y){
     arrastoRafPendente = false;
     if(!cardTouchDrag) return;
     const xAtual = cardTouchDrag.ultimoXCalculo, yAtual = cardTouchDrag.ultimoYCalculo;
+    verificarChipDeEtapaSobDedo(xAtual, yAtual);
     const colAlvo = encontrarColunaMaisProxima(xAtual);
     document.querySelectorAll('.column.coluna-drag-alvo').forEach(c=> c.classList.remove('coluna-drag-alvo'));
     if(colAlvo){
@@ -7052,7 +7329,8 @@ function atualizarArrastoDeCard(x, y){
 // pela posição horizontal, em vez de simplesmente desistir. É bem mais tolerante que
 // depender de acertar o pixel exato num aparelho de toque.
 function encontrarColunaMaisProxima(x){
-  const colunas = [...document.querySelectorAll('.column')];
+  // só as colunas à vista (no celular, a etapa aberta)
+  const colunas = [...document.querySelectorAll('.column')].filter(c=> c.offsetParent !== null);
   if(!colunas.length) return null;
   const dentro = colunas.find(c=>{
     const r = c.getBoundingClientRect();
@@ -7086,6 +7364,14 @@ function permitirDropForaDasColunas(e){
 }
 function atualizarAutoScrollDoArrasto(x, y, colAlvo){
   clearInterval(autoScrollDoArrastoInterval);
+  // celular: a página rola para cima (rumo aos chips de etapa) ou para baixo
+  if(ehCelular() && cardTouchDrag){
+    let dy = 0;
+    if(!cardTouchDrag.chipHover && y < 130) dy = -12;
+    else if(y > window.innerHeight - 150) dy = 12;
+    if(dy) autoScrollDoArrastoInterval = setInterval(()=> window.scrollBy(0, dy), 16);
+    return;
+  }
   const margemHorizontal = 260; // cobre a largura da barra lateral — passar por cima dela já conta como "quero rolar pra lá"
   const margemVertical = 110;
   const mainEl = document.querySelector('main.pipeline-main');
@@ -7122,6 +7408,8 @@ function cancelarArrastoDeCard(){
 function limparVisualDoArrasto(){
   if(!cardTouchDrag) return;
   clearInterval(autoScrollDoArrastoInterval);
+  clearTimeout(chipHoverTimer);
+  document.querySelectorAll('.etapa-chip-mobile.etapa-chip-alvo').forEach(c=> c.classList.remove('etapa-chip-alvo'));
   cardTouchDrag.cardEl.classList.remove('card-touch-arrastando');
   if(cardTouchDrag.fantasmaEl) cardTouchDrag.fantasmaEl.remove();
   document.querySelectorAll('.column.coluna-drag-alvo').forEach(c=> c.classList.remove('coluna-drag-alvo'));
@@ -8487,9 +8775,15 @@ function renderEquipeSetup(tituloPagina, subtitulo){
         <p>${subtitulo}</p>
       </div>
     </div>
+    ${renderCriarEntrarEquipe()}
+  `;
+}
+function renderCriarEntrarEquipe(){
+  const outra = !!equipe;
+  return `
     <div class="settings-page-grid">
       <div class="settings-page-section">
-        <h3>Criar uma equipe</h3>
+        <h3>${outra ? 'Criar outra equipe' : 'Criar uma equipe'}</h3>
         ${temRecurso('equipe') ? `<p class="settings-page-note">Você vira supervisor(a) automaticamente e ganha um código pra convidar outras pessoas. O funil de cada um continua separado — só o chat e a supervisão são compartilhados.</p>
         <div class="field">
           <input type="text" id="equipe-nome-novo" placeholder="Nome da equipe" value="${esc(equipeNomeNovo)}" />
@@ -8497,7 +8791,7 @@ function renderEquipeSetup(tituloPagina, subtitulo){
         <button class="btn-primary" data-action="criar-equipe">Criar equipe</button>` : avisoPlanoCompleto('Criar e supervisionar uma equipe é do plano Completo', 'Convide pessoas, acompanhe o desempenho de cada uma e converse pelo chat interno.')}
       </div>
       <div class="settings-page-section">
-        <h3>Entrar numa equipe existente</h3>
+        <h3>${outra ? 'Entrar em mais uma equipe' : 'Entrar numa equipe existente'}</h3>
         <p class="settings-page-note">Peça o código de convite pra quem já criou a equipe.</p>
         <div class="field">
           <input type="text" id="equipe-codigo-entrar" placeholder="Código de convite" value="${esc(equipeCodigoEntrar)}" />
@@ -8562,11 +8856,18 @@ function renderEquipePage(){
   if(equipe.souSupervisor) abas.push(['supervisao','Gestão']);
   if(equipe.souSupervisor && typeof renderPermissoesEquipe === 'function') abas.push(['permissoes','Permissões']);
   if(equipe.souSupervisorDeDados) abas.push(['monitoramento','Monitoramento']);
+  abas.push(['equipes', minhasEquipes.length > 1 ? `Minhas equipes (${minhasEquipes.length})` : 'Minhas equipes']);
   return `
     <div class="page-head">
       <div>
         <h1>Equipe</h1>
-        <p>${esc(equipe.nome)} · ${equipe.membros.length} membro${equipe.membros.length===1?'':'s'}</p>
+        <p>${minhasEquipes.length > 1 ? `
+          <label class="equipe-troca">
+            <span class="sr-only">Equipe aberta</span>
+            <select data-action="trocar-equipe" aria-label="Equipe aberta">
+              ${minhasEquipes.map(e=>`<option value="${e.id}" ${e.ativa?'selected':''}>${esc(e.nome)}${e.papel==='supervisor'?' ⭐':''}</option>`).join('')}
+            </select>
+          </label>` : esc(equipe.nome)} · ${equipe.membros.length} membro${equipe.membros.length===1?'':'s'}</p>
       </div>
     </div>
     ${abas.length > 1 ? `
@@ -8578,6 +8879,32 @@ function renderEquipePage(){
     ${equipeSubTab==='supervisao' && equipe.souSupervisor ? renderSupervisaoConteudo() : ''}
     ${equipeSubTab==='permissoes' && equipe.souSupervisor && typeof renderPermissoesEquipe === 'function' ? renderPermissoesEquipe() : ''}
     ${equipeSubTab==='monitoramento' && equipe.souSupervisorDeDados ? renderMonitoramentoConteudo() : ''}
+    ${equipeSubTab==='equipes' ? renderMinhasEquipes() : ''}
+  `;
+}
+
+// Todas as equipes da pessoa (uma fica aberta) + criar/entrar em mais uma
+function renderMinhasEquipes(){
+  const cheio = minhasEquipes.length >= limiteEquipes;
+  return `
+    <div class="settings-page-section" style="margin-bottom:20px;">
+      <h3>Minhas equipes</h3>
+      <p class="settings-page-note">Você pode fazer parte de até ${limiteEquipes} equipes, com um papel diferente em cada uma. Seu funil é um só e continua seu; o que muda ao trocar é o chat, a gestão e as permissões da equipe aberta.</p>
+      <div class="minhas-equipes-lista">
+        ${minhasEquipes.map(e=>`
+          <div class="minha-equipe-item ${e.ativa?'ativa':''}">
+            <div class="minha-equipe-info">
+              <b>${esc(e.nome)}</b>
+              <span>${e.papel==='supervisor'?'⭐ Gestor':'Membro'} · ${e.membros} pessoa${e.membros===1?'':'s'}${e.ativa?' · <span class="minha-equipe-aberta">Aberta</span>':''}</span>
+            </div>
+            <div class="settings-btn-row">
+              ${e.ativa ? '' : `<button class="btn-primary" data-action="abrir-equipe-lista" data-equipe-id="${e.id}">Abrir</button>`}
+              <button class="btn-outline" data-action="sair-equipe-lista" data-equipe-id="${e.id}" data-nome="${esc(e.nome)}">Sair</button>
+            </div>
+          </div>`).join('')}
+      </div>
+    </div>
+    ${cheio ? `<p class="settings-page-note">Você chegou ao limite de ${limiteEquipes} equipes. Saia de alguma para criar ou entrar em outra.</p>` : renderCriarEntrarEquipe()}
   `;
 }
 
@@ -8616,6 +8943,7 @@ function renderRankingSupervisao(membros){
               <span style="display:flex; align-items:center; gap:10px;">
                 ${fmtBRL(m.ganhoValor)}
                 <button type="button" class="btn-outline" style="padding:4px 10px; font-size:11px;" data-action="ver-dashboard-membro" data-user-id="${m.userId}" data-nome="${esc(m.nome)}">Ver Dashboard</button>
+                <button type="button" class="btn-primary" style="padding:4px 10px; font-size:11px;" data-action="atuar-como-membro" data-user-id="${m.userId}" data-nome="${esc(m.nome)}" title="Trabalhar no funil dessa pessoa (fica registrado)">Abrir funil</button>
               </span>
             </div>
             <div class="stage-bar-track"><div class="stage-bar-fill" style="width:${(m.ganhoValor/maxGanho*100)}%"></div></div>

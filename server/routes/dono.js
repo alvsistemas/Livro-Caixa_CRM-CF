@@ -285,7 +285,7 @@ router.get('/equipes', async (req, res) => {
   try {
     const { rows } = await comoSistema(() => query(
       `SELECT e.id, e.nome, e.permissoes, d.email AS dono_email, d.nome AS dono_nome,
-              (SELECT count(*)::int FROM usuarios u WHERE u.equipe_id = e.id) AS membros
+              (SELECT count(*)::int FROM equipe_membros m WHERE m.equipe_id = e.id) AS membros
          FROM equipes e LEFT JOIN usuarios d ON d.id = e.dono_id ORDER BY e.created_at DESC`));
     res.json({
       equipes: rows.map((r) => ({ id: r.id, nome: r.nome, dono: r.dono_nome || r.dono_email || '', donoEmail: r.dono_email || '', membros: r.membros, permissoes: P.normalizar(r.permissoes) })),

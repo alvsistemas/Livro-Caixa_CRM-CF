@@ -477,8 +477,26 @@ usuário" — é uma camada nova, sem mexer em nenhum dado que já existia:
 - Só supervisores veem a página **Supervisão**, com um resumo agregado
   (quantos leads, quanto está em negociação/ganho/perdido) de cada
   membro — nunca os clientes individuais de ninguém
-- Uma pessoa só pode estar em **uma equipe por vez**. Sair da equipe
-  (ou ser removido) não apaga nada do funil dela
+- Uma pessoa pode estar em **até 10 equipes** (versão 20261163), com um papel
+  diferente em cada uma. Uma fica **aberta** (chat, gestão e permissões são os
+  dela); troca pelo seletor no topo da página Equipe ou em "Minhas equipes".
+  Tabela `equipe_membros` (migração `019_equipes_varias.sql`); os campos de
+  equipe em `usuarios` espelham a equipe aberta (`server/utils/equipesDoUsuario.js`).
+  Sair de uma equipe (ou ser removido) não apaga nada do funil
+- **Abrir funil (gestor):** na Gestão, o gestor pode trabalhar no funil de um
+  consultor da equipe aberta. O site manda o cabeçalho `X-Atuar-Como` só nas
+  rotas do funil; o servidor confere e registra cada alteração (`gestor_atuou`)
+  na auditoria do gestor e do consultor. Configurações, agenda, backup e o resto
+  ficam bloqueados enquanto ele está lá dentro
+
+## CRM no celular (versão 20261163)
+
+Barra fixa embaixo (Início, Negociações, Contatos, Agenda, Mais), etapas do funil
+em chips com uma coluna por vez, contatos em cartões com WhatsApp e "+ Novo
+contato", Configurações em lista e janelas em tela cheia. Quem prefere a tela de
+sempre liga **Ver como no computador** em Configurações → Aparência e
+acessibilidade (só aparece no celular). Em Contatos, **Duplicados (n)** junta
+contatos com o mesmo telefone (`GET /api/cards/duplicados`, `POST /api/cards/unificar`).
 
 ## Página de divulgação
 

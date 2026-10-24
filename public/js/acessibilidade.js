@@ -8,6 +8,9 @@
      Liga sozinho quando o aparelho pede mais contraste (prefers-contrast: more), até a pessoa escolher.
    - Menos animação: desliga transições e animações (também segue a preferência do sistema).
    - Destacar links e botões: sublinha links e mostra um contorno forte em quem está com o foco.
+   - Ver como no computador (só aparece em tela de celular): a página passa a ter 1280px de largura
+     (meta viewport), então o celular mostra a mesma tela do computador, menor, e a pessoa amplia
+     com dois dedos. Desliga a versão de celular (barra de baixo, etapas em chips, cartões).
 
    - Leitor de tela (sempre ligado, não muda nada na tela): botões só com ícone ou símbolo ganham nome
      (vem do title ou de uma lista de símbolos), ícones SVG ficam escondidos do leitor, bolinhas e
@@ -27,7 +30,12 @@
     { id: 'contraste', nome: 'Alto contraste', dica: 'Textos e bordas mais fortes, mais fáceis de ler.' },
     { id: 'movimento', nome: 'Menos animação', dica: 'Desliga os efeitos de movimento e transição.' },
     { id: 'links', nome: 'Destacar links e botões', dica: 'Sublinha os links e mostra um contorno forte em quem está selecionado pelo teclado.' },
+    { id: 'computador', nome: 'Ver como no computador', dica: 'Mostra a mesma tela do computador, com botões menores. Para ampliar, use dois dedos.', soCelular: true },
   ];
+  // tela de celular (pela tela do aparelho, não pela largura da página, que muda com esta opção)
+  const telaDeCelular = () => Math.min(window.screen ? screen.width : 9999, window.screen ? screen.height : 9999) <= 900;
+  const metaViewport = document.querySelector('meta[name="viewport"]');
+  const viewportOriginal = metaViewport ? metaViewport.getAttribute('content') : 'width=device-width, initial-scale=1.0';
   const temZoom = !!(window.CSS && CSS.supports && CSS.supports('zoom', '1.1'));
 
   const pede = (q) => { try { return !!(window.matchMedia && matchMedia(q).matches); } catch (e) { return false; } };
@@ -40,7 +48,7 @@
     // sem escolha da pessoa, segue o aparelho
     const contraste = c.contraste === undefined ? pede('(prefers-contrast: more)') : !!c.contraste;
     const movimento = c.movimento === undefined ? pede('(prefers-reduced-motion: reduce)') : !!c.movimento;
-    return { letra, contraste, movimento, links: !!c.links };
+    return { letra, contraste, movimento, links: !!c.links, computador: !!c.computador };
   }
   const doAparelho = (id) => salvo[id] === undefined && (id === 'contraste' || id === 'movimento');
   function gravar(c) { try { localStorage.setItem(CHAVE, JSON.stringify(c)); salvo = { ...c }; } catch (e) { /* sem armazenamento: vale só agora */ } }
@@ -57,6 +65,12 @@
     h.classList.toggle('a11y-contraste', atual.contraste);
     h.classList.toggle('a11y-sem-movimento', atual.movimento);
     h.classList.toggle('a11y-links', atual.links);
+    const pc = atual.computador && telaDeCelular();
+    h.classList.toggle('a11y-computador', pc);
+    if (metaViewport) {
+      const quer = pc ? 'width=1280' : viewportOriginal;
+      if (metaViewport.getAttribute('content') !== quer) metaViewport.setAttribute('content', quer);
+    }
   }
   aplicar();
 
@@ -67,7 +81,7 @@
         ${LETRAS.map((l, i) => `<button type="button" class="a11y-letra ${atual.letra === i ? 'ativo' : ''}" data-a11y-letra="${i}" aria-pressed="${atual.letra === i}"><span class="a11y-aa" style="font-size:${13 + i * 4}px">Aa</span>${l.nome}</button>`).join('')}
       </div>
       ${temZoom ? '' : '<p class="a11y-nota">Este navegador não permite aumentar a letra por aqui. Use o zoom do navegador (Ctrl e +).</p>'}
-      ${OPCOES.map((o) => `<button type="button" class="a11y-opcao" data-a11y-opcao="${o.id}" role="switch" aria-checked="${atual[o.id]}">
+      ${OPCOES.filter((o) => !o.soCelular || telaDeCelular() || atual[o.id]).map((o) => `<button type="button" class="a11y-opcao" data-a11y-opcao="${o.id}" role="switch" aria-checked="${atual[o.id]}">
         <span class="a11y-texto"><b>${o.nome}</b><small>${o.dica}${atual[o.id] && doAparelho(o.id) ? ' Ligado pelo seu aparelho.' : ''}</small></span>
         <span class="a11y-chave ${atual[o.id] ? 'ligada' : ''}" aria-hidden="true"><i></i></span>
       </button>`).join('')}

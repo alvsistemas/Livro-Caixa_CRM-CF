@@ -18,6 +18,11 @@ const { executarAcaoDeAutomacao } = require('../utils/executarAutomacao');
 const { dispararWebhooks } = require('../utils/dispararWebhooks');
 const { validarAtribuicao, colunaEquivalente, proximaOrdem, transferirCard } = require('../utils/atribuirLead');
 const { enviarPush } = require('../utils/push');
+const { chaveTelefone } = require('../utils/telefone');
+const { transacao } = require('../db/pool');
+const HistoricoContato = require('../models/HistoricoContato');
+const MensagemAgendada = require('../models/MensagemAgendada');
+const EventoGoogleExtra = require('../models/EventoGoogleExtra');
 
 const router = express.Router();
 router.use(auth); // todas as rotas de card exigem login
@@ -69,6 +74,78 @@ function filtrarCampos(body) {
   }
   return dados;
 }
+
+/* ---------- contatos duplicados ----------
+   Dois contatos são o mesmo quando a chave do telefone é igual (só dígitos, sem 55, sem o 9 extra
+   do celular). A tela mostra os grupos; a pessoa escolhe qual manter; o resto é juntado nele. */
+// GET /api/cards/duplicados -> grupos de contatos com o mesmo telefone
+router.get('/duplicados', async (req, res) => {
+  try {
+    const cards = await Card.find({ userId: req.userId, arquivado: { $ne: true } });
+    const colunas = await Column.find({ userId: req.userId });
+    const nomeCol = new Map(colunas.map((c) => [String(c._id), c.nome]));
+    const grupos = new Map();
+    for (const c of cards) {
+      const k = chaveTelefone(c.telefone);
+      if (!k) continue;
+      if (!grupos.has(k)) grupos.set(k, []);
+      grupos.get(k).push(c);
+    }
+    const lista = [...grupos.entries()].filter(([, l]) => l.length > 1).map(([chave, l]) => ({
+      chave,
+      contatos: l.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt)).map((c) => ({
+        id: String(c._id), cliente: c.cliente, telefone: c.telefone, valor: Number(c.valor) || 0,
+        etapa: nomeCol.get(String(c.columnId)) || '', criadoEm: c.createdAt, etiquetas: c.etiquetas || [],
+      })),
+    }));
+    res.json({ grupos: lista });
+  } catch (err) {
+    console.error('Erro ao procurar duplicados:', err.message);
+    res.status(500).json({ error: 'Erro ao procurar contatos duplicados.' });
+  }
+});
+
+// POST /api/cards/unificar { manterId, juntarIds: [...] } -> junta tudo no contato mantido e arquiva os outros
+const CAMPOS_PARA_COMPLETAR = ['cnpj', 'razaoSocial', 'inscricaoEstadual', 'ramoAtividade', 'contatoNome', 'contatoCargo', 'tipoProduto', 'obs'];
+router.post('/unificar', async (req, res) => {
+  try {
+    const manterId = String((req.body && req.body.manterId) || '');
+    const juntarIds = [...new Set(((req.body && req.body.juntarIds) || []).map(String))].filter((id) => id !== manterId);
+    if (!isValidId(manterId) || !juntarIds.length || juntarIds.some((id) => !isValidId(id))) {
+      return res.status(400).json({ error: 'Escolha o contato que fica e pelo menos um para juntar.' });
+    }
+    const manter = await Card.findOne({ _id: manterId, userId: req.userId });
+    const outros = await Card.find({ _id: { $in: juntarIds }, userId: req.userId });
+    if (!manter || outros.length !== juntarIds.length) return res.status(404).json({ error: 'Contato não encontrado.' });
+    const chave = chaveTelefone(manter.telefone);
+    if (!chave || outros.some((o) => chaveTelefone(o.telefone) !== chave)) {
+      return res.status(400).json({ error: 'Só dá para juntar contatos com o mesmo telefone.' });
+    }
+    await transacao(async () => {
+      const ids = outros.map((o) => o._id);
+      // histórico, anexos, tarefas e o resto passam para o contato que fica
+      await HistoricoContato.updateMany({ userId: req.userId, cardId: { $in: ids } }, { cardId: manter._id });
+      await Anexo.updateMany({ userId: req.userId, cardId: { $in: ids } }, { cardId: manter._id });
+      await Task.updateMany({ userId: req.userId, leadId: { $in: ids } }, { leadId: manter._id });
+      await MensagemAgendada.updateMany({ userId: req.userId, cardId: { $in: ids } }, { cardId: manter._id });
+      await EventoGoogleExtra.updateMany({ userId: req.userId, leadId: { $in: ids } }, { leadId: manter._id });
+      await Contrato.updateMany({ userId: req.userId, cardId: { $in: ids } }, { cardId: manter._id });
+      // etiquetas somadas; campos vazios do mantido completados com os dos outros
+      const mudar = { etiquetas: [...new Set([...(manter.etiquetas || []), ...outros.flatMap((o) => o.etiquetas || [])])] };
+      for (const campo of CAMPOS_PARA_COMPLETAR) {
+        if (!manter[campo]) { const comValor = outros.find((o) => o[campo]); if (comValor) mudar[campo] = comValor[campo]; }
+      }
+      await Card.updateOne({ _id: manter._id, userId: req.userId }, mudar);
+      await Card.updateMany({ _id: { $in: ids }, userId: req.userId }, { arquivado: true });
+    });
+    await registrarAuditoria(req.userId, 'contatos_unificados', `${outros.length + 1} contatos com o telefone ${manter.telefone || ''} viraram "${manter.cliente}"`);
+    const atualizado = await Card.findOne({ _id: manter._id, userId: req.userId });
+    res.json({ card: atualizado.toJSON(), arquivados: juntarIds });
+  } catch (err) {
+    console.error('Erro ao unificar contatos:', err.message);
+    res.status(500).json({ error: 'Erro ao juntar os contatos.' });
+  }
+});
 
 // POST /api/cards -> cria um novo cliente/card para o usuário logado
 router.post('/', async (req, res) => {

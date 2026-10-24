@@ -1022,3 +1022,160 @@ tr.membro-supervisor-destaque td:last-child{ border-right:1px solid var(--gold);
 .func-pin{ font-size:24px !important; letter-spacing:10px; text-align:center; }
 .func-loja{ font-family:'Fraunces',serif; font-size:20px; font-weight:600; margin:4px 0 2px; }
 .func-link{ background:none; border:none; color:var(--ink); opacity:.8; font:inherit; font-size:13px; text-decoration:underline; cursor:pointer; padding:10px 4px; }
+
+/* ================================================================
+   Celular (até 768px): barra de baixo, Negociações por etapa, Contatos em cartões,
+   Configurações em lista e janelas em tela cheia. "Ver como no computador"
+   (Acessibilidade) troca a largura da tela e desliga tudo isto.
+================================================================ */
+.bottom-nav, .etapas-chips-mobile, .etapas-dica-mobile, .leads-chips-mobile, .leads-cards-mobile, .fab-novo-lead, .config-voltar-mobile{ display:none; }
+@media (max-width: 768px){
+  .hamburger-btn{ display:none; }
+  .main-topbar{ justify-content:flex-end; }
+  .main-area{ padding-bottom:calc(96px + env(safe-area-inset-bottom)); }
+
+  /* barra fixa de baixo */
+  .bottom-nav{
+    display:grid; grid-template-columns:repeat(5,1fr); position:fixed; left:0; right:0; bottom:0; z-index:130;
+    height:calc(66px + env(safe-area-inset-bottom)); padding-bottom:env(safe-area-inset-bottom);
+    background:var(--paper); border-top:1px solid var(--line);
+  }
+  .bottom-nav-item{
+    position:relative; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:4px;
+    border:none; background:none; color:var(--ink-soft); font-family:inherit; font-size:11px; font-weight:600;
+    min-height:48px; padding:0 2px; cursor:pointer; -webkit-tap-highlight-color:transparent;
+  }
+  .bottom-nav-item span{ max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .bottom-nav-item.active{ color:var(--ink); font-weight:700; }
+  .bottom-nav-item.active::before{ content:''; position:absolute; top:0; width:28px; height:3px; border-radius:0 0 3px 3px; background:var(--ink); }
+  .bottom-nav-item:focus-visible{ outline:2px solid var(--ink); outline-offset:-4px; border-radius:10px; }
+  .assistente-bolha{ right:14px !important; bottom:calc(150px + env(safe-area-inset-bottom)) !important; width:48px; height:48px; }
+
+  /* chips de etapa (Negociações) e de filtro (Contatos) */
+  .etapas-chips-mobile, .leads-chips-mobile{
+    display:flex; gap:8px; overflow-x:auto; padding:8px 0; margin:0 0 4px; scrollbar-width:none; -webkit-overflow-scrolling:touch;
+  }
+  .etapas-chips-mobile{ position:sticky; top:52px; z-index:9; background:var(--bg); }
+  .etapas-chips-mobile::-webkit-scrollbar, .leads-chips-mobile::-webkit-scrollbar{ display:none; }
+  .etapa-chip-mobile{
+    flex-shrink:0; display:inline-flex; align-items:center; gap:8px; min-height:44px; padding:0 14px; border-radius:999px;
+    border:1px solid var(--line); background:var(--paper); color:var(--ink); font-family:inherit; font-size:13px; font-weight:600; white-space:nowrap; cursor:pointer;
+  }
+  .etapa-chip-mobile.active{ background:var(--ink); color:var(--bg); border-color:var(--ink); }
+  .etapa-chip-mobile.etapa-chip-alvo{ outline:3px solid var(--ink); outline-offset:2px; }
+  .etapa-chip-qtd{ font-size:11px; font-weight:700; padding:2px 7px; border-radius:999px; background:var(--hover-tint); }
+  .etapa-chip-mobile.active .etapa-chip-qtd{ background:rgba(128,128,128,.35); }
+  .etapas-dica-mobile{ display:block; margin:0 0 10px; font-size:12px; color:var(--ink-soft); }
+
+  /* Negociações: uma etapa por vez, a lista rola com a página */
+  .pipeline-main{ overflow:visible; }
+  .board{ display:block; min-height:0; }
+  .column{ display:none; width:100%; max-height:none; min-height:120px; }
+  .column.col-ativa-mobile{ display:flex; }
+  .cards{ overflow:visible; }
+  .col-head .grip{ display:none; }
+  .add-col-wrap{ margin-top:12px; }
+  .tabs{ padding:0 0 10px; }
+  .stats-wrap{ padding:0; }
+  .stats-wrap-fixo{ position:static; border-bottom:none; padding-bottom:6px; }
+  .stats{ scroll-snap-type:x mandatory; }
+  .stats .stat{ width:46% !important; min-width:150px; scroll-snap-align:start; padding:10px 14px 12px; }
+  .stat-resize-handle{ display:none; }
+  .pipeline-ordenar-row{ display:none; }
+  main.pipeline-main, .board{ padding-left:0; padding-right:0; margin-left:0; margin-right:0; }
+  .main-area-pipeline .page-head p{ display:none; }
+  .main-area-pipeline .page-head{ margin-bottom:10px; }
+  .funil-tabs{ margin-bottom:8px; flex-wrap:nowrap; overflow-x:auto; scrollbar-width:none; }
+  .funil-tabs::-webkit-scrollbar{ display:none; }
+  .stats-label{ padding:10px 16px 0; }
+  .stats .stat .val{ font-size:17px; }
+  .pipeline-insights-bar{ margin-bottom:6px; }
+
+  /* Contatos: cartões */
+  .leads-table-wrap{ display:none; }
+  .leads-cards-mobile{ display:flex; flex-direction:column; gap:10px; margin-top:6px; }
+  .page-head-actions [data-action="open-new-lead"]{ display:none; }
+  .leads-toolbar{ flex-wrap:wrap; }
+  .leads-toolbar .leads-filter{ display:none; }
+  .leads-search{ width:100%; }
+  .lead-card-mobile{ display:flex; align-items:center; gap:12px; padding:14px; background:var(--paper); border:1px solid var(--line); border-radius:16px; cursor:pointer; }
+  .lead-card-mobile:focus-visible{ outline:2px solid var(--ink); outline-offset:2px; }
+  .lead-card-avatar{ width:44px; height:44px; border-radius:50%; background:var(--col-bg); border:1px solid var(--line); display:flex; align-items:center; justify-content:center; font-size:14px; font-weight:700; color:var(--ink); flex-shrink:0; }
+  .lead-card-info{ flex:1; min-width:0; display:flex; flex-direction:column; gap:5px; }
+  .lead-card-top, .lead-card-bot{ display:flex; align-items:center; justify-content:space-between; gap:8px; min-width:0; }
+  .lead-card-nome{ font-size:15px; font-weight:600; color:var(--ink); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; min-width:0; }
+  .lead-card-tel{ font-size:12.5px; color:var(--ink-soft); }
+  .lead-card-valor{ font-family:'IBM Plex Mono',monospace; font-size:13px; font-weight:600; color:var(--ink); flex-shrink:0; }
+  .lead-card-wa{ width:44px; height:44px; border-radius:50%; border:1px solid var(--line); background:var(--paper); color:var(--ink); display:flex; align-items:center; justify-content:center; flex-shrink:0; cursor:pointer; padding:0; }
+  .fab-novo-lead{
+    display:flex; align-items:center; gap:8px; position:fixed; right:16px; bottom:calc(82px + env(safe-area-inset-bottom)); z-index:125;
+    height:52px; padding:0 20px; border-radius:999px; border:none; background:var(--ink); color:var(--bg);
+    font-family:inherit; font-size:14px; font-weight:600; box-shadow:0 8px 20px rgba(0,0,0,.28); cursor:pointer;
+  }
+
+  /* Configurações: lista que abre cada tela */
+  .config-layout{ flex-direction:column; gap:0; }
+  .config-layout .config-sidebar{ width:100%; position:static; flex-direction:column; flex-wrap:nowrap; gap:0; }
+  .config-layout .config-sidebar-grupo{ display:block; margin:18px 4px 8px; }
+  .config-layout .config-sidebar-grupo:first-child{ margin-top:0; }
+  .config-layout .config-sidebar-item{
+    display:flex; align-items:center; justify-content:space-between; width:100%; min-height:52px; padding:0 16px; border-radius:0;
+    background:var(--paper); border:1px solid var(--line); border-top-width:0; font-size:15px; font-weight:500; text-align:left;
+  }
+  .config-layout .config-sidebar-item::after{ content:'›'; font-size:20px; color:var(--ink-soft); }
+  .config-layout .config-sidebar-grupo + .config-sidebar-item{ border-top-width:1px; border-radius:16px 16px 0 0; }
+  .config-layout .config-sidebar-item:has(+ .config-sidebar-grupo), .config-layout .config-sidebar-item:last-child{ border-radius:0 0 16px 16px; }
+  .config-layout .config-sidebar-grupo + .config-sidebar-item:has(+ .config-sidebar-grupo){ border-radius:16px; }
+  .config-layout .config-sidebar-item.active{ background:var(--paper); color:var(--ink); font-weight:500; }
+  .config-layout.mostrando-lista .config-content{ display:none; }
+  .config-layout.mostrando-conteudo .config-sidebar{ display:none; }
+  .config-layout.mostrando-conteudo .config-voltar-mobile{
+    display:inline-flex; align-items:center; min-height:44px; margin:0 0 10px; padding:0 14px 0 6px; border:none; background:none;
+    color:var(--ink); font-family:inherit; font-size:15px; font-weight:600; cursor:pointer;
+  }
+
+  /* janelas (editar contato, tarefa…) em tela cheia, com os botões sempre à vista */
+  .overlay:not(#confirm-overlay){ padding:0; align-items:stretch; }
+  /* janelas em tela cheia ficam acima da barra de cima (140), da barra de baixo (130) e do botão + (125) */
+  .overlay{ z-index:170; }
+  #fechamento-root .overlay{ z-index:180; }
+  .overlay:not(#confirm-overlay) .modal{ max-width:none; height:100%; max-height:100dvh; border-radius:0; display:flex; flex-direction:column; }
+  .overlay:not(#confirm-overlay) .modal-body{ max-height:none; flex:1; min-height:0; }
+  .overlay:not(#confirm-overlay) .modal-foot{ position:sticky; bottom:0; background:var(--paper); padding-bottom:calc(16px + env(safe-area-inset-bottom)); flex-shrink:0; }
+}
+
+/* contatos duplicados */
+.dup-grupo{ border:1px solid var(--line); border-radius:12px; padding:12px 14px 14px; margin:0; display:grid; gap:6px; }
+.dup-grupo legend{ font-size:13px; font-weight:600; padding:0 6px; }
+.dup-opcao{ display:flex; gap:10px; align-items:flex-start; padding:8px 4px; border-radius:8px; cursor:pointer; min-height:40px; }
+.dup-opcao:hover{ background:var(--hover-tint); }
+.dup-opcao input{ margin-top:3px; width:18px; height:18px; accent-color:var(--ink); }
+.dup-opcao span{ display:grid; gap:2px; }
+.dup-opcao small{ font-size:12px; color:var(--ink-soft); }
+.dup-grupo .btn-primary{ justify-self:start; margin-top:4px; }
+
+/* ---------- Várias equipes e gestor no funil de um consultor ---------- */
+.atuando-banner{
+  display:flex; align-items:center; justify-content:space-between; gap:12px;
+  background:var(--ink); color:var(--paper); padding:10px 16px; border-radius:12px;
+  margin:0 0 14px; font-size:13px; font-weight:600; line-height:1.4;
+  position:sticky; top:0; z-index:30;
+}
+.atuando-banner .btn-outline{ background:transparent; border-color:var(--paper); color:var(--paper); flex-shrink:0; }
+.equipe-troca select{
+  font:inherit; font-weight:600; color:var(--ink); background:var(--col-bg);
+  border:1px solid var(--line); border-radius:8px; padding:3px 8px; max-width:220px;
+}
+.minhas-equipes-lista{ display:flex; flex-direction:column; gap:8px; margin-top:10px; }
+.minha-equipe-item{
+  display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap;
+  padding:10px 12px; border:1px solid var(--line); border-radius:10px; background:var(--col-bg);
+}
+.minha-equipe-item.ativa{ border-color:var(--accent); }
+.minha-equipe-info{ display:flex; flex-direction:column; gap:2px; min-width:0; }
+.minha-equipe-info span{ font-size:12px; color:var(--ink-soft); }
+.minha-equipe-aberta{ color:var(--accent) !important; font-weight:700; }
+.sr-only{ position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap; }
+@media (max-width:768px){
+  .atuando-banner{ flex-direction:column; align-items:stretch; border-radius:10px; font-size:12px; position:static; }
+}

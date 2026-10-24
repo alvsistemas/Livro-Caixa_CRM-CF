@@ -87,7 +87,7 @@ function montarEmailResumo({ nome, resumo, equipe, hoje }) {
 }
 
 async function resumoDaEquipe(gestor, hoje) {
-  const membros = await User.find({ equipeId: gestor.equipeId });
+  const membros = await require('./equipesDoUsuario').membrosDe(gestor.equipeId);
   const lista = [];
   for (const m of membros) {
     if (String(m._id) === String(gestor._id)) continue;

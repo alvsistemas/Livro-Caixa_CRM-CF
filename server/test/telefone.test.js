@@ -29,3 +29,15 @@ describe('normalizarTelefone', () => {
     assert.equal(normalizarTelefone(null), null);
   });
 });
+
+const { chaveTelefone } = require('../utils/telefone');
+test('chaveTelefone: o mesmo número escrito de jeitos diferentes vira a mesma chave', () => {
+  const k = chaveTelefone('(15) 99999-1234');
+  assert.equal(k, '1599991234');
+  assert.equal(chaveTelefone('+55 15 99999-1234'), k);
+  assert.equal(chaveTelefone('15 9999-1234'), k);
+  assert.equal(chaveTelefone('5515999991234'), k);
+  assert.equal(chaveTelefone('11 3333-4444'), '1133334444');
+  assert.equal(chaveTelefone('123'), null);
+  assert.equal(chaveTelefone(''), null);
+});

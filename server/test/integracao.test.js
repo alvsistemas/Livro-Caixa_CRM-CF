@@ -1991,6 +1991,105 @@ describe('API com PostgreSQL (integração)', { skip: pular }, () => {
     assert.ok(r2.dados.token);
   });
 
+  test('contatos duplicados: acha pelo telefone e junta tudo no que fica', async () => {
+    const r = await api('POST', '/api/auth/register', { nome: 'Duda Dup', email: 'duda.dup@teste.com', senha: 'senha123' });
+    const t = r.dados.token;
+    const board = await api('GET', '/api/board', undefined, t);
+    const col = board.dados.columns.find((c) => c.tipo === 'aberto');
+    const a = await api('POST', '/api/cards', { cliente: 'Marina Souza', telefone: '(15) 99999-1234', valor: 3200, columnId: col.id, etiquetas: ['vip'] }, t);
+    const b = await api('POST', '/api/cards', { cliente: 'Marina S.', telefone: '+55 15 9999-1234', obs: 'Prefere WhatsApp', columnId: col.id, etiquetas: ['indicação'] }, t);
+    await api('POST', '/api/cards', { cliente: 'Outra pessoa', telefone: '11 98888-7777', columnId: col.id }, t);
+    assert.equal((await api('POST', '/api/tasks', { titulo: 'Ligar para a Marina', leadId: b.dados.id }, t)).status, 201);
+    const dup = await api('GET', '/api/cards/duplicados', undefined, t);
+    assert.equal(dup.status, 200, JSON.stringify(dup.dados));
+    assert.equal(dup.dados.grupos.length, 1);
+    assert.equal(dup.dados.grupos[0].contatos.length, 2);
+    // não junta contatos de telefones diferentes
+    const outro = (await api('GET', '/api/board', undefined, t)).dados.cards.find((c) => c.cliente === 'Outra pessoa');
+    assert.equal((await api('POST', '/api/cards/unificar', { manterId: a.dados.id, juntarIds: [outro.id] }, t)).status, 400);
+    const junta = await api('POST', '/api/cards/unificar', { manterId: a.dados.id, juntarIds: [b.dados.id] }, t);
+    assert.equal(junta.status, 200, JSON.stringify(junta.dados));
+    const depois = (await api('GET', '/api/board', undefined, t)).dados.cards;
+    const fica = depois.find((c) => c.id === a.dados.id);
+    assert.deepEqual([...fica.etiquetas].sort(), ['indicação', 'vip']);
+    assert.equal(fica.obs, 'Prefere WhatsApp'); // campo vazio completado
+    assert.ok(!depois.some((c) => c.id === b.dados.id && !c.arquivado), 'o duplicado devia ir para os arquivados');
+    const tarefas = (await api('GET', '/api/tasks', undefined, t)).dados.tasks;
+    assert.equal(tarefas.find((x) => x.titulo === 'Ligar para a Marina').leadId, a.dados.id);
+    assert.equal((await api('GET', '/api/cards/duplicados', undefined, t)).dados.grupos.length, 0);
+  });
+
+  test('várias equipes por pessoa e gestor atuando no funil de um consultor', async () => {
+    const nova = async (nome, email) => {
+      const r = await api('POST', '/api/auth/register', { nome, email, senha: 'senha123' });
+      assert.equal(r.status, 201, JSON.stringify(r.dados));
+      return { token: r.dados.token, id: r.dados.user.id };
+    };
+    const gil = await nova('Gil Gestor', 'gil.multi@teste.com');
+    const lu = await nova('Lu Gestora', 'lu.multi@teste.com');
+    const rai = await nova('Raí Consultor', 'rai.multi@teste.com');
+    const eqA = await api('POST', '/api/equipe', { nome: 'Equipe Norte' }, gil.token);
+    const eqB = await api('POST', '/api/equipe', { nome: 'Equipe Sul' }, lu.token);
+    assert.equal((await api('POST', '/api/equipe/entrar', { codigo: eqA.dados.codigoConvite }, rai.token)).status, 204);
+    // entrar numa segunda equipe não tira da primeira (antes era recusado)
+    assert.equal((await api('POST', '/api/equipe/entrar', { codigo: eqB.dados.codigoConvite }, rai.token)).status, 204);
+    assert.equal((await api('POST', '/api/equipe/entrar', { codigo: eqB.dados.codigoConvite }, rai.token)).status, 400);
+    let ver = await api('GET', '/api/equipe', undefined, rai.token);
+    assert.equal(ver.dados.minhasEquipes.length, 2);
+    assert.equal(ver.dados.equipe.nome, 'Equipe Sul'); // a última em que entrou fica aberta
+    assert.deepEqual(ver.dados.minhasEquipes.map((e) => e.ativa), [false, true]);
+    // o Gil continua vendo o Raí na equipe dele, mesmo com o Raí na Sul aberta
+    const supA = await api('GET', '/api/equipe/supervisao', undefined, gil.token);
+    assert.equal(supA.dados.membros.length, 2);
+    // papel por equipe: gestor na Norte, membro na Sul
+    assert.equal((await api('PUT', `/api/equipe/membro/${rai.id}/papel`, { papel: 'supervisor' }, gil.token)).status, 204);
+    ver = await api('GET', '/api/equipe', undefined, rai.token);
+    assert.equal(ver.dados.equipe.souSupervisor, false);
+    assert.equal((await api('POST', '/api/equipe/abrir', { equipeId: eqA.dados.id }, rai.token)).status, 204);
+    ver = await api('GET', '/api/equipe', undefined, rai.token);
+    assert.equal(ver.dados.equipe.nome, 'Equipe Norte');
+    assert.equal(ver.dados.equipe.souSupervisor, true);
+    assert.equal((await api('PUT', `/api/equipe/membro/${rai.id}/papel`, { papel: 'membro' }, gil.token)).status, 204);
+    assert.equal((await api('POST', '/api/equipe/abrir', { equipeId: eqA.dados.id }, lu.token)).status, 404);
+
+    // atuar como: o Gil (gestor da Norte) trabalha no funil do Raí
+    const comoRai = (metodo, caminho, corpo, token = gil.token) => fetch(`${base}${caminho}`, {
+      method: metodo,
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}`, 'X-Atuar-Como': rai.id },
+      body: corpo ? JSON.stringify(corpo) : undefined,
+    }).then(async (r) => ({ status: r.status, dados: await r.json().catch(() => null) }));
+    const boardRai = await comoRai('GET', '/api/board');
+    assert.equal(boardRai.status, 200, JSON.stringify(boardRai.dados));
+    const col = boardRai.dados.columns.find((c) => c.tipo === 'aberto');
+    const criado = await comoRai('POST', '/api/cards', { cliente: 'Lead posto pelo gestor', columnId: col.id });
+    assert.equal(criado.status, 201, JSON.stringify(criado.dados));
+    const doRai = await api('GET', '/api/board', undefined, rai.token);
+    assert.ok(doRai.dados.cards.some((c) => c.cliente === 'Lead posto pelo gestor'), 'o lead tinha que ir para o funil do Raí');
+    const doGil = await api('GET', '/api/board', undefined, gil.token);
+    assert.ok(!doGil.dados.cards.some((c) => c.cliente === 'Lead posto pelo gestor'));
+    // fora do funil: bloqueado; quem não é gestor ou é de outra equipe: bloqueado
+    assert.equal((await comoRai('GET', '/api/backup/exportar-tudo')).status, 403);
+    assert.equal((await comoRai('GET', '/api/board', undefined, lu.token)).status, 200); // a Lu é gestora da Sul, e o Raí também está lá
+    const raiComoGil = await fetch(`${base}/api/board`, { headers: { Authorization: `Bearer ${rai.token}`, 'X-Atuar-Como': gil.id } });
+    assert.equal(raiComoGil.status, 403); // membro comum não atua no funil de ninguém
+    await new Promise((r) => setTimeout(r, 50)); // a auditoria grava depois da resposta
+    const audGil = await api('GET', '/api/auditoria', undefined, gil.token);
+    const audRai = await api('GET', '/api/auditoria', undefined, rai.token);
+    const lista = (a) => a.dados.eventos;
+    assert.ok(JSON.stringify(lista(audGil)).includes('gestor_atuou'), JSON.stringify(audGil.dados).slice(0, 300));
+    assert.ok(JSON.stringify(lista(audRai)).includes('gestor_atuou'));
+
+    // sair da equipe aberta abre a outra; sair da última deixa sem equipe
+    assert.equal((await api('POST', '/api/equipe/sair', { equipeId: eqA.dados.id }, rai.token)).status, 204);
+    ver = await api('GET', '/api/equipe', undefined, rai.token);
+    assert.equal(ver.dados.equipe.nome, 'Equipe Sul');
+    assert.equal((await comoRai('GET', '/api/board')).status, 404); // não é mais da Norte
+    assert.equal((await api('POST', '/api/equipe/sair', {}, rai.token)).status, 204);
+    ver = await api('GET', '/api/equipe', undefined, rai.token);
+    assert.equal(ver.dados.equipe, null);
+    assert.equal(ver.dados.minhasEquipes.length, 0);
+  });
+
   test('sair de todos os aparelhos invalida o token antigo', async () => {
     const t = contas.caio.token;
     assert.equal((await api('POST', '/api/auth/logout-all', {}, t)).status, 204);

@@ -6,6 +6,7 @@ process.env.JWT_SECRET = process.env.JWT_SECRET || 'segredo-de-teste';
 const User = require('../models/User');
 const Column = require('../models/Column');
 const { validarAtribuicao, colunaEquivalente } = require('../utils/atribuirLead');
+const EQ = require('../utils/equipesDoUsuario');
 
 const EQUIPE = 'e'.repeat(24);
 const GESTOR = 'a'.repeat(24);
@@ -22,6 +23,10 @@ function stubUsuarios() {
   User.findOne = async (q) => {
     const u = usuarios[q._id];
     return u && String(u.equipeId) === String(q.equipeId) ? u : null;
+  };
+  EQ.membroDe = async (equipeId, id) => {
+    const u = usuarios[id];
+    return u && String(u.equipeId) === String(equipeId) ? { papel: u.papelEquipe, supervisorDeDados: false } : null;
   };
 }
 
