@@ -73,7 +73,7 @@
     $('dono-kpis').innerHTML = [
       kpi('Cadastros', t.cadastros, `+${t.cadastros7d} em 7 dias · +${t.cadastros30d} em 30`),
       kpi('No teste grátis', t.emTeste, t.semAcesso ? `${t.semAcesso} ainda não entraram desde que a cobrança foi ligada` : ''),
-      kpi('Pagando', t.pagantes, `Essencial ${t.porPlano.essencial} · Completo ${t.porPlano.completo}`),
+      kpi('Pagando', t.pagantes, `${t.anuais || 0} no anual · ${Math.max(0, t.pagantes - (t.anuais || 0))} no mensal`),
       kpi('Receita mensal', brl(t.receitaMensal), `estimada, já com descontos${t.anuais ? ` · ${t.anuais} ${t.anuais === 1 ? 'anual entra' : 'anuais entram'} como 1/12` : ''}`),
       kpi('Teste → pagante', t.conversao == null ? '—' : `${String(t.conversao).replace('.', ',')}%`, t.testeAcabou ? `${t.testeAcabouEPagou} de ${t.testeAcabou} que terminaram o teste` : 'ninguém terminou o teste ainda'),
       kpi('Precisa de atenção', atencao, `${t.atrasados} ${t.atrasados === 1 ? 'atrasado' : 'atrasados'} · ${t.aguardando} sem pagar a 1ª fatura · ${t.cancelaram} ${t.cancelaram === 1 ? 'cancelou' : 'cancelaram'}`, atencao > 0),

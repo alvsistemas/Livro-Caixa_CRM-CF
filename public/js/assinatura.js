@@ -83,14 +83,14 @@
     if(s.status === 'cortesia') return { titulo:'Sua assinatura', sub:'Sua conta está liberada sem cobrança.' };
     if(!s.liberado){
       const motivos = {
-        teste_acabou: 'Seu teste grátis acabou. Escolha um plano para continuar usando — seus dados estão guardados.',
+        teste_acabou: 'Seu teste grátis acabou. Assine para continuar usando — seus dados estão guardados.',
         aguardando_pagamento: 'Falta pagar a primeira fatura para liberar o acesso. Seus dados estão guardados.',
         pagamento_atrasado: 'A fatura venceu e o prazo de tolerância acabou. Pague para liberar o acesso de novo — seus dados estão guardados.',
         cancelada: 'Sua assinatura foi cancelada e o período pago terminou. Assine de novo quando quiser — seus dados estão guardados.',
       };
       return { titulo:'Continue usando o Livro-Caixa', sub: motivos[s.motivo] || 'Sua assinatura não está ativa.' };
     }
-    if(s.emTeste) return { titulo:'Sua assinatura', sub:`Você está no teste grátis: ${s.diasDeTeste === 1 ? 'falta 1 dia' : `faltam ${s.diasDeTeste} dias`}. Durante o teste, tudo do plano Completo fica liberado.` };
+    if(s.emTeste) return { titulo:'Sua assinatura', sub:`Você está no teste grátis: ${s.diasDeTeste === 1 ? 'falta 1 dia' : `faltam ${s.diasDeTeste} dias`}. Durante o teste, tudo fica liberado.` };
     return { titulo:'Sua assinatura', sub:'' };
   }
 
@@ -136,7 +136,7 @@
   function desenharPlanos(s){
     const sec = $('ass-planos-sec');
     if(!s.cobranca || s.status === 'cortesia'){ sec.hidden = true; return; }
-    $('ass-planos-titulo').textContent = s.temAssinatura ? 'Trocar de plano' : 'Escolha seu plano';
+    $('ass-planos-titulo').textContent = s.temAssinatura ? 'Mensal ou anual' : 'Assine o Livro-Caixa';
     if(s.temAssinatura && !params.get('ciclo') && !desenharPlanos.jaEscolheuCiclo) cicloEscolhido = s.ciclo || 'mensal';
     const economia = (s.planos || []).map((p) => 1 - p.valorAnual / (p.valor * 12)).reduce((a, b) => Math.min(a, b), 1);
     $('ass-ciclo').innerHTML = ['mensal', 'anual'].map((c) => `<button type="button" class="ass-ciclo-opcao ${cicloEscolhido === c ? 'ativo' : ''}" data-ciclo="${c}" role="radio" aria-checked="${cicloEscolhido === c}">${c === 'mensal' ? 'Mensal' : `Anual <span>economize ${Math.round(economia * 100)}%</span>`}</button>`).join('');
@@ -144,15 +144,15 @@
     const notaDesconto = s.desconto && !s.temAssinatura ? `<p class="ass-faixa ass-faixa-desconto">${esc(textoDoDesconto(s.desconto, false))}. O preço abaixo já tem o desconto.</p>` : '';
     $('ass-desconto-nota').innerHTML = notaDesconto;
     $('ass-planos').innerHTML = (s.planos || []).map((p) => {
-      const atual = s.temAssinatura && p.id === s.plano && cicloEscolhido === (s.ciclo || 'mensal');
-      const texto = atual ? 'Seu plano atual' : s.temAssinatura ? `Mudar para o ${p.nome} ${cicloEscolhido}` : `Assinar o ${p.nome}`;
+      const atual = s.temAssinatura && cicloEscolhido === (s.ciclo || 'mensal');
+      const texto = atual ? 'Seu plano atual' : s.temAssinatura ? `Mudar para o ${cicloEscolhido}` : 'Assinar';
       const o = oferta(p.id, cicloEscolhido);
       const temDesconto = o.final < o.base;
       const sub = cicloEscolhido === 'anual'
         ? `equivale a ${brl(o.final / 12)}/mês · ${brl(p.valor * 12 - p.valorAnual)} a menos que 12 mensalidades`
         : '';
       return `<div class="ass-plano ${atual ? 'atual' : ''}">
-        <div class="ass-plano-topo">${esc(p.nome)}</div>
+        <div class="ass-plano-topo">Tudo incluído</div>
         ${temDesconto ? `<div class="ass-preco-antigo">${brl(o.base)}${porCiclo(cicloEscolhido)}</div>` : ''}
         <div class="ass-preco">${brl(o.final)}<small>${porCiclo(cicloEscolhido)}</small></div>
         ${sub ? `<div class="ass-preco-sub">${sub}</div>` : ''}

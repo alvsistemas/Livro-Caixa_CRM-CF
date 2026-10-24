@@ -36,10 +36,12 @@ test('assinou no teste: ganha a tolerância pra pagar a 1ª fatura, depois bloqu
   assert.equal(depois.motivo, 'aguardando_pagamento');
 });
 
-test('pago: vale o plano escolhido; Essencial não tem IA', () => {
+test('plano único: quem assinou o antigo Essencial passa a ter tudo', () => {
   const s = A.calcularAcesso({ plano: 'essencial', status: 'ativa', teste_ate: em(-30), pago_ate: em(10), asaas_assinatura_id: 'sub_1' }, { agora, ligada: true, tolerancia: 3 });
   assert.equal(s.liberado, true);
-  assert.deepEqual(s.recursos, { ia: false, googleAgenda: false, restaurante: false, nfce: false, equipe: false, relatorios: false, automacoes: false });
+  assert.equal(s.plano, 'completo');
+  assert.deepEqual(s.recursos, { ia: true, googleAgenda: true, restaurante: true, nfce: true, equipe: true, relatorios: true, automacoes: true });
+  assert.deepEqual(A.listaDePlanos().map((p) => p.id), ['completo']);
 });
 
 test('vencido: libera nos dias de tolerância e bloqueia depois', () => {
@@ -124,9 +126,9 @@ test('chave do Asaas no ambiente errado desliga a cobrança', () => {
 });
 
 test('preço pode mudar pela variável de ambiente', () => {
-  process.env.ASSINATURA_VALOR_ESSENCIAL = '79,90';
-  try { assert.equal(A.valorDoPlano('essencial'), 79.9); } finally { delete process.env.ASSINATURA_VALOR_ESSENCIAL; }
-  assert.equal(A.valorDoPlano('completo'), 39.9);
+  process.env.ASSINATURA_VALOR_COMPLETO = '79,90';
+  try { assert.equal(A.valorDoPlano('completo'), 79.9); } finally { delete process.env.ASSINATURA_VALOR_COMPLETO; }
+  assert.equal(A.valorDoPlano('completo'), 49.9);
 });
 
 test('painel do dono: situação de cada cliente', () => {
@@ -145,8 +147,7 @@ test('painel do dono: situação de cada cliente', () => {
 });
 
 test('plano anual: preços padrão e acesso de 12 meses por cobrança paga', () => {
-  assert.equal(A.valorDoPlano('essencial', 'anual'), 300);
-  assert.equal(A.valorDoPlano('completo', 'anual'), 400);
+  assert.equal(A.valorDoPlano('completo', 'anual'), 499);
   assert.equal(A.somarMeses('2026-10-25', 12), '2027-10-25');
   assert.equal(A.somarMeses('2028-02-29', 12), '2029-02-28');
   const s = A.situacaoPelasCobrancas({ status: 'ACTIVE', cycle: 'YEARLY', nextDueDate: '2027-10-25' }, [{ status: 'RECEIVED', dueDate: '2026-10-25', value: 300 }]);
@@ -162,11 +163,9 @@ test('desconto: vale até a data, por percentual, sobre o preço contratado', ()
   // para sempre
   assert.equal(A.valorDevido({ ...linha, desconto_ate: null }, '2035-01-01'), 29.93);
   // preço contratado antigo continua valendo mesmo se a tabela mudar
-  process.env.ASSINATURA_VALOR_COMPLETO = '49.90';
-  try {
-    assert.equal(A.valorDevido({ plano: 'completo', ciclo: 'mensal', valor_contratado: 39.9 }, '2027-01-01'), 39.9);
-    assert.equal(A.valorDevido({ plano: 'essencial', ciclo: 'mensal', valor_contratado: 29.9 }, '2027-01-01', 'completo', 'mensal'), 49.9, 'trocou de plano: preço novo da tabela');
-  } finally { delete process.env.ASSINATURA_VALOR_COMPLETO; }
+  assert.equal(A.valorDevido({ plano: 'completo', ciclo: 'mensal', valor_contratado: 39.9 }, '2027-01-01'), 39.9);
+  assert.equal(A.valorDevido({ plano: 'essencial', ciclo: 'mensal', valor_contratado: 29.9 }, '2027-01-01', 'completo', 'mensal'), 29.9, 'do Essencial para o plano único no mesmo ciclo: mantém o valor contratado');
+  assert.equal(A.valorDevido({ plano: 'essencial', ciclo: 'mensal', valor_contratado: 29.9 }, '2027-01-01', 'completo', 'anual'), 499, 'mudou o ciclo: preço novo da tabela');
   // nunca abaixo do mínimo do Asaas
   assert.equal(A.valorDevido({ plano: 'essencial', ciclo: 'mensal', desconto_percentual: 90 }, '2027-01-01'), 5);
 });

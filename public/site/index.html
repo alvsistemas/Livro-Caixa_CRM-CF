@@ -23,6 +23,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=DM+Sans:wght@400;500;700&display=swap">
 <style>
+[hidden]{display:none !important}
 *{box-sizing:border-box}
 html{scroll-behavior:smooth}
 body{margin:0;background:#F5F4EF;color:#14211D;font-family:'DM Sans',system-ui,sans-serif}
@@ -158,7 +159,7 @@ img{max-width:100%}
     <div style="background:#fff;border-radius:16px;padding:28px;border:1px solid #E3E1D8">
       <div style="font-family:'Bricolage Grotesque',sans-serif;font-weight:800;font-size:15px;color:#E8A33D;background:#14211D;display:inline-block;padding:4px 10px;border-radius:8px">09</div>
       <h3 style="margin:16px 0 0;font-size:23px">Assistente com IA</h3>
-      <p style="margin:10px 0 0;color:#42524D;line-height:1.55">No plano Completo: tire dúvidas, peça sugestões de mensagem e lance despesas conversando.</p>
+      <p style="margin:10px 0 0;color:#42524D;line-height:1.55">Tire dúvidas, peça sugestões de mensagem e lance despesas conversando.</p>
     </div>
   </div>
 </div>
@@ -244,37 +245,27 @@ img{max-width:100%}
 <!-- PLANOS -->
 <div id="planos" style="max-width:1200px;margin:0 auto;padding:88px 24px 24px;box-sizing:border-box">
   <div style="font-weight:700;color:#0E6B53;font-size:14px;letter-spacing:.08em">PLANOS</div>
-  <h2 class="h2" style="margin:10px 0 0;font-size:44px;line-height:1.08;letter-spacing:-0.02em">Escolha o plano ideal para você</h2>
+  <h2 class="h2" style="margin:10px 0 0;font-size:44px;line-height:1.08;letter-spacing:-0.02em">Um plano só, com tudo incluído</h2>
   <div id="promocao" hidden style="margin-top:18px;display:inline-block;background:#E8A33D;color:#14211D;font-weight:700;padding:10px 16px;border-radius:12px"></div>
-  <div style="margin-top:40px;display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:20px;align-items:stretch">
-    <div style="background:#fff;border:1px solid #E3E1D8;border-radius:18px;padding:32px;display:flex;flex-direction:column;gap:14px">
-      <div style="font-weight:700;font-size:15px;color:#5B6B66;letter-spacing:.04em">ESSENCIAL</div>
-      <div style="font-family:'Bricolage Grotesque',sans-serif;font-weight:800;font-size:44px;line-height:1.15"><span data-preco="essencial-mensal">R$ 29,90</span><span style="font-size:16px;font-weight:500;color:#5B6B66">/mês</span></div>
-      <div style="font-size:14px;color:#5B6B66;margin-top:-6px">ou <b style="color:#14211D"><span data-preco="essencial-anual">R$ 300</span>/ano</b> (<span data-economia="essencial">economize 16%</span>)</div>
-      <ul style="margin:0;padding-left:20px;color:#42524D;line-height:1.5"><li style="margin:0 0 8px">CRM: contatos, negociações, agenda e comissões</li><li style="margin:0 0 8px">Controle financeiro com o lucro de verdade</li><li style="margin:0 0 8px">PDV: venda no balcão, caixa, estoque, clientes e fiado</li><li style="margin:0 0 8px">Funciona sem internet, no celular e no computador</li></ul>
-      <a class="btn" data-app="/login.html?cadastro=1&amp;plano=essencial&amp;ciclo=mensal" href="/login.html?cadastro=1&amp;plano=essencial&amp;ciclo=mensal" style="margin-top:auto;text-align:center;border:2px solid #14211D;border-radius:999px;padding:14px;font-weight:700">Assinar o Essencial</a>
-      <a data-app="/login.html?cadastro=1&amp;teste=1" href="/login.html?cadastro=1&amp;teste=1" style="text-align:center;font-size:14px;color:#42524D;text-decoration:underline">ou testar 7 dias grátis</a>
-    </div>
-    <div style="background:#14211D;color:#F5F4EF;border-radius:18px;padding:32px;display:flex;flex-direction:column;gap:14px">
-      <div style="font-weight:700;font-size:15px;color:#E8A33D;letter-spacing:.04em">COMPLETO · MAIS ESCOLHIDO</div>
-      <div style="font-family:'Bricolage Grotesque',sans-serif;font-weight:800;font-size:44px;line-height:1.15"><span data-preco="completo-mensal">R$ 39,90</span><span style="font-size:16px;font-weight:500;color:#B9C7C1">/mês</span></div>
-      <div style="font-size:14px;color:#B9C7C1;margin-top:-6px">ou <b style="color:#F5F4EF"><span data-preco="completo-anual">R$ 400</span>/ano</b> (<span data-economia="completo">economize 16%</span>)</div>
-      <ul style="margin:0;padding-left:20px;color:#D6E0DB;line-height:1.5"><li style="margin:0 0 8px">Tudo do Essencial</li><li style="margin:0 0 8px">Restaurante: cardápio digital, mesas e cozinha</li><li style="margin:0 0 8px">Nota fiscal (NFC-e)</li><li style="margin:0 0 8px">Operadores com PIN e equipe</li><li style="margin:0 0 8px">Relatórios avançados e ações automáticas</li><li style="margin:0 0 8px">Assistente com IA e Google Agenda</li></ul>
-      <a class="btn" data-app="/login.html?cadastro=1&amp;plano=completo&amp;ciclo=mensal" href="/login.html?cadastro=1&amp;plano=completo&amp;ciclo=mensal" style="margin-top:auto;text-align:center;background:#E8A33D;color:#14211D;border-radius:999px;padding:14px;font-weight:700">Assinar o Completo</a>
+  <div style="margin-top:40px;display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:20px;align-items:stretch;max-width:980px">
+    <div style="background:#14211D;color:#F5F4EF;border-radius:18px;padding:36px;display:flex;flex-direction:column;gap:14px">
+      <div style="font-weight:700;font-size:15px;color:#E8A33D;letter-spacing:.04em">LIVRO-CAIXA · SEM RESTRIÇÕES</div>
+      <div style="font-family:'Bricolage Grotesque',sans-serif;font-weight:800;font-size:52px;line-height:1.1"><span data-preco="completo-mensal">R$ 49,90</span><span style="font-size:16px;font-weight:500;color:#B9C7C1">/mês</span></div>
+      <div style="font-size:14px;color:#B9C7C1;margin-top:-6px">ou <b style="color:#F5F4EF"><span data-preco="completo-anual">R$ 499</span>/ano</b> (<span data-economia="completo">economize 17%</span>)</div>
+      <a class="btn" data-app="/login.html?cadastro=1&amp;plano=completo&amp;ciclo=mensal" href="/login.html?cadastro=1&amp;plano=completo&amp;ciclo=mensal" style="margin-top:8px;text-align:center;background:#E8A33D;color:#14211D;border-radius:999px;padding:14px;font-weight:700">Assinar o Livro-Caixa</a>
       <a data-app="/login.html?cadastro=1&amp;teste=1" href="/login.html?cadastro=1&amp;teste=1" style="text-align:center;font-size:14px;color:#D6E0DB;text-decoration:underline">ou testar 7 dias grátis</a>
     </div>
-    <div style="background:#fff;border:1px solid #E3E1D8;border-radius:18px;padding:32px;display:flex;flex-direction:column;gap:14px">
-      <div style="font-weight:700;font-size:15px;color:#5B6B66;letter-spacing:.04em">EQUIPE</div>
-      <div style="font-family:'Bricolage Grotesque',sans-serif;font-weight:800;font-size:34px;line-height:1.15">Sob consulta<span style="font-size:16px;font-weight:500;color:#5B6B66"></span></div>
-      <ul style="margin:0;padding-left:20px;color:#42524D;line-height:1.5"><li style="margin:0 0 8px">Vários acessos, um por pessoa</li><li style="margin:0 0 8px">Gestão de equipe, metas e ranking</li><li style="margin:0 0 8px">Condições sob medida para o seu time</li></ul>
-      <a class="btn" href="https://wa.me/5515988053447?text=Quero%20falar%20sobre%20o%20plano%20Equipe" style="margin-top:auto;text-align:center;border:2px solid #14211D;border-radius:999px;padding:14px;font-weight:700">Quero este plano</a>
+    <div style="background:#fff;border:1px solid #E3E1D8;border-radius:18px;padding:36px;display:flex;flex-direction:column;gap:14px">
+      <div style="font-weight:700;font-size:15px;color:#5B6B66;letter-spacing:.04em">O QUE ESTÁ INCLUÍDO</div>
+      <ul style="margin:0;padding-left:20px;color:#42524D;line-height:1.5"><li style="margin:0 0 8px">CRM: contatos, negociações, agenda e comissões</li><li style="margin:0 0 8px">Controle financeiro com o lucro de verdade</li><li style="margin:0 0 8px">PDV: balcão, caixa, estoque, clientes e fiado</li><li style="margin:0 0 8px">Equipe com funções e PIN, e o Painel do dono</li><li style="margin:0 0 8px">Restaurante: cardápio digital, mesas e cozinha</li><li style="margin:0 0 8px">Nota fiscal (NFC-e)</li><li style="margin:0 0 8px">Assistente com IA e Google Agenda</li><li style="margin:0 0 8px">Funciona sem internet, no celular e no computador</li></ul>
     </div>
   </div>
-  <div style="margin-top:16px;font-size:13px;color:#5B6B66">Todo cadastro começa com 7 dias grátis com tudo liberado (plano Completo), sem cartão. Quem já escolhe um plano só paga quando o teste acabar. Pague por Pix, boleto ou cartão e cancele quando quiser. Valores sujeitos a alteração.</div>
+  <div style="margin-top:16px;font-size:13px;color:#5B6B66">Todo cadastro começa com 7 dias grátis, com tudo liberado e sem cartão. Quem já assina só paga quando o teste acabar. Pague por Pix, boleto ou cartão e cancele quando quiser. Valores sujeitos a alteração.</div>
+
   <div style="margin-top:40px;background:#fff;border:1px solid #E3E1D8;border-radius:18px;padding:28px 32px;display:flex;flex-wrap:wrap;gap:20px;align-items:center;justify-content:space-between">
     <div style="flex:1 1 380px">
       <h3 style="margin:0;font-size:24px">Ficou com alguma dúvida?</h3>
-      <p style="margin:8px 0 0;color:#42524D;line-height:1.55">Fale com a gente no WhatsApp: tiramos dúvidas, mostramos o sistema funcionando e ajudamos a escolher o plano.</p>
+      <p style="margin:8px 0 0;color:#42524D;line-height:1.55">Fale com a gente no WhatsApp: tiramos dúvidas e mostramos o sistema funcionando.</p>
     </div>
     <a class="btn" href="https://wa.me/5515988053447?text=Ol%C3%A1!%20Quero%20saber%20mais%20sobre%20o%20Livro-Caixa" style="background:#0E6B53;color:#fff;padding:15px 26px;border-radius:999px;font-weight:700;font-size:17px;display:inline-flex;align-items:center;gap:10px"><svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2a10 10 0 0 0-8.6 15.1L2 22l5-1.3A10 10 0 1 0 12 2zm0 18.2a8.2 8.2 0 0 1-4.2-1.2l-.3-.2-3 .8.8-2.9-.2-.3A8.2 8.2 0 1 1 12 20.2zm4.5-6.1c-.2-.1-1.5-.7-1.7-.8s-.4-.1-.6.1-.7.8-.8 1-.3.2-.5.1a6.7 6.7 0 0 1-3.3-2.9c-.2-.4.2-.4.7-1.3.1-.2 0-.3 0-.4l-.8-1.8c-.2-.5-.4-.4-.6-.4h-.5a1 1 0 0 0-.7.3 3 3 0 0 0-.9 2.2 5.2 5.2 0 0 0 1.1 2.8 11.9 11.9 0 0 0 4.6 4c1.7.7 2.4.8 3.2.7a2.8 2.8 0 0 0 1.8-1.3 2.3 2.3 0 0 0 .2-1.3c-.1-.1-.3-.2-.5-.3z"/></svg>Falar no WhatsApp</a>
   </div>
@@ -286,7 +277,7 @@ img{max-width:100%}
   <div style="margin-top:28px;border-top:1px solid #D5D3C9">
     <details style="border-bottom:1px solid #D5D3C9;padding:6px 0">
       <summary style="cursor:pointer;padding:16px 0;font-family:'Bricolage Grotesque',sans-serif;font-weight:700;font-size:20px;">Como funciona o teste grátis?</summary>
-      <p style="margin:0 0 18px;color:#42524D;line-height:1.6">Você cria a conta e usa tudo do plano Completo por <span data-dias-teste>7</span> dias, inclusive o assistente com IA e o Google Agenda. Não pedimos cartão. No fim do teste, escolhe um plano para continuar; se não escolher, seus dados ficam guardados e você pode assinar depois.</p>
+      <p style="margin:0 0 18px;color:#42524D;line-height:1.6">Você cria a conta e usa tudo por <span data-dias-teste>7</span> dias, inclusive o assistente com IA e o Google Agenda. Não pedimos cartão. No fim do teste, é só assinar para continuar; se não assinar, seus dados ficam guardados e você pode assinar depois.</p>
     </details>
     <details style="border-bottom:1px solid #D5D3C9;padding:6px 0">
       <summary style="cursor:pointer;padding:16px 0;font-family:'Bricolage Grotesque',sans-serif;font-weight:700;font-size:20px;">Se eu assinar durante o teste, pago na hora?</summary>
@@ -297,8 +288,8 @@ img{max-width:100%}
       <p style="margin:0 0 18px;color:#42524D;line-height:1.6">Por Pix, boleto ou cartão de crédito, mensal ou anual. Você cancela quando quiser pela tela de assinatura, sem multa, e continua com acesso até o fim do período que já pagou.</p>
     </details>
     <details style="border-bottom:1px solid #D5D3C9;padding:6px 0">
-      <summary style="cursor:pointer;padding:16px 0;font-family:'Bricolage Grotesque',sans-serif;font-weight:700;font-size:20px;">Qual a diferença entre o Essencial e o Completo?</summary>
-      <p style="margin:0 0 18px;color:#42524D;line-height:1.6">Os dois têm o CRM e o Controle financeiro completos. O Completo inclui o assistente com IA e a integração com o Google Agenda.</p>
+      <summary style="cursor:pointer;padding:16px 0;font-family:'Bricolage Grotesque',sans-serif;font-weight:700;font-size:20px;">Tem algum recurso pago à parte?</summary>
+      <p style="margin:0 0 18px;color:#42524D;line-height:1.6">Não. É um plano só, com tudo liberado: CRM, Controle financeiro, PDV, equipe, cardápio digital, nota fiscal e o assistente com IA. Você escolhe só se paga por mês ou por ano.</p>
     </details>
     <details style="border-bottom:1px solid #D5D3C9;padding:6px 0">
       <summary style="cursor:pointer;padding:16px 0;font-family:'Bricolage Grotesque',sans-serif;font-weight:700;font-size:20px;">O que é o Controle financeiro?</summary>

@@ -5472,7 +5472,7 @@ function renderFaixaTeste(){
   const quanto = dias === 1 ? 'falta 1 dia' : `faltam ${dias} dias`;
   const titulo = boasVindasTeste ? `Bem-vindo ao Livro-Caixa! Você tem ${dias === 1 ? '1 dia' : `${dias} dias`} de teste grátis.` : `Teste grátis: ${quanto}.`;
   return `<div class="faixa-teste" role="status">
-    <div><b>${titulo}</b> Está tudo liberado, no plano Completo: assistente com IA, Google Agenda e o Controle financeiro. Não pedimos cartão; você só paga se quiser continuar depois do teste.</div>
+    <div><b>${titulo}</b> Está tudo liberado: CRM, Controle financeiro, PDV, equipe e assistente com IA. Não pedimos cartão; você só paga se quiser continuar depois do teste.</div>
     <div class="faixa-teste-acoes">
       <a class="btn-primary" href="assinatura.html?de=crm">Ver planos</a>
       <button type="button" class="faixa-teste-x" data-action="fechar-faixa-teste" aria-label="Fechar aviso do teste grátis">✕</button>

@@ -86,7 +86,7 @@ router.get('/resumo', async (req, res) => {
     const fixos = D.donosFixos();
     const adicionados = new Set((await D.listarDonos()).map((d) => d.email));
     const contagem = {};
-    const porPlano = { essencial: 0, completo: 0 };
+    const porPlano = { completo: 0 };
     let receitaMensal = 0;
     let anuais = 0;
     let testeAcabou = 0;

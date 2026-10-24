@@ -21,15 +21,15 @@ let tempToken2FA = null;
 
 /* Vindo da página de divulgação:
    ?cadastro=1&teste=1                        -> "Quero uma demonstração": cria a conta e cai no CRM, no teste grátis
-   ?cadastro=1&plano=essencial|completo&ciclo=mensal|anual -> cria a conta e segue pro pagamento desse plano
+   ?cadastro=1&plano=completo&ciclo=mensal|anual -> cria a conta e segue pro pagamento (plano único;
+                                              links antigos com plano=essencial levam ao mesmo plano)
    A escolha fica guardada na aba (sessionStorage) até o login terminar (inclusive com Google ou 2FA). */
 const PLANOS_DIVULGACAO = {
-  essencial: { nome: 'Essencial', mensal: 'R$ 29,90/mês', anual: 'R$ 300/ano' },
-  completo: { nome: 'Completo', mensal: 'R$ 39,90/mês', anual: 'R$ 400/ano' },
+  completo: { nome: 'Completo', mensal: 'R$ 49,90/mês', anual: 'R$ 499/ano' },
 };
 (function guardarIntencao(){
   const q = new URLSearchParams(location.search);
-  const plano = q.get('plano');
+  const plano = q.get('plano') ? 'completo' : null;
   if(PLANOS_DIVULGACAO[plano]){
     try{ sessionStorage.setItem('intencaoCadastro', JSON.stringify({ plano, ciclo: q.get('ciclo') === 'anual' ? 'anual' : 'mensal' })); }catch(e){}
   } else if(q.get('teste') === '1'){
@@ -61,10 +61,10 @@ if(localStorage.getItem('token')){
   if(!el || !i) return;
   if(i.plano){
     const p = PLANOS_DIVULGACAO[i.plano];
-    el.innerHTML = `<b>Você escolheu o plano ${p.nome}</b> (${i.ciclo === 'anual' ? p.anual : p.mensal}). Crie sua conta e, em seguida, escolha como pagar: Pix, boleto ou cartão.
-      <span class="auth-oferta-sub">Prefere testar antes? Você ganha <b>7 dias grátis com tudo liberado</b>, no plano Completo, e só paga quando o teste acabar.</span>`;
+    el.innerHTML = `<b>Você escolheu assinar o Livro-Caixa</b> (${i.ciclo === 'anual' ? p.anual : p.mensal}, tudo incluído). Crie sua conta e, em seguida, escolha como pagar: Pix, boleto ou cartão.
+      <span class="auth-oferta-sub">Prefere testar antes? Você ganha <b>7 dias grátis com tudo liberado</b>, e só paga quando o teste acabar.</span>`;
   } else {
-    el.innerHTML = `<b>7 dias grátis com tudo liberado.</b> Durante o teste você usa o plano Completo, com o assistente de IA e a integração com o Google Agenda. Não pede cartão.`;
+    el.innerHTML = `<b>7 dias grátis com tudo liberado.</b> Durante o teste você usa tudo, inclusive o assistente de IA e a equipe. Não pede cartão.`;
   }
   el.hidden = false;
 })();

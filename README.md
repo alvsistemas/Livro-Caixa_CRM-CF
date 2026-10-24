@@ -584,20 +584,20 @@ Cobrança mensal por Pix, boleto ou cartão, com teste grátis. Tutorial complet
 funciona, sandbox → produção) no documento "Assinatura com o Asaas".
 
 - **Desligada por padrão:** sem `ASAAS_API_KEY` nada muda (tudo liberado). Variáveis no `server/.env.example`.
-- **Planos:** Essencial (R$ 29,90: CRM + financeiro) e Completo (R$ 39,90: + IA e
-  Google Agenda), iguais aos da página de divulgação. Preço muda por variável de ambiente.
-- **Teste grátis:** 7 dias a partir do primeiro acesso depois de ligar a cobrança, com tudo do Completo.
+- **Plano único (versão 20261160):** R$ 49,90/mês ou R$ 499/ano, sem restrições (id interno `completo`).
+  Preço muda por variável de ambiente (`ASSINATURA_VALOR_COMPLETO` e `_ANUAL`).
+- **Teste grátis:** 7 dias a partir do primeiro acesso depois de ligar a cobrança, com tudo liberado.
 - **Quem diz o que foi pago é o Asaas:** o webhook (`POST /api/assinatura/webhook`, token no
   header `asaas-access-token`) só avisa; o servidor consulta o Asaas e recalcula. Uma conferência
   de hora em hora corrige avisos perdidos.
 - **Bloqueio:** sem pagamento (fora do teste e da tolerância de 3 dias), a API responde 402 e o
   site leva pra `assinatura.html`. Continuam abertos: login, assinatura e exportar os dados.
-  Recursos do Completo respondem 403 no Essencial.
+  Quem assinou o antigo Essencial passa a ter tudo e continua pagando o valor contratado.
 - **Banco:** migração `004_assinaturas.sql` (`assinaturas`: a pessoa só LÊ a própria linha, só o
   sistema grava; `assinatura_eventos`: avisos já processados, pra não repetir).
 - **Arquivos:** `server/utils/asaas.js`, `server/utils/assinatura.js`, `server/routes/assinatura.js`,
   `public/assinatura.html`, `public/js/assinatura.js`, `public/css/assinatura.css`.
-- **Plano anual:** R$ 300 (Essencial) e R$ 400 (Completo), cycle YEARLY no Asaas; acesso de 12 meses por cobrança paga.
+- **Plano anual:** R$ 499, cycle YEARLY no Asaas; acesso de 12 meses por cobrança paga.
 - **Descontos:** pessoal (Painel do dono → Desconto) ou promoção para novos (Painel do dono), por N meses ou para sempre. Campos `desconto_*` em `assinaturas`; promoção em `configuracoes_sistema` (migração `006`). Preço contratado guardado em `valor_contratado`.
 - **Valor mudou → assinatura nova:** a API do Asaas não garante mudar o valor; `recriarAssinatura` cria a nova a partir do próximo vencimento e só então apaga a antiga (desfaz se falhar). Período pago anterior fica em `pago_ate_base`. A sincronização confere se o valor da próxima fatura bate com `valorDevido` (fim de desconto) e corrige sozinha.
 - **E-mails da assinatura** (`server/utils/avisosAssinatura.js`, com Resend configurado): teste acabando/acabou, fatura próxima/vencida, pagamento confirmado; uma vez cada (tabela `assinatura_avisos`), das 9h às 20h. Com eles ligados, `notificationDisabled` desliga os avisos do Asaas (`ASSINATURA_AVISOS=asaas` mantém o Asaas avisando).
@@ -739,16 +739,11 @@ estiver ativa. Rotas do app: `/api/estoque/*` (`server/routes/estoque.js`, regra
 Servidor: `server/utils/caixa.js`, rotas `/api/estoque/caixa*`, `/api/estoque/operadores*`,
 `/api/estoque/clientes/:id/fiado*`, migração `012_pdv_caixa.sql`.
 
-### O que é de cada plano (versão 20261150)
+### Plano (versão 20261160)
 
-- **Essencial:** CRM (contatos, negociações, agenda, comissões), Controle financeiro completo e PDV básico
-  (balcão, caixa, estoque, clientes, fiado, fidelidade, venda sem internet, planilhas).
-- **Completo:** tudo do Essencial + assistente com IA, Google Agenda, restaurante (cardápio digital, mesas,
-  cozinha, pedidos), nota fiscal (NFC-e e compra pelo XML), equipe (operadores com PIN no PDV; criar e
-  supervisionar equipe no CRM), relatórios avançados do PDV e ações automáticas/sequências do CRM.
-- No teste grátis tudo fica liberado. No Essencial, o que é do Completo aparece com o selo "Completo" e uma
-  tela explicando, com o botão "Ver planos"; o que a pessoa já tinha criado fica guardado (as ações
-  automáticas param, o cardápio público sai do ar e o PIN deixa de ser pedido) e volta ao mudar de plano.
+Um plano só, com tudo liberado (R$ 49,90/mês ou R$ 499/ano). A estrutura de recursos por plano
+(`recursos`, `temRecurso`, `recursoDoCaminho`) continua no código, toda liberada, caso um dia volte a
+existir mais de um plano. Links antigos com `plano=essencial` levam ao plano único.
 
 ### Botões maiores no celular (versão 20261147)
 

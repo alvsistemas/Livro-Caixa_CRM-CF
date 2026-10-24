@@ -13,10 +13,11 @@
      ASSINATURA_DIAS_TESTE ............ dias grátis a partir do primeiro acesso (padrão 7)
      ASSINATURA_TOLERANCIA_DIAS ....... dias depois do vencimento antes de bloquear (padrão 3)
      ASSINATURA_LIBERADOS ............. e-mails sem cobrança, separados por vírgula
-     ASSINATURA_VALOR_ESSENCIAL ....... preço mensal do Essencial (padrão 29.90)
-     ASSINATURA_VALOR_COMPLETO ........ preço mensal do Completo (padrão 39.90)
-     ASSINATURA_VALOR_ESSENCIAL_ANUAL . preço anual do Essencial (padrão 300)
-     ASSINATURA_VALOR_COMPLETO_ANUAL .. preço anual do Completo (padrão 400)
+     ASSINATURA_VALOR_COMPLETO ........ preço mensal do plano (padrão 49.90)
+     ASSINATURA_VALOR_COMPLETO_ANUAL .. preço anual do plano (padrão 499)
+   Plano único (desde a versão 20261160): um plano só, sem restrições. Quem assinou o antigo
+   "Essencial" passa a ter tudo, e quem já paga continua com o valor contratado (valor_contratado)
+   até trocar de mensal para anual ou o contrário.
      ASSINATURA_AVISOS ................ "asaas" = deixa o Asaas avisar as cobranças; sem isso, com o
                                         e-mail (Resend) configurado, quem avisa é o Livro-Caixa
      ASSINATURA_URL_RETORNO ........... pra onde o Asaas manda a pessoa depois de pagar
@@ -29,22 +30,18 @@ const { emailConfigurado } = require('./email');
 
 const DIA = 24 * 60 * 60 * 1000;
 
+// Um plano só, com tudo. O id continua "completo" (assinaturas e links antigos seguem valendo).
 const PLANOS = {
-  essencial: {
-    nome: 'Essencial',
-    valorPadrao: 29.9,
-    valorAnualPadrao: 300,
-    itens: ['CRM: contatos, negociações, agenda e comissões', 'Controle financeiro completo', 'PDV: venda no balcão, caixa, estoque, clientes, fiado e fidelidade', 'Venda sem internet e planilhas do Excel', 'Celular e computador'],
-    recursos: { ia: false, googleAgenda: false, restaurante: false, nfce: false, equipe: false, relatorios: false, automacoes: false },
-  },
   completo: {
     nome: 'Completo',
-    valorPadrao: 39.9,
-    valorAnualPadrao: 400,
-    itens: ['Tudo do Essencial', 'Assistente com IA (CRM e financeiro)', 'Integração com o Google Agenda', 'Restaurante: cardápio digital, mesas e comandas, tela da cozinha e garçom', 'Nota fiscal (NFC-e) e compra pelo XML da NF-e', 'Equipe: operadores com PIN no PDV, membros e supervisão no CRM', 'Relatórios avançados: lucro por produto, margem e horários mais fortes', 'Ações automáticas e sequências no CRM'],
+    valorPadrao: 49.9,
+    valorAnualPadrao: 499,
+    itens: ['CRM: contatos, negociações, agenda e comissões', 'Controle financeiro com o lucro de verdade', 'PDV: balcão, caixa, estoque, clientes, fiado e fidelidade', 'Equipe com funções e PIN, e o Painel do dono', 'Restaurante: cardápio digital, mesas, comandas e cozinha', 'Nota fiscal (NFC-e) e compra pelo XML da NF-e', 'Assistente com IA e Google Agenda', 'Relatórios avançados, ações automáticas e sequências', 'Venda sem internet, no celular e no computador'],
     recursos: { ia: true, googleAgenda: true, restaurante: true, nfce: true, equipe: true, relatorios: true, automacoes: true },
   },
 };
+// plano antigo (ex.: "essencial") vira o plano único
+const planoValido = (p) => (PLANOS[p] ? p : 'completo');
 const CICLOS = { mensal: { asaas: 'MONTHLY', meses: 1, nome: 'mensal' }, anual: { asaas: 'YEARLY', meses: 12, nome: 'anual' } };
 const TODOS_OS_RECURSOS = { ia: true, googleAgenda: true, restaurante: true, nfce: true, equipe: true, relatorios: true, automacoes: true };
 const NENHUM_RECURSO = Object.fromEntries(Object.keys(TODOS_OS_RECURSOS).map((k) => [k, false]));
@@ -119,7 +116,7 @@ function descontoVale(linha, vencimento) {
 // Preço de tabela da pessoa: o contratado se for o mesmo plano/ciclo, senão o atual da tabela
 function valorBase(linha, plano, ciclo) {
   const l = linha || {};
-  if (l.valor_contratado && l.plano === plano && (l.ciclo || 'mensal') === ciclo) return centavos(l.valor_contratado);
+  if (l.valor_contratado && planoValido(l.plano) === plano && (l.ciclo || 'mensal') === ciclo) return centavos(l.valor_contratado);
   return valorDoPlano(plano, ciclo);
 }
 // Quanto a cobrança que vence em "vencimento" deve custar
@@ -366,8 +363,8 @@ async function sincronizar(userId, { semAjuste = false } = {}) {
   }
 
   // assinatura de antes desta versão: guarda o preço da tabela de agora como o contratado
-  if (!apagada && atual.valor_contratado == null && PLANOS[atual.plano]) {
-    const contratado = valorDoPlano(atual.plano, atual.ciclo || 'mensal');
+  if (!apagada && atual.valor_contratado == null && atual.plano) {
+    const contratado = valorDoPlano(planoValido(atual.plano), atual.ciclo || 'mensal');
     await query('UPDATE assinaturas SET valor_contratado = $2 WHERE user_id = $1 AND valor_contratado IS NULL', [userId, contratado]);
     atual.valor_contratado = contratado;
   }
@@ -398,9 +395,10 @@ async function recriarAssinatura(userId, { plano, ciclo }) {
   if (!linha || !linha.asaas_assinatura_id || linha.status === 'cancelada' || !linha.asaas_cliente_id) {
     throw new ErroAsaas('Não há assinatura ativa para alterar.', 400);
   }
-  const novoPlano = PLANOS[plano] ? plano : linha.plano;
+  const novoPlano = PLANOS[plano] ? plano : planoValido(linha.plano);
   const novoCiclo = CICLOS[ciclo] ? ciclo : (linha.ciclo || 'mensal');
-  const mudouContrato = novoPlano !== linha.plano || novoCiclo !== (linha.ciclo || 'mensal');
+  // de um plano antigo para o único, mantendo o ciclo: continua com o valor contratado
+  const mudouContrato = novoCiclo !== (linha.ciclo || 'mensal');
   // começa no vencimento da fatura em aberto, ou no fim do período pago — nunca no passado
   const hoje = hojeEmBrasilia();
   const fimPago = dataDeBrasilia([linha.pago_ate, linha.pago_ate_base].filter(Boolean).sort((a, b) => new Date(b) - new Date(a))[0]);
@@ -472,7 +470,7 @@ async function criarNoAsaas(clienteId, userId, { plano, ciclo, valor, vencimento
 
 async function assinar(userId, { plano, ciclo = 'mensal', nome, cpfCnpj, email }) {
   if (!cobrancaLigada()) throw new ErroAsaas('A cobrança não está ligada neste servidor.', 400);
-  if (!PLANOS[plano]) throw new ErroAsaas('Escolha um plano válido.', 400);
+  plano = planoValido(plano); // links antigos com ?plano=essencial levam ao plano único
   if (!CICLOS[ciclo]) throw new ErroAsaas('Escolha mensal ou anual.', 400);
   const documento = String(cpfCnpj || '').replace(/\D/g, '');
   if (!cpfCnpjValido(documento)) throw new ErroAsaas('CPF ou CNPJ inválido. Confira os números.', 400);
@@ -533,10 +531,9 @@ async function trocarPlano(userId, { plano, ciclo }) {
     if (!linha.asaas_assinatura_id || linha.status === 'cancelada') {
       throw new ErroAsaas('Você ainda não tem assinatura ativa. Escolha um plano para assinar.', 400);
     }
-    const novoPlano = PLANOS[plano] ? plano : linha.plano;
+    const novoPlano = PLANOS[plano] ? plano : planoValido(linha.plano);
     const novoCiclo = CICLOS[ciclo] ? ciclo : (linha.ciclo || 'mensal');
-    if (!PLANOS[plano] && plano) throw new ErroAsaas('Escolha um plano válido.', 400);
-    if (novoPlano === linha.plano && novoCiclo === (linha.ciclo || 'mensal')) return { plano: novoPlano, ciclo: novoCiclo };
+    if (novoPlano === planoValido(linha.plano) && novoCiclo === (linha.ciclo || 'mensal')) return { plano: novoPlano, ciclo: novoCiclo };
     await sincronizar(userId, { semAjuste: true }); // parte do estado mais recente do Asaas
     await recriarAssinatura(userId, { plano: novoPlano, ciclo: novoCiclo });
     return { plano: novoPlano, ciclo: novoCiclo };
@@ -637,7 +634,7 @@ async function sincronizarPendentes() {
 }
 
 module.exports = { recursosDe, temRecurso, NENHUM_RECURSO, TODOS_OS_RECURSOS,
-  PLANOS, CICLOS, listaDePlanos, valorDoPlano, valorDevido, descontoVale, cobrancaLigada, avisosProprios,
+  PLANOS, CICLOS, planoValido, listaDePlanos, valorDoPlano, valorDevido, descontoVale, cobrancaLigada, avisosProprios,
   calcularAcesso, situacaoDe, esquecer, precosPara,
   cpfCnpjValido, somarUmMes, somarMeses, hojeEmBrasilia, situacaoPelasCobrancas,
   sincronizar, assinar, trocarPlano, cancelar, definirDescontoPessoal,

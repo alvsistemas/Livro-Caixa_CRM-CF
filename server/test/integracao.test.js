@@ -69,7 +69,7 @@ describe('API com PostgreSQL (integração)', { skip: pular }, () => {
     assert.equal(res.headers.get('x-content-type-options'), 'nosniff');
     assert.equal(res.headers.get('x-frame-options'), 'SAMEORIGIN');
     const d = await res.json();
-    assert.deepEqual(d.planos.map((p) => [p.id, p.valor, p.valorAnual]), [['essencial', 29.9, 300], ['completo', 39.9, 400]]);
+    assert.deepEqual(d.planos.map((p) => [p.id, p.valor, p.valorAnual]), [['completo', 49.9, 499]]);
     assert.equal(d.diasTeste, 7);
     assert.equal(d.promocao, null);
     // a raiz É a tela inicial do sistema; a divulgação fica em /conheca
@@ -894,7 +894,7 @@ describe('API com PostgreSQL (integração)', { skip: pular }, () => {
       assert.match(ass.dados.link, /^https:\/\/sandbox\.asaas\.com\/i\//);
       const sub = Object.values(fake.assinaturas)[0];
       assert.equal(sub.billingType, 'UNDEFINED');
-      assert.equal(sub.value, 39.9);
+      assert.equal(sub.value, 49.9);
       assert.equal(sub.cycle, 'MONTHLY');
       assert.equal(sub.nextDueDate, A.hojeEmBrasilia(new Date(Date.now() + 7 * 86400000)), '1ª cobrança vence no fim do teste');
       assert.equal(fake.clientes[sub.customer].cpfCnpj, '52998224725');
@@ -942,48 +942,23 @@ describe('API com PostgreSQL (integração)', { skip: pular }, () => {
       fake.cobrancas[0].status = 'RECEIVED';
       assert.equal((await api('POST', '/api/assinatura/atualizar', {}, t)).dados.situacao.liberado, true);
 
-      // troca pro Essencial: o sistema cria uma assinatura nova (a partir do próximo vencimento)
-      // e apaga a antiga; o mês já pago continua valendo
+      // plano único: tudo liberado para quem paga; "trocar" para o antigo Essencial não muda nada
       const ativa = (clienteId) => Object.values(fake.assinaturas).filter((a) => a.customer === clienteId && !a.deleted);
-      const troca = await api('POST', '/api/assinatura/trocar-plano', { plano: 'essencial' }, t);
-      assert.equal(troca.status, 200, JSON.stringify(troca.dados));
-      assert.equal(fake.assinaturas[sub.id].deleted, true, 'a antiga é apagada');
-      const sub2 = ativa(sub.customer);
-      assert.equal(sub2.length, 1, 'só uma assinatura ativa');
-      assert.equal(sub2[0].value, 29.9);
-      assert.equal(sub2[0].cycle, 'MONTHLY');
-      assert.equal(sub2[0].nextDueDate, A.somarMeses(sub.nextDueDate, 1), 'começa quando o mês pago acaba');
-      assert.equal(troca.dados.situacao.liberado, true);
-      assert.equal(troca.dados.situacao.plano, 'essencial');
-      const ia = await api('POST', '/api/ai/assistente', { mensagens: [{ role: 'user', content: 'oi' }] }, t);
-      assert.equal(ia.status, 403);
-      assert.equal(ia.dados.recurso, 'ia');
-      // o resto do que é só do Completo
-      for (const [m, c, rec] of [['GET', '/api/estoque/mesas', 'restaurante'], ['GET', '/api/estoque/cozinha', 'restaurante'], ['GET', '/api/estoque/analises?de=2026-01-01&ate=2026-01-31', 'relatorios'],
-        ['GET', '/api/estoque/fiscal', 'nfce'], ['POST', '/api/estoque/operadores', 'equipe'], ['POST', '/api/automacoes', 'automacoes'], ['POST', '/api/fluxos', 'automacoes'], ['POST', '/api/equipe', 'equipe']]) {
-        const r = await api(m, c, m === 'GET' ? undefined : {}, t);
-        assert.equal(r.status, 403, `${m} ${c}`);
-        assert.equal(r.dados.recurso, rec, c);
-        assert.match(r.dados.error, /plano Completo/);
-      }
-      assert.equal((await api('GET', '/api/fluxos', undefined, t)).status, 200, 'ver o que já tinha continua aberto');
-      assert.equal((await api('GET', '/api/estoque/operadores', undefined, t)).status, 200);
-      const pdvEss = (await api('GET', '/api/estoque', undefined, t)).dados;
-      assert.equal(pdvEss.recursos.restaurante, false);
-      assert.equal(pdvEss.pdv.exigirOperador, false);
-      assert.equal((await api('PUT', '/api/estoque/pdv', { exigirOperador: true }, t)).status, 400, 'PIN é do Completo');
-      // aviso da assinatura antiga apagada chega depois: é ignorado
-      assert.equal((await aviso({ id: 'evt_old', event: 'SUBSCRIPTION_DELETED', subscription: { id: sub.id, deleted: true } }, 'token-do-webhook-teste')).status, 200);
-      await new Promise((r2) => setTimeout(r2, 200));
-      assert.equal((await api('GET', '/api/assinatura', undefined, t)).dados.status, 'ativa', 'troca com mês pago continua em dia');
+      const mesmo = await api('POST', '/api/assinatura/trocar-plano', { plano: 'essencial' }, t);
+      assert.equal(mesmo.status, 200, JSON.stringify(mesmo.dados));
+      assert.ok(!fake.assinaturas[sub.id].deleted, 'nada mudou');
+      assert.equal((await api('GET', '/api/estoque/mesas', undefined, t)).status, 200);
+      assert.equal((await api('GET', '/api/estoque', undefined, t)).dados.recursos.equipe, true);
 
-      // vira anual: nova assinatura YEARLY de R$ 300, começando no fim do período pago
-      const anual = await api('POST', '/api/assinatura/trocar-plano', { plano: 'essencial', ciclo: 'anual' }, t);
+      // vira anual: nova assinatura YEARLY de R$ 499, começando no fim do período pago
+      const anual = await api('POST', '/api/assinatura/trocar-plano', { plano: 'completo', ciclo: 'anual' }, t);
       assert.equal(anual.status, 200, JSON.stringify(anual.dados));
       const sub3 = ativa(sub.customer);
       assert.equal(sub3.length, 1);
       assert.equal(sub3[0].cycle, 'YEARLY');
-      assert.equal(sub3[0].value, 300);
+      assert.equal(sub3[0].value, 499);
+      assert.equal(sub3[0].nextDueDate, A.somarMeses(sub.nextDueDate, 1), 'começa quando o mês pago acaba');
+      assert.equal(fake.assinaturas[sub.id].deleted, true, 'a antiga é apagada');
       assert.equal(anual.dados.situacao.ciclo, 'anual');
       assert.equal(anual.dados.situacao.liberado, true);
 
@@ -1015,17 +990,17 @@ describe('API com PostgreSQL (integração)', { skip: pular }, () => {
       assert.equal(desc.status, 200, JSON.stringify(desc.dados));
       let s4 = ativa(sub.customer);
       assert.equal(s4.length, 1);
-      assert.equal(s4[0].value, 19.95, '50% de R$ 39,90');
+      assert.equal(s4[0].value, 24.95, '50% de R$ 49,90');
       s = await api('GET', '/api/assinatura', undefined, t);
       assert.equal(s.dados.desconto.percentual, 50);
       assert.equal(s.dados.desconto.origem, 'pessoal');
-      assert.equal(s.dados.valorAtual, 19.95);
+      assert.equal(s.dados.valorAtual, 24.95);
       // os 2 meses passaram: na próxima conferência o valor volta ao normal
       await query("UPDATE assinaturas SET desconto_ate = (now() - interval '1 day')::date WHERE user_id = $1", [id]);
       await api('POST', '/api/assinatura/atualizar', {}, t);
       s4 = ativa(sub.customer);
       assert.equal(s4.length, 1);
-      assert.equal(s4[0].value, 39.9, 'desconto acabou: preço cheio');
+      assert.equal(s4[0].value, 49.9, 'desconto acabou: preço cheio');
       // tirar o desconto de vez
       assert.equal((await api('PUT', `/api/dono/clientes/${id}/desconto`, { percentual: 0 }, td)).status, 200);
 
@@ -1036,24 +1011,24 @@ describe('API com PostgreSQL (integração)', { skip: pular }, () => {
       const novo = await api('POST', '/api/auth/register', { nome: 'Edu', email: 'edu@teste.com', senha: 'senha123' });
       const te = novo.dados.token;
       const precos = await api('GET', '/api/assinatura', undefined, te);
-      assert.equal(precos.dados.ofertas.completo.mensal.final, 31.92, '20% de R$ 39,90');
-      assert.equal(precos.dados.ofertas.essencial.anual.final, 240, '20% de R$ 300');
+      assert.equal(precos.dados.ofertas.completo.mensal.final, 39.92, '20% de R$ 49,90');
+      assert.equal(precos.dados.ofertas.completo.anual.final, 399.2, '20% de R$ 499');
       assert.equal(precos.dados.desconto.origem, 'promocao');
       const assEdu = await api('POST', '/api/assinatura/assinar', { plano: 'essencial', ciclo: 'anual', nome: 'Edu Lima', cpfCnpj: '11.222.333/0001-81' }, te);
       assert.equal(assEdu.status, 200, JSON.stringify(assEdu.dados));
-      assert.equal(assEdu.dados.valor, 240);
+      assert.equal(assEdu.dados.valor, 399.2, 'link antigo do Essencial assina o plano único');
       const subEdu = Object.values(fake.assinaturas).find((a) => fake.clientes[a.customer].cpfCnpj === '11222333000181');
       assert.equal(subEdu.cycle, 'YEARLY');
-      assert.equal(subEdu.value, 240);
+      assert.equal(subEdu.value, 399.2);
       // promoção desligada depois: quem já assinou mantém (para sempre)
       await api('PUT', '/api/dono/promocao', { ativa: false }, td);
       const edu2 = await api('POST', '/api/assinatura/atualizar', {}, te);
       assert.equal(edu2.dados.situacao.desconto.percentual, 20);
-      assert.equal(Object.values(fake.assinaturas).filter((a) => a.customer === subEdu.customer && !a.deleted)[0].value, 240);
+      assert.equal(Object.values(fake.assinaturas).filter((a) => a.customer === subEdu.customer && !a.deleted)[0].value, 399.2);
       // pago o anual: acesso por 12 meses
       fake.cobrancas.find((c) => c.subscription === subEdu.id).status = 'CONFIRMED';
       const edu3 = await api('POST', '/api/assinatura/atualizar', {}, te);
-      assert.equal(edu3.dados.situacao.pagoAte.slice(0, 7), A.somarMeses(subEdu.nextDueDate, 12).slice(0, 7));
+      assert.equal(A.hojeEmBrasilia(new Date(edu3.dados.situacao.pagoAte)).slice(0, 7), A.somarMeses(subEdu.nextDueDate, 12).slice(0, 7)); // no fuso de Brasília (fim de mês não vira o mês seguinte)
       // painel do dono: receita em equivalente mensal e anuais contados
       const resumo = await api('GET', '/api/dono/resumo', undefined, td);
       assert.equal(resumo.status, 200);
