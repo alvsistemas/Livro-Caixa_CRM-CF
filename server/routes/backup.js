@@ -1,4 +1,5 @@
 const express = require('express');
+const { restaurarPdv } = require('../utils/backupPdv');
 const auth = require('../middleware/auth');
 
 const User = require('../models/User');
@@ -198,6 +199,14 @@ router.post('/importar-tudo', async (req, res) => {
     const resultado = {};
     for (const [chave, Model] of mapaColecoes) {
       resultado[chave] = await restaurarColecao(Model, backup[chave], userId);
+    }
+
+    // PDV: produtos, estoque, clientes, vendas, caixas, mesas… (backups de antes desta versão só
+    // tinham uma cópia para consulta, em "caixaEstoque", que não dá para restaurar)
+    if (backup.pdv && typeof backup.pdv === 'object') {
+      resultado.pdv = await restaurarPdv(userId, backup.pdv);
+    } else if (backup.caixaEstoque) {
+      resultado.pdv = { aviso: 'Este backup é de uma versão antiga: o PDV veio só para consulta e não foi restaurado.' };
     }
 
     // Controle financeiro: substitui as seções que vieram no arquivo.

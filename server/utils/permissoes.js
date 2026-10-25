@@ -4,9 +4,8 @@
 
    O servidor aplica as regras em middleware/auth.js (regraDoCaminho); o site esconde
    as abas e botões, mas quem garante é o servidor. */
-const User = require('../models/User');
-const Equipe = require('../models/Equipe');
 const { comoSistema } = require('../db/contexto');
+const { query } = require('../db/pool');
 
 const ABAS = [
   { chave: 'dashboard', nome: 'Visão geral' },
@@ -60,12 +59,21 @@ function limparCache() { cache.clear(); }
 async function permissoesDe(userId) {
   const c = cache.get(String(userId));
   if (c && c.ate > Date.now()) return c.valor;
+  // Vale a regra mais restrita de todas as equipes em que a pessoa é MEMBRO (não só a aberta):
+  // assim ninguém escapa do que o gestor bloqueou só abrindo outra equipe (ou criando a própria).
   const valor = await comoSistema(async () => {
-    const u = await User.findById(userId).select('equipeId papelEquipe');
-    if (!u || !u.equipeId || u.papelEquipe === 'supervisor') return { ...TUDO, restrito: false };
-    const e = await Equipe.findById(u.equipeId);
-    if (!e) return { ...TUDO, restrito: false };
-    return { ...normalizar(e.permissoes), restrito: true };
+    const { rows } = await query(
+      `SELECT e.permissoes FROM equipe_membros m JOIN equipes e ON e.id = m.equipe_id
+        WHERE m.user_id = $1 AND m.papel = 'membro'`, [String(userId)]);
+    if (!rows.length) return { ...TUDO, restrito: false };
+    const final = normalizar({});
+    for (const r of rows) {
+      const p = normalizar(r.permissoes || {});
+      for (const grupo of ['abas', 'funcoes']) {
+        for (const k of Object.keys(final[grupo])) final[grupo][k] = final[grupo][k] && p[grupo][k] !== false;
+      }
+    }
+    return { ...final, restrito: true };
   });
   cache.set(String(userId), { valor, ate: Date.now() + CACHE_MS });
   return valor;

@@ -7,6 +7,9 @@ const A = require('../utils/acesso');
 const C = require('../utils/caixa');
 const { query } = require('../db/pool');
 const { hojeBR } = require('../utils/fechamento');
+const { dadosDoCrm, resumoDoMes } = require('../utils/financeiroResumo');
+const { carregarFinanceiro } = require('../utils/financeiro');
+const Calc = require('../../public/financeiro/calculos');
 
 const router = express.Router();
 router.use(auth);
@@ -24,9 +27,10 @@ router.get('/', async (req, res) => {
       query('SELECT count(*)::int AS n, COALESCE(sum(total),0) AS total, COALESCE(sum(total - cmv - taxa),0) AS lucro, COALESCE(sum(desconto),0) AS descontos FROM estoque_vendas WHERE user_id = $1::uuid AND NOT cancelada AND data >= $2', [u, inicioMes]),
       query(`SELECT operador, count(*)::int AS n, COALESCE(sum(total),0) AS total FROM estoque_vendas WHERE user_id = $1::uuid AND NOT cancelada AND data >= $2 GROUP BY operador`, [u, inicioMes]),
       query(`SELECT numero, aberto_por, aberto_em FROM estoque_caixas WHERE user_id = $1::uuid AND status = 'aberto'`, [u]),
-      query('SELECT count(*)::int AS n FROM clientes WHERE user_id = $1::uuid AND created_at >= $2::date', [u, inicioMes]),
-      query(`SELECT count(*)::int AS n, COALESCE(sum(c.valor),0) AS total FROM clientes c JOIN colunas k ON k.id = c.column_id
-             WHERE c.user_id = $1::uuid AND k.tipo = 'ganho' AND c.mes LIKE $2`, [u, `${mes}%`]),
+      // contatos novos pelo "início de contato" (o mesmo filtro do mês no Pipeline)
+      query("SELECT count(*)::int AS n FROM clientes WHERE user_id = $1::uuid AND NOT arquivado AND left(mes_inicio_contato, 7) = $2", [u, mes]),
+      // vendas do CRM e lucro do Controle financeiro: as mesmas regras das abas Painel e Lucro
+      (async () => { const crm = await dadosDoCrm(u); const fin = await carregarFinanceiro(u); return { vendas: Calc.vendasDoCrmNoMes(crm, mes), fin: resumoDoMes(fin, crm, mes) }; })(),
       query('SELECT count(*)::int AS n, COALESCE(sum(total),0) AS total FROM estoque_vendas WHERE user_id = $1::uuid AND cancelada AND data >= $2', [u, inicioMes]),
       query(`(SELECT 'cancelada' AS tipo, cancelada_em AS quando, numero, total AS valor, operador AS quem FROM estoque_vendas WHERE user_id = $1::uuid AND cancelada AND cancelada_em IS NOT NULL ORDER BY cancelada_em DESC LIMIT 6)
              UNION ALL (SELECT 'desconto', criado_em, numero, desconto, operador FROM estoque_vendas WHERE user_id = $1::uuid AND NOT cancelada AND desconto > 0 ORDER BY criado_em DESC LIMIT 6)
@@ -35,6 +39,7 @@ router.get('/', async (req, res) => {
       A.opcoesDaEquipe(u),
       A.codigoDaLoja(u),
     ]);
+    const esquecidos = await require('../utils/pdvResumo').esquecidos(u);
     const vendasPor = new Map(porOp.rows.map((r) => [r.operador, { vendas: r.n, total: r2(r.total) }]));
     const verCustos = !req.acesso || req.acesso.perm.custos;
     res.json({
@@ -43,8 +48,12 @@ router.get('/', async (req, res) => {
         hoje: { vendas: vHoje.rows[0].n, total: r2(vHoje.rows[0].total) },
         mes: { vendas: vMes.rows[0].n, total: r2(vMes.rows[0].total), ticket: vMes.rows[0].n ? r2(vMes.rows[0].total / vMes.rows[0].n) : 0, descontos: r2(vMes.rows[0].descontos), ...(verCustos ? { lucro: r2(vMes.rows[0].lucro) } : {}) },
         canceladas: { vendas: cancel.rows[0].n, total: r2(cancel.rows[0].total) },
-        caixa: caixa.rows[0] ? { numero: caixa.rows[0].numero, abertoPor: caixa.rows[0].aberto_por || '', desde: caixa.rows[0].aberto_em } : null,
-        crm: { novos: crmNovos.rows[0].n, ganhos: crmGanhos.rows[0].n, ganhosValor: r2(crmGanhos.rows[0].total) },
+        caixa: caixa.rows[0] ? { numero: caixa.rows[0].numero, abertoPor: caixa.rows[0].aberto_por || '', desde: caixa.rows[0].aberto_em, esquecido: !!esquecidos.caixa, horas: esquecidos.caixa ? esquecidos.caixa.horas : 0 } : null,
+        mesasEsquecidas: esquecidos.mesas,
+        crm: { novos: crmNovos.rows[0].n, ganhos: crmGanhos.vendas.quantidade, ganhosValor: crmGanhos.vendas.total },
+        // o negócio inteiro: balcão + CRM, e o resultado da Empresa no Controle financeiro
+        vendidoNoMes: { total: r2(Number(vMes.rows[0].total) + crmGanhos.vendas.total), balcao: r2(vMes.rows[0].total), crm: crmGanhos.vendas.total },
+        ...(verCustos ? { financeiro: { mes, empresa: crmGanhos.fin.empresa, total: crmGanhos.fin.total, pendente: crmGanhos.fin.valorPendente } } : {}),
       },
       atividade: atividade.rows.map((r) => ({ tipo: r.tipo, quando: r.quando, numero: r.numero, valor: r2(r.valor), quem: r.quem || '' })),
       equipe: ops.rows.map((o) => ({

@@ -1,20 +1,9 @@
-/* Resumo do Controle financeiro para o assistente de IA.
+/* Resumo do Controle financeiro para o assistente de IA (e o Painel do dono).
    Espelha as contas do front-end (public/financeiro/script.js: occurrencesForMonth,
    crmRowsForMonth, parcelaDoContrato, dataVendaDoCard), pra IA responder com os
    mesmos números que a pessoa vê nas abas Painel e Lucro. */
 
 const arred = (n) => Math.round((Number(n) || 0) * 100) / 100;
-
-function mesesEntre(a, b) {
-  const [ya, ma] = a.split('-').map(Number);
-  const [yb, mb] = b.split('-').map(Number);
-  return (yb * 12 + mb) - (ya * 12 + ma);
-}
-const anoMes = (v) => {
-  if (!v) return '';
-  if (v instanceof Date) return v.toISOString().slice(0, 7);
-  return String(v).slice(0, 7);
-};
 
 const Calc = require('../../public/financeiro/calculos');
 
@@ -24,61 +13,10 @@ function ocorrenciasDoMes(transacoes, mes) {
   return Calc.ocorrenciasDoMes(transacoes, mes).map((o) => ({ tx: { ...o.tx, status: o.status }, valor: o.valor, parcela: o.parcela, data: o.data }));
 }
 
-function parcelaDoContrato(ct, idx) {
-  if (Array.isArray(ct.blocos) && ct.blocos.length) {
-    let inicio = 0;
-    for (const b of ct.blocos) {
-      const n = Math.max(1, parseInt(b.parcelas, 10) || 1);
-      if (idx < inicio + n) return Number(b.value) || 0;
-      inicio += n;
-    }
-    return 0;
-  }
-  const p1 = ct.parcelas1 != null ? ct.parcelas1 : ct.parcelas;
-  return idx < p1 ? (Number(ct.value) || 0) : (Number(ct.value2) || 0);
-}
-
-function dataVendaDoCard(c) {
-  const mes = String(c.mes || '');
-  if (/^\d{4}-\d{2}-\d{2}/.test(mes)) return mes.slice(0, 10);
-  if (/^\d{4}-\d{2}/.test(mes)) return mes.slice(0, 7) + '-01';
-  const ref = c.colunaDesde || c.updatedAt || c.createdAt;
-  if (!ref) return '';
-  return ref instanceof Date ? ref.toISOString().slice(0, 10) : String(ref).slice(0, 10);
-}
-
-// Receitas/despesas que vêm do CRM, conforme a escolha feita na aba Lucro
-function linhasDoCrm({ config, colunas, cards, contratos }, mes) {
-  const modo = (config && config.integracaoCrm) || 'vendas';
-  if (modo === 'nenhum') return [];
-  const linhas = [];
-  const contratosDoMes = (tipo, categoria, escopoFixo) => {
-    for (const ct of contratos || []) {
-      const ancora = anoMes(ct.date);
-      if (!/^\d{4}-\d{2}$/.test(ancora)) continue;
-      const cancelado = anoMes(ct.canceladoNoMes);
-      if (cancelado && mes >= cancelado) continue;
-      const idx = mesesEntre(ancora, mes);
-      if (idx < 0 || idx >= (Number(ct.parcelas) || 1)) continue;
-      const valor = parcelaDoContrato(ct, idx);
-      if (valor <= 0) continue;
-      linhas.push({ tx: { type: tipo, category: categoria, scope: escopoFixo || (ct.scope === 'Empresa' ? 'Empresa' : 'Pessoal'), desc: ct.desc || 'Contrato', origem: 'crm' }, valor });
-    }
-  };
-  if (modo === 'vendas') {
-    const ganho = new Set((colunas || []).filter((c) => c.tipo === 'ganho').map((c) => String(c._id || c.id)));
-    for (const c of cards || []) {
-      if (!ganho.has(String(c.columnId))) continue;
-      if (anoMes(dataVendaDoCard(c)) !== mes) continue;
-      const valor = Number(c.valor) || 0;
-      if (valor <= 0) continue;
-      linhas.push({ tx: { type: 'Receita', category: 'Vendas', scope: 'Empresa', desc: `Venda — ${c.cliente || 'Cliente'}`, origem: 'crm' }, valor });
-    }
-    if (config && config.descontarComissoes) contratosDoMes('Despesa', 'Comissões', 'Empresa');
-  } else if (modo === 'comissoes') {
-    contratosDoMes('Receita', 'Comissão');
-  }
-  return linhas;
+// Receitas/despesas que vêm do CRM: a MESMA regra do site (public/financeiro/calculos.js),
+// para a IA, o Painel do dono e o e-mail nunca mostrarem um número diferente do financeiro
+function linhasDoCrm(crm, mes) {
+  return Calc.linhasDoCrm(crm, mes).map((l) => ({ tx: l.tx, valor: l.value, parcela: l.badge }));
 }
 
 function somar(linhas) {
@@ -141,4 +79,23 @@ function cartoesObjetivosInvestimentos(dados) {
   };
 }
 
-module.exports = { ocorrenciasDoMes, linhasDoCrm, resumoDoMes, lancamentosDoMes, cartoesObjetivosInvestimentos };
+// O que o financeiro precisa do CRM, lido no servidor para a conta inteira (sem o filtro "só os meus
+// contatos" de vendedor). Cards arquivados vêm marcados: não viram venda, mas o "Lucro por venda" de
+// um card com fechamento continua aparecendo.
+async function dadosDoCrm(userId) {
+  const Column = require('../models/Column');
+  const Card = require('../models/Card');
+  const Contrato = require('../models/Contrato');
+  const [colunas, cards, contratos] = await Promise.all([Column.find({ userId }), Card.find({ userId }), Contrato.find({ userId })]);
+  return {
+    colunas: colunas.map((c) => ({ id: String(c._id), nome: c.nome, tipo: c.tipo })),
+    cards: cards.map((c) => ({
+      id: String(c._id), cliente: c.cliente, valor: Number(c.valor) || 0, columnId: String(c.columnId), mes: c.mes || '',
+      colunaDesde: c.colunaDesde || null, updatedAt: c.updatedAt || null, createdAt: c.createdAt || null,
+      fechamento: c.fechamento || null, fechamentoPendente: !!c.fechamentoPendente, arquivado: !!c.arquivado,
+    })),
+    contratos: contratos.map((c) => c.toJSON()),
+  };
+}
+
+module.exports = { dadosDoCrm, ocorrenciasDoMes, linhasDoCrm, resumoDoMes, lancamentosDoMes, cartoesObjetivosInvestimentos };

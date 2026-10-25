@@ -70,6 +70,25 @@ async function talvezPedirFechamento(card, colunaAnteriorId) {
   if (!card) return;
   const entrou = fechColunaEhGanho(card.columnId) && !fechColunaEhGanho(colunaAnteriorId);
   const saiu = !fechColunaEhGanho(card.columnId) && fechColunaEhGanho(colunaAnteriorId);
+  // gestor no funil de um consultor: o financeiro é do consultor. O fechamento fica pendente
+  // (selo "Falta o fechamento" no card dele) e quem faz é o próprio consultor.
+  if (typeof atuandoComo !== 'undefined' && atuandoComo) {
+    if (entrou && !fechValendo(card)) {
+      try {
+        const modo = await apiRequest('GET', '/financeiro/fechamento/modo');
+        if (modo && (!modo.perguntado || modo.modo === 'vendas')) {
+          const r = await apiRequest('POST', `/financeiro/fechamento/${card.id}/depois`);
+          fechAtualizarCard(r.card);
+          errorMsg = `Venda marcada. O fechamento (valores e parcelas) fica para ${atuandoComo.nome} fazer no Controle financeiro dele.`;
+          renderApp();
+        }
+      } catch (e) { /* o selo é só um lembrete */ }
+    } else if (saiu && fechValendo(card)) {
+      errorMsg = `Essa venda já tinha fechamento no financeiro de ${atuandoComo.nome}. Peça para ele conferir se a venda foi desfeita.`;
+      renderApp();
+    }
+    return;
+  }
   if (saiu) { if (fechValendo(card) && !(typeof podeCrm === 'function' && !podeCrm('funcoes', 'fechamentoVenda'))) abrirVendaDesfeita(card.id); return; }
   if (!entrou || fechValendo(card)) return;
   if (typeof podeCrm === 'function' && !podeCrm('funcoes', 'fechamentoVenda')) return; // o gestor não liberou
@@ -79,9 +98,16 @@ async function talvezPedirFechamento(card, colunaAnteriorId) {
   abrirFechamento(card.id);
 }
 
+function fechSoDoConsultor() {
+  if (typeof atuandoComo === 'undefined' || !atuandoComo) return false;
+  errorMsg = `O fechamento da venda é feito pelo próprio ${atuandoComo.nome}, no Controle financeiro dele.`;
+  renderApp();
+  return true;
+}
+
 async function abrirFechamento(cardId) {
   const card = board.cards.find((c) => c.id === cardId);
-  if (!card) return;
+  if (!card || fechSoDoConsultor()) return;
   // modo e taxas sempre frescos (podem ter mudado no financeiro); regra da comissão do card
   const [modo, info] = await Promise.all([
     fechCarregarModo(true),
@@ -467,6 +493,7 @@ function fechRoot() {
 function fecharDialogo() { fechDialogo = null; fechRoot().innerHTML = ''; }
 
 async function abrirVendaDesfeita(cardId) {
+  if (fechSoDoConsultor()) return;
   const card = board.cards.find((c) => c.id === cardId);
   if (!card) return;
   let info;
@@ -484,6 +511,7 @@ async function abrirVendaDesfeita(cardId) {
 }
 
 function abrirDevolucao(cardId) {
+  if (fechSoDoConsultor()) return;
   const card = board.cards.find((c) => c.id === cardId);
   if (!card || !card.fechamento) return;
   fechDialogo = { tipo: 'devolucao', cardId, valorTxt: '', data: fechHoje(), motivo: '', salvando: false, erro: '', feito: null };

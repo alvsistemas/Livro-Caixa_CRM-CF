@@ -63,7 +63,7 @@ const brl = (n) => 'R$ ' + (Number(n) || 0).toLocaleString('pt-BR', { minimumFra
 const lista = (itens, vazio) => (itens.length ? `<ul style="margin:6px 0 0;padding-left:18px;line-height:1.6;">${itens.join('')}</ul>` : `<p style="margin:6px 0 0;color:#777;font-size:14px;">${vazio}</p>`);
 const titulo = (t) => `<p style="font-weight:bold;margin:18px 0 0;">${t}</p>`;
 
-function montarEmailResumo({ nome, resumo, equipe, hoje }) {
+function montarEmailResumo({ nome, resumo, equipe, hoje, pdv }) {
   const p = P;
   const r = resumo;
   const dataBonita = new Intl.DateTimeFormat('pt-BR', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC' }).format(new Date(hoje + 'T12:00:00Z'));
@@ -80,17 +80,33 @@ function montarEmailResumo({ nome, resumo, equipe, hoje }) {
   if (equipe && equipe.length) {
     corpo += titulo('Sua equipe') + `<table style="width:100%;border-collapse:collapse;font-size:13px;margin-top:6px;"><tr style="text-align:left;color:#666;"><th style="padding:4px 6px;">Pessoa</th><th>${p.leads} ${p.abertos}</th><th>Paradas</th><th>Tarefas atrasadas</th><th>Vendido / meta</th></tr>${equipe.map((m) => `<tr style="border-top:1px solid #e4e4e0;"><td style="padding:5px 6px;">${escaparHtml(m.nome)}</td><td>${m.resumo.totalAbertos}</td><td${m.resumo.parados.length ? ' style="color:#a00;"' : ''}>${m.resumo.parados.length}</td><td${m.resumo.tarefasAtrasadas.length ? ' style="color:#a00;"' : ''}>${m.resumo.tarefasAtrasadas.length}</td><td>${brl(m.resumo.vendidoMes)}${m.resumo.metaMes ? ' / ' + brl(m.resumo.metaMes) : ''}</td></tr>`).join('')}</table>`;
   }
+  if (pdv && pdv.temPdv) {
+    const dataOntem = pdv.ontem.data.split('-').reverse().slice(0, 2).join('/');
+    corpo += titulo('PDV (balcão)') + `<p style="margin:6px 0 0;">Ontem (${dataOntem}): <b>${brl(pdv.ontem.total)}</b> em ${pdv.ontem.vendas} ${pdv.ontem.vendas === 1 ? 'venda' : 'vendas'} · no mês: ${brl(pdv.mes.total)}</p>`;
+    const avisos = [];
+    if (pdv.esquecidos.caixa) avisos.push(`<li style="color:#a00;">Caixa nº ${pdv.esquecidos.caixa.numero} aberto há ${pdv.esquecidos.caixa.horas} horas${pdv.esquecidos.caixa.abertoPor ? ` (aberto por ${escaparHtml(pdv.esquecidos.caixa.abertoPor)})` : ''} — feche no PDV para conferir o dinheiro.</li>`);
+    else if (pdv.caixa.aberto) avisos.push(`<li>Caixa nº ${pdv.caixa.numero} aberto.</li>`);
+    if (pdv.esquecidos.mesas.length) avisos.push(`<li style="color:#a00;">${pdv.esquecidos.mesas.length === 1 ? `${escaparHtml(pdv.esquecidos.mesas[0].nome)} está aberta` : `${pdv.esquecidos.mesas.length} mesas estão abertas`} há mais de 6 horas.</li>`);
+    if (pdv.pedidosDoCardapioEsperando) avisos.push(`<li>${pdv.pedidosDoCardapioEsperando} ${pdv.pedidosDoCardapioEsperando === 1 ? 'pedido do cardápio esperando' : 'pedidos do cardápio esperando'}.</li>`);
+    if (avisos.length) corpo += `<ul style="margin:8px 0 0;padding-left:18px;line-height:1.6;">${avisos.join('')}</ul>`;
+    if (pdv.estoqueBaixo.quantidade) corpo += titulo(`Estoque baixo (${pdv.estoqueBaixo.quantidade})`) + lista(pdv.estoqueBaixo.itens.slice(0, 8).map((i) => `<li>${escaparHtml(i.nome)} — ${i.situacao === 'acabou' ? '<span style="color:#a00;">acabou</span>' : `${i.estoque} (mínimo ${i.minimo})`}</li>`), '');
+  }
   corpo += `<p style="margin:22px 0 0;"><a href="${escaparHtml(urlBaseDoApp())}/index.html" style="background:#141414;color:#fff;text-decoration:none;padding:10px 18px;border-radius:8px;display:inline-block;">Abrir o Livro-Caixa</a></p>
 <p style="font-size:12px;color:#888;margin-top:16px;">Para parar de receber, desative em Configurações → Integrações → E-mail.</p>`;
   const texto = `Resumo de ${dataBonita}: ${r.totalAbertos} ${p.leads} ${p.abertos}, ${r.novos24h} contatos novos nas últimas 24h, ${r.parados.length} paradas, ${r.tarefasHoje.length} tarefa(s) hoje, ${r.tarefasAtrasadas.length} atrasada(s).`;
   return { assunto: `Seu resumo de hoje: ${r.tarefasHoje.length} tarefa(s), ${r.parados.length} ${r.parados.length === 1 ? 'negociação parada' : 'negociações paradas'}`, html: moldeEmail('Resumo do dia', corpo), texto };
 }
 
+// Todas as equipes em que a pessoa é gestora (não só a aberta); cada colega aparece uma vez
 async function resumoDaEquipe(gestor, hoje) {
-  const membros = await require('./equipesDoUsuario').membrosDe(gestor.equipeId);
+  const EQ = require('./equipesDoUsuario');
+  const minhas = (await EQ.equipesDe(gestor._id)).filter((e) => e.papel === 'supervisor');
+  const ids = minhas.length ? minhas.map((e) => e.id) : (gestor.equipeId ? [gestor.equipeId] : []);
+  const vistos = new Set([String(gestor._id)]);
+  const membros = [];
+  for (const id of ids) for (const m of await EQ.membrosDe(id)) if (!vistos.has(String(m._id))) { vistos.add(String(m._id)); membros.push(m); }
   const lista = [];
   for (const m of membros) {
-    if (String(m._id) === String(gestor._id)) continue;
     // dados de outra pessoa da equipe: só números agregados, lidos como sistema (o gestor já foi conferido)
     lista.push({ nome: m.nome || m.email, resumo: await comoSistema(() => resumoDoUsuario(m._id, hoje)) });
   }
@@ -101,8 +117,10 @@ async function resumoDaEquipe(gestor, hoje) {
 async function enviarResumoDe(user, hoje = hojeBR()) {
   if (!emailConfigurado()) throw new Error('O envio de e-mail não está configurado neste servidor.');
   const resumo = await resumoDoUsuario(user._id, hoje);
-  const equipe = user.equipeId && user.papelEquipe === 'supervisor' ? await resumoDaEquipe(user, hoje) : null;
-  const msg = montarEmailResumo({ nome: user.nome, resumo, equipe, hoje });
+  const gestorEmAlguma = (await require('./equipesDoUsuario').equipesDe(user._id)).some((e) => e.papel === 'supervisor') || (user.equipeId && user.papelEquipe === 'supervisor');
+  const equipe = gestorEmAlguma ? await resumoDaEquipe(user, hoje) : null;
+  const pdv = await require('./pdvResumo').resumoDoPdv(user._id).catch(() => null);
+  const msg = montarEmailResumo({ nome: user.nome, resumo, equipe, hoje, pdv });
   await enviarEmail({ para: user.email, assunto: msg.assunto, html: msg.html, texto: msg.texto });
 }
 

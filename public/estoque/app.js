@@ -227,7 +227,7 @@
     $("#nome-negocio").textContent = S.negocio.nome || "PDV";
     document.querySelectorAll("[data-so-restaurante]").forEach((el) => { el.hidden = !restaurante(); });
     if (!tem("restaurante")) document.querySelectorAll('.nav-item[data-tab="mesas"], .nav-item[data-tab="cozinha"], .nav-item[data-tab="pedidos"], .nav-item[data-tab="cardapio"]').forEach((el) => { if (!el.querySelector(".selo-completo")) el.insertAdjacentHTML("beforeend", '<span class="selo-completo mini">Completo</span>'); });
-    const doHash = (location.hash || "").replace("#", "");
+    const [doHash, idDoHash] = (location.hash || "").replace("#", "").split("/");
     const ALIAS = { inicio: "caixa", vendas: "relatorios", gastos: "relatorios" };
     if (doHash === "gastos") S.relAba = "despesas";
     const validas = ["caixa", "vender", "produtos", "compras", "relatorios", "clientes", "config", ...(restaurante() ? ["pedidos", "cardapio", "mesas", "cozinha"] : [])];
@@ -235,6 +235,8 @@
     desenharNavCelular();
     atualizarChipOperador();
     irPara(validas.includes(alvo) && podeAba(alvo) ? alvo : primeiraAba() || "vender");
+    // link vindo do CRM (#clientes/<id>): abre a ficha desse cliente
+    if (alvo === "clientes" && idDoHash && S.tab === "clientes") setTimeout(() => abrirFicha(idDoHash), 300);
     atualizarSelos();
     if (restaurante()) setInterval(atualizarSelos, 60000);
   }
@@ -365,15 +367,20 @@
       </div>`;
     }
     const cx = c.caixa;
-    const hora = new Date(cx.abertoEm).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+    const horasAberto = (Date.now() - new Date(cx.abertoEm).getTime()) / 3600000;
+    // de um dia para o outro: mostra a data e avisa (caixa esquecido aberto mistura as vendas de dias diferentes)
+    const hora = horasAberto >= 12 ? new Date(cx.abertoEm).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }) : new Date(cx.abertoEm).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+    const avisoEsquecido = horasAberto >= 12 ? `<p class="aviso alerta" role="alert">⚠ Este caixa está aberto há ${horasAberto >= 48 ? `${Math.floor(horasAberto / 24)} dias` : `${Math.floor(horasAberto)} horas`}. Feche e abra um novo no começo de cada dia, para as vendas e o dinheiro da gaveta de cada dia não se misturarem.</p>` : "";
     // a função não cuida do caixa: o servidor não manda os valores (vendas, gaveta, movimentos)
     if (c.restrito) return `<div class="card caixa-card aberto">
       <div class="caixa-status"><span class="caixa-luz"></span><div><h2 class="secao" style="margin:0">Caixa #${cx.numero} aberto</h2><p class="sub">desde ${hora}${cx.abertoPor ? ` · por ${esc(cx.abertoPor)}` : ""}. Os valores do caixa ficam com quem cuida dele.</p></div></div>
+      ${avisoEsquecido}
     </div>`;
     const outros = MEIOS_CAIXA.filter((m) => m !== "dinheiro" && c.esperado[m]).map((m) => `<li><span>${meioCurto(m)}</span><b class="num">${fmt(c.esperado[m])}</b></li>`).join("");
     const movs = c.movimentos.lista.slice().reverse().slice(0, 8);
     return `<div class="card caixa-card aberto">
       <div class="caixa-status"><span class="caixa-luz"></span><div><h2 class="secao" style="margin:0">Caixa #${cx.numero} aberto</h2><p class="sub">desde ${hora}${cx.abertoPor ? ` · por ${esc(cx.abertoPor)}` : ""} · troco inicial ${fmt(cx.trocoInicial)}</p></div></div>
+      ${avisoEsquecido}
       <div class="caixa-numeros">
         <div><p class="kpi-rotulo">Vendas</p><p class="kpi-valor">${fmt(c.vendas.total)}</p><p class="kpi-nota">${c.vendas.quantidade === 1 ? "1 venda" : `${c.vendas.quantidade} vendas`}${c.vendas.fiado ? ` · ${fmt(c.vendas.fiado)} no fiado` : ""}</p></div>
         <div><p class="kpi-rotulo">Dinheiro na gaveta</p><p class="kpi-valor">${fmt(c.esperado.dinheiro)}</p><p class="kpi-nota">deveria ter agora</p></div>
@@ -1495,7 +1502,23 @@
   async function abrirFicha(id) {
     FC = { id, dados: null, edit: null, erro: "", aba: "historico" };
     abrirModal("Cliente", `<p class="sub">Carregando…</p>`, { largo: true, aoFechar: () => { FC = null; } });
-    try { FC.dados = await api("GET", `/estoque/clientes/${id}`); if (FC) corpoModal(fichaHtml()); } catch (e) { corpoModal(`<p class="erro-form">${esc(e.message)}</p>`); }
+    try { FC.dados = await api("GET", `/estoque/clientes/${id}`); if (FC) corpoModal(fichaHtml()); } catch (e) { corpoModal(`<p class="erro-form">${esc(e.message)}</p>`); return; }
+    carregarCrmDaFicha(id);
+  }
+  // A mesma pessoa no CRM (pelo telefone): negociação aberta, compra fechada ou "levar para o CRM"
+  async function carregarCrmDaFicha(id) {
+    try { const r = await api("GET", `/estoque/clientes/${id}/crm`); if (FC && FC.id === id) { FC.crm = r; if (!FC.edit) corpoModal(fichaHtml()); } } catch (e) { /* sem CRM: a ficha segue igual */ }
+  }
+  function crmDaFichaHtml() {
+    const r = FC.crm;
+    if (!r || r.semAcesso) return "";
+    const TIPO = { aberto: ["Em negociação", "acento"], ganho: ["Comprou", "acento"], perdido: ["Perdido", "neutro"] };
+    if (r.negociacoes.length) return `<div class="bloco"><p class="bloco-titulo">No CRM</p><ul class="lista-simples" style="margin-top:6px">${r.negociacoes.map((n) => {
+      const [rot, cls] = TIPO[n.tipo] || [n.etapa, "neutro"];
+      return `<li><span><b>${esc(n.cliente)}</b> · ${esc(n.etapa)}${n.funil ? ` <small class="sub">(${esc(n.funil)})</small>` : ""} <span class="selo ${cls}">${rot}</span></span><span class="linha">${n.valor ? `<b class="num">${fmt(n.valor)}</b>` : ""}<a class="btn mini claro" href="../index.html?contato=${esc(n.id)}">Abrir no CRM</a></span></li>`;
+    }).join("")}</ul></div>`;
+    if (!r.temTelefone) return "";
+    return `<div class="bloco"><div class="linha entre"><p class="bloco-titulo" style="margin:0">No CRM</p><button class="btn mini claro" data-a="fc-crm-criar">Levar para o CRM</button></div><p class="sub" style="margin-top:4px">Ainda não tem um contato com este telefone no CRM.</p></div>`;
   }
   function fichaHtml() {
     const { cliente: c, beneficio: b, vendas, preferidos, cashback } = FC.dados;
@@ -1531,6 +1554,7 @@
       </div>
       ${FC.dados.fiado && FC.dados.fiado.total ? `<div class="bloco"><div class="linha entre"><p class="bloco-titulo" style="margin:0">Fiado: deve <span class="negativo">${fmt(FC.dados.fiado.total)}</span></p><button class="btn mini acento" data-a="fc-receber">Receber</button></div>
         <ul class="lista-simples" style="margin-top:6px">${FC.dados.fiado.vendas.map((v) => `<li><span>Venda #${v.numero} · ${dataBR(v.data)}</span><span class="num">${fmt(v.aberto)}${v.aberto < v.total ? ` <small class="sub">de ${fmt(v.total)}</small>` : ""}</span></li>`).join("")}</ul></div>` : ""}
+      ${crmDaFichaHtml()}
       ${preferidos.length ? `<div class="bloco"><p class="bloco-titulo">O que mais pede</p><div class="chips" style="margin-top:8px">${preferidos.map((x) => `<span class="chip">${esc(x.nome)} · ${fmtN(x.qtd)}×</span>`).join("")}</div></div>` : ""}
       <div class="bloco"><p class="bloco-titulo">Compras</p>${vendas.length ? `<div class="tabela-wrap"><table class="tabela"><tbody>${vendas.slice(0, 40).map((v) => `<tr class="${v.cancelada ? "cancelada" : ""}">
           <td class="num" style="white-space:nowrap">${dataBR(v.data)}</td><td>${v.itens.slice(0, 3).map((i) => `${fmtN(i.qtd)}× ${esc(i.nome)}`).join(", ")}${v.itens.length > 3 ? ` +${v.itens.length - 3}` : ""}
@@ -1836,7 +1860,9 @@
   // "garçom" = quem lança pedidos mas não cobra (a função não tem vender nem caixa)
   const ehGarcom = () => { const o = operadorAtual(); return permsAtuais() ? !pode("vender") && !pode("caixa") && pode("mesas") : !!(o && o.papel === "garcom"); };
   const minutosDesde = (iso) => Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 60000));
-  const tempoTxt = (iso) => { const m = minutosDesde(iso); return m < 60 ? `${m} min` : `${Math.floor(m / 60)}h${String(m % 60).padStart(2, "0")}`; };
+  const tempoTxt = (iso) => { const m = minutosDesde(iso); return m < 60 ? `${m} min` : m >= 24 * 60 ? `${Math.floor(m / 1440)}d ${Math.floor((m % 1440) / 60)}h` : `${Math.floor(m / 60)}h${String(m % 60).padStart(2, "0")}`; };
+  // mesa aberta há mais de 6 h: provavelmente esqueceram de fechar a conta (mesma regra do servidor)
+  const mesaEsquecida = (c) => c && minutosDesde(c.abertaEm) >= 6 * 60;
   const relogio = (iso) => { const s = Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 1000)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`; };
   const OBS_RAPIDAS = ["sem cebola", "sem tomate", "bem passado", "ao ponto", "sem gelo", "para viagem"];
 
@@ -1875,10 +1901,10 @@
   }
   function mesaTile(m, c) {
     const estado = !c ? "livre" : c.status === "conta" ? "conta" : "ocupada";
-    return `<button type="button" class="mesa ${estado} ${c && c.prontos ? "tem-pronto" : ""}" data-a="${c ? "ms-abrir" : "ms-nova"}" data-id="${c ? c.id : m.id}">
+    return `<button type="button" class="mesa ${estado} ${c && c.prontos ? "tem-pronto" : ""} ${mesaEsquecida(c) ? "esquecida" : ""}" data-a="${c ? "ms-abrir" : "ms-nova"}" data-id="${c ? c.id : m.id}" ${mesaEsquecida(c) ? `title="Aberta há ${tempoTxt(c.abertaEm)}: confira se a conta já foi fechada"` : ""}>
       <span class="mesa-nome">${esc(m ? m.nome : c.rotulo)}</span>
       ${c ? `<span class="mesa-total num">${fmt(c.total)}</span>
-        <span class="mesa-info">${c.pessoas > 1 ? `${c.pessoas} pessoas · ` : ""}${tempoTxt(c.abertaEm)}</span>
+        <span class="mesa-info">${c.pessoas > 1 ? `${c.pessoas} pessoas · ` : ""}${mesaEsquecida(c) ? "⚠ " : ""}${tempoTxt(c.abertaEm)}</span>
         <span class="mesa-selos">${c.status === "conta" ? `<i class="s-conta">pediu a conta</i>` : ""}${c.prontos ? `<i class="s-pronto">🔔 pronto</i>` : c.naCozinha ? `<i class="s-cozinha">na cozinha</i>` : ""}${c.pendentes ? `<i class="s-pend">${c.pendentes} a enviar</i>` : ""}</span>`
         : `<span class="mesa-info">livre</span>`}
     </button>`;
@@ -1898,6 +1924,8 @@
     const emAberto = r2(abertas.reduce((a, c) => a + c.total, 0));
     const prontos = abertas.filter((c) => c.prontos).length;
     html += `<div class="ms-resumo"><span><b>${ocupadas.length}</b> de ${M.mesas.length} ${M.mesas.length === 1 ? "mesa ocupada" : "mesas ocupadas"}</span>${M.avulsas.length ? `<span><b>${M.avulsas.length}</b> sem mesa</span>` : ""}<span>Em aberto <b class="num">${fmt(emAberto)}</b></span>${prontos ? `<span class="s-pronto">🔔 ${prontos === 1 ? "1 mesa com prato pronto" : `${prontos} mesas com prato pronto`}</span>` : ""}</div>`;
+    const esquecidas = abertas.filter(mesaEsquecida).length;
+    if (esquecidas) html += `<p class="aviso alerta" role="alert" style="margin:0 0 12px">⚠ ${esquecidas === 1 ? "1 conta está aberta" : `${esquecidas} contas estão abertas`} há mais de 6 horas (marcadas em vermelho). Confira se já foram pagas e feche ou cancele.</p>`;
     html += `<div class="mesas-grade">${M.mesas.map((m) => mesaTile(m, m.comanda)).join("")}</div>`;
     if (M.avulsas.length) html += `<h2 class="secao" style="margin-top:22px">Comandas sem mesa</h2><div class="mesas-grade">${M.avulsas.map((c) => mesaTile(null, c)).join("")}</div>`;
     html += `<p class="sub ms-legenda"><i class="leg livre"></i> livre <i class="leg ocupada"></i> ocupada <i class="leg conta"></i> pediu a conta${M.taxaServico ? ` · taxa de serviço ${String(M.taxaServico).replace(".", ",")}%` : ""}</p>`;
@@ -3183,6 +3211,9 @@
       case "cli-novo": novoClienteModal("", async (c) => { await carregarDaAba("clientes"); abrirFicha(c.id); }); break;
       case "filtro-cli": S.filtroCli = el.dataset.v; S.clientes = null; render(); carregarDaAba("clientes"); break;
       case "cli-ficha": if (ev.target.closest("a")) break; abrirFicha(id); break;
+      case "fc-crm-criar":
+        try { const r = await api("POST", `/estoque/clientes/${FC.id}/crm`); toast(r.jaExistia ? "Esse telefone já estava no CRM." : "Contato criado no CRM, na primeira etapa do funil."); await carregarCrmDaFicha(FC.id); } catch (e) { toast(esc(e.message), "erro"); }
+        break;
       case "fc-editar": FC.edit = { nome: FC.dados.cliente.nome, telefone: telFmt(FC.dados.cliente.telefone), endereco: FC.dados.cliente.endereco, obs: FC.dados.cliente.obs, participa: FC.dados.cliente.participa }; FC.erro = ""; corpoModal(fichaHtml()); break;
       case "fc-cancelar": FC.edit = null; corpoModal(fichaHtml()); break;
       case "fc-salvar": {

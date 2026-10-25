@@ -14,20 +14,27 @@ const { registrarAuditoria } = require('../utils/auditoria');
 // Só as áreas do funil aceitam o modo (nada de configurações, senha, integrações, backup...).
 // Toda alteração fica registrada na auditoria do gestor e na do consultor.
 const AREAS_ATUAR_COMO = ['/api/board', '/api/columns', '/api/cards', '/api/tasks', '/api/funis', '/api/historico-contato', '/api/campos-personalizados'];
-function areaPermitidaParaAtuarComo(caminho) {
-  return AREAS_ATUAR_COMO.some((p) => caminho === p || caminho.startsWith(p + '/'));
+function areaPermitidaParaAtuarComo(caminho, metodo = 'GET') {
+  if (AREAS_ATUAR_COMO.some((p) => caminho === p || caminho.startsWith(p + '/'))) return true;
+  // venda ganha pelo gestor: o fechamento fica pendente para o próprio consultor fazer (o gestor
+  // só lê o modo do consultor e marca o selo; os lançamentos financeiros continuam com o dono deles)
+  if (metodo === 'GET' && caminho === '/api/financeiro/fechamento/modo') return true;
+  // agenda do consultor: só as tarefas do CRM (o Google Agenda dele é pessoal e não vem)
+  if (metodo === 'GET' && caminho === '/api/calendar/agenda-mes') return true;
+  if (metodo === 'POST' && /^\/api\/financeiro\/fechamento\/[^/]+\/depois$/.test(caminho)) return true;
+  return false;
 }
 // Confere o pedido de "atuar como". Devolve { alvo } ou { status, error }.
-async function conferirAtuarComo(gestorId, alvoId, caminho) {
+async function conferirAtuarComo(gestorId, alvoId, caminho, metodo) {
   if (!isValidId(alvoId)) return { status: 400, error: 'Consultor inválido.' };
   return comoSistema(async () => {
     const EQ = require('../utils/equipesDoUsuario');
     const gestor = await User.findById(gestorId).select('equipeId papelEquipe nome email');
     if (!gestor || !gestor.equipeId || gestor.papelEquipe !== 'supervisor') {
-      return { status: 403, error: 'Só o gestor da equipe pode atuar no funil de outra pessoa.' };
+      return { status: 403, error: 'Só o gestor da equipe pode atuar no funil de outra pessoa.', sairDoFunil: true };
     }
-    if (!(await EQ.membroDe(gestor.equipeId, alvoId))) return { status: 404, error: 'Esse consultor não está na sua equipe.' };
-    if (!areaPermitidaParaAtuarComo(caminho)) {
+    if (!(await EQ.membroDe(gestor.equipeId, alvoId))) return { status: 404, error: 'Esse consultor não está mais na sua equipe.', sairDoFunil: true };
+    if (!areaPermitidaParaAtuarComo(caminho, metodo)) {
       return { status: 403, error: 'Isso não está disponível enquanto você atua no funil de outra pessoa. Clique em "Sair do funil".' };
     }
     const alvo = await User.findById(alvoId).select('nome email');
@@ -162,8 +169,8 @@ module.exports = async function auth(req, res, next) {
     const alvoId = req.headers['x-atuar-como'];
     if (alvoId && String(alvoId) !== req.userId) {
       if (acesso.tipo !== 'dono') return res.status(403).json({ error: 'Só o gestor da equipe pode atuar no funil de outra pessoa.' });
-      const r = await conferirAtuarComo(req.userId, String(alvoId), caminho);
-      if (r.error) return res.status(r.status).json({ error: r.error, atuarComo: true });
+      const r = await conferirAtuarComo(req.userId, String(alvoId), caminho, req.method);
+      if (r.error) return res.status(r.status).json({ error: r.error, atuarComo: true, sairDoFunil: !!r.sairDoFunil });
       req.realUserId = req.userId;
       req.atuandoComo = true;
       req.userId = String(r.alvo._id);

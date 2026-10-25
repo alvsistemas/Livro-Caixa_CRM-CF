@@ -259,8 +259,90 @@
     return { viavel, meses: viavel ? mes : null, livreEm: viavel ? somarMeses(inicio, mes - 1) : null, jurosTotal: arred(jurosTotal), ordem, orcamento: arred(orcamento), minimos: arred(minimos) };
   }
 
+  /* ---------- vendas e comissões do CRM ----------
+     Uma regra só para o site (abas Painel e Lucro), o servidor (Painel do dono, assistente de IA,
+     resumo por e-mail): assim os números nunca brigam entre as telas.
+     crm = { config, colunas: [{id, tipo}], cards: [...], contratos: [...] } (cards arquivados não entram) */
+  function parcelaDoContrato(ct, idx) {
+    if (Array.isArray(ct.blocos) && ct.blocos.length) {
+      let inicio = 0;
+      for (const b of ct.blocos) {
+        const n = Math.max(1, parseInt(b.parcelas, 10) || 1);
+        if (idx < inicio + n) return Number(b.value) || 0;
+        inicio += n;
+      }
+      return 0;
+    }
+    const p1 = ct.parcelas1 != null ? ct.parcelas1 : ct.parcelas;
+    return idx < p1 ? (Number(ct.value) || 0) : (Number(ct.value2) || 0);
+  }
+  // dia da venda de um card: o "Mês de venda" do CRM; sem ele, quando entrou na coluna de ganho
+  function dataVendaDoCard(c) {
+    const mes = String(c.mes || '');
+    if (/^\d{4}-\d{2}-\d{2}/.test(mes)) return mes.slice(0, 10);
+    if (/^\d{4}-\d{2}/.test(mes)) return mes.slice(0, 7) + '-01';
+    const ref = c.colunaDesde || c.updatedAt || c.createdAt;
+    if (!ref) return hojeISO();
+    return ref instanceof Date ? ref.toISOString().slice(0, 10) : String(ref).slice(0, 10);
+  }
+  const modoCrm = (config) => (config && config.integracaoCrm) || 'vendas';
+  // Linhas que o CRM põe no financeiro naquele mês ("vendas": cards em Ganho sem fechamento —
+  // os com fechamento já viraram lançamentos de verdade; "comissoes": parcelas dos contratos)
+  function linhasDoCrm(crm, mes) {
+    const config = (crm && crm.config) || {};
+    const modo = modoCrm(config);
+    if (modo === 'nenhum' || !crm) return [];
+    const linhas = [];
+    const status = mes > anoMes(hojeISO()) ? 'Previsto' : 'Pago';
+    const contratosDoMes = (tipo, categoria, escopoFixo) => {
+      for (const ct of crm.contratos || []) {
+        const ancora = anoMes(ct.date);
+        if (!ehAnoMes(ancora)) continue;
+        const cancelado = anoMes(ct.canceladoNoMes);
+        if (cancelado && mes >= cancelado) continue; // cancelado: para de contar a partir desse mês
+        const idx = mesesEntre(ancora, mes);
+        const total = Number(ct.parcelas) || 1;
+        if (idx < 0 || idx >= total) continue;
+        const value = parcelaDoContrato(ct, idx);
+        if (value <= 0) continue;
+        linhas.push({
+          tx: { id: `crm-comissao-${ct.id || ct._id}`, origem: 'crm', date: `${mes}-01`, desc: `${tipo === 'Receita' ? 'Comissão' : 'Comissão paga'} — ${ct.desc || 'Contrato'}`, type: tipo, category: categoria, scope: escopoFixo || (ct.scope === 'Empresa' ? 'Empresa' : 'Pessoal'), account: '—', status, value },
+          value, badge: `${idx + 1}/${total}`,
+        });
+      }
+    };
+    if (modo === 'vendas') {
+      const ganho = new Set((crm.colunas || []).filter((c) => c.tipo === 'ganho').map((c) => String(c.id || c._id)));
+      for (const c of crm.cards || []) {
+        if (c.arquivado || !ganho.has(String(c.columnId))) continue;
+        if (c.fechamento && !c.fechamento.cancelado) continue; // fechamento feito: as parcelas já são lançamentos de verdade
+        const data = dataVendaDoCard(c);
+        if (anoMes(data) !== mes) continue;
+        const value = Number(c.valor) || 0;
+        if (value <= 0) continue;
+        linhas.push({ tx: { id: `crm-venda-${c.id || c._id}`, origem: 'crm', date: data, desc: `Venda — ${c.cliente || 'Cliente'}`, type: 'Receita', category: 'Vendas', scope: 'Empresa', account: '—', status: 'Pago', value }, value, badge: null });
+      }
+      if (config.descontarComissoes) contratosDoMes('Despesa', 'Comissões', 'Empresa');
+    } else if (modo === 'comissoes') {
+      contratosDoMes('Receita', 'Comissão');
+    }
+    return linhas;
+  }
+
+  // Vendas ganhas no CRM naquele mês (valor final do fechamento, se houver), em qualquer modo do financeiro
+  function vendasDoCrmNoMes(crm, mes) {
+    const ganho = new Set(((crm && crm.colunas) || []).filter((c) => c.tipo === 'ganho').map((c) => String(c.id || c._id)));
+    let quantidade = 0; let total = 0;
+    for (const c of (crm && crm.cards) || []) {
+      if (c.arquivado || !ganho.has(String(c.columnId)) || anoMes(dataVendaDoCard(c)) !== mes) continue;
+      const f = c.fechamento && !c.fechamento.cancelado ? c.fechamento : null;
+      quantidade++; total += f && Number.isFinite(Number(f.valorFinal)) ? Number(f.valorFinal) : (Number(c.valor) || 0);
+    }
+    return { quantidade, total: arred(total) };
+  }
+
   const api = {
-    CARTAO, anoMes, ehAnoMes, somarMeses, mesesEntre, diasNoMes, diaNoMes, hojeISO, arred,
+    CARTAO, parcelaDoContrato, dataVendaDoCard, linhasDoCrm, modoCrm, vendasDoCrmNoMes, anoMes, ehAnoMes, somarMeses, mesesEntre, diasNoMes, diaNoMes, hojeISO, arred,
     valorDaParcela, statusNoMes, ocorrenciaNoMes, ocorrenciasDoMes, primeiroMes,
     diaFechamento, faturaDaCompra, datasDaFatura, cartaoDoLancamento, faturasDoCartao, situacaoDaFatura, limiteUsado,
     saldoDaConta, aPagarEReceber, planoDeQuitacao,

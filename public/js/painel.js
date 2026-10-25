@@ -54,13 +54,20 @@
   function resumoHtml() {
     const r = D.resumo;
     const kpi = (rot, val, sub, cls = '') => `<div class="dono-kpi ${cls}"><p class="dono-kpi-rotulo">${rot}</p><p class="dono-kpi-valor">${val}</p>${sub ? `<p class="dono-kpi-sub">${sub}</p>` : ''}</div>`;
-    return `<section aria-labelledby="t-vendas"><h2 class="pd-h3" id="t-vendas">Vendas</h2><div class="dono-kpis pd-kpis">
+    const v = r.vendidoNoMes; const f = r.financeiro;
+    const negocio = v ? `<section aria-labelledby="t-negocio"><h2 class="pd-h3" id="t-negocio">O negócio no mês</h2><div class="dono-kpis pd-kpis">
+      ${kpi('Vendido no mês', fmt(v.total), `balcão ${fmt(v.balcao)} · CRM ${fmt(v.crm)}`)}
+      ${f ? kpi('Resultado da Empresa', fmt(f.empresa.saldo), `receitas ${fmt(f.empresa.receitas)} · despesas ${fmt(f.empresa.despesas)} · <a href="financeiro/#lucro" style="color:inherit;font-weight:600">ver no Controle financeiro</a>`, f.empresa.saldo < 0 ? 'alerta' : '') : ''}
+      ${f && f.pendente ? kpi('Ainda a pagar/receber', fmt(f.pendente), 'lançamentos do mês que não estão pagos') : ''}
+    </div></section>` : '';
+    return `${negocio}<section aria-labelledby="t-vendas"><h2 class="pd-h3" id="t-vendas">Vendas no balcão (PDV)</h2><div class="dono-kpis pd-kpis">
       ${kpi('Hoje', fmt(r.hoje.total), `${r.hoje.vendas} ${r.hoje.vendas === 1 ? 'venda' : 'vendas'} no balcão`)}
       ${kpi('No mês', fmt(r.mes.total), `${r.mes.vendas} vendas · ticket médio ${fmt(r.mes.ticket)}`)}
       ${r.mes.lucro !== undefined ? kpi('Lucro bruto no mês', fmt(r.mes.lucro), 'vendas menos o custo da mercadoria e as taxas', r.mes.lucro < 0 ? 'alerta' : '') : ''}
     </div></section>
     <section aria-labelledby="t-agora"><h2 class="pd-h3" id="t-agora">Agora</h2><div class="dono-kpis pd-kpis">
-      ${kpi('Caixa', r.caixa ? 'Aberto' : 'Fechado', r.caixa ? `nº ${r.caixa.numero}${r.caixa.abertoPor ? ` · por ${esc(r.caixa.abertoPor)}` : ''} · ${quando(r.caixa.desde)}` : 'nenhum caixa aberto agora')}
+      ${kpi('Caixa', r.caixa ? (r.caixa.esquecido ? `Aberto há ${r.caixa.horas >= 48 ? Math.floor(r.caixa.horas / 24) + ' dias' : r.caixa.horas + ' h'}` : 'Aberto') : 'Fechado', r.caixa ? `nº ${r.caixa.numero}${r.caixa.abertoPor ? ` · por ${esc(r.caixa.abertoPor)}` : ''} · ${quando(r.caixa.desde)}${r.caixa.esquecido ? ' · feche no PDV para conferir o dia' : ''}` : 'nenhum caixa aberto agora', r.caixa && r.caixa.esquecido ? 'alerta' : '')}
+      ${r.mesasEsquecidas && r.mesasEsquecidas.length ? kpi('Mesas abertas há muito tempo', String(r.mesasEsquecidas.length), `${r.mesasEsquecidas.slice(0, 3).map((m) => esc(m.nome)).join(', ')}${r.mesasEsquecidas.length > 3 ? '…' : ''} · mais de 6 horas`, 'alerta') : ''}
       ${kpi('CRM no mês', `${r.crm.novos} ${r.crm.novos === 1 ? 'contato novo' : 'contatos novos'}`, `${r.crm.ganhos} ${r.crm.ganhos === 1 ? 'negociação ganha' : 'negociações ganhas'} · ${fmt(r.crm.ganhosValor)}`)}
       ${kpi('Cancelamentos no mês', String(r.canceladas.vendas), `${fmt(r.canceladas.total)} · descontos ${fmt(r.mes.descontos)}`, r.canceladas.vendas >= 5 ? 'alerta' : '')}
     </div></section>`;
@@ -121,7 +128,7 @@
     return `<section aria-labelledby="t-aparelho"><h2 class="pd-h3" id="t-aparelho">Aparelho da loja</h2><div class="ass-cartao">
       ${loja ? `<p class="ass-texto" style="margin-top:0"><b>Este aparelho é da loja.</b> Quem for usar escolhe o nome e digita o PIN, e só vê o que a função dele permite (vale para o PDV, o CRM e o Controle financeiro).</p>
         <div class="ass-acoes pd-acoes-esq"><button type="button" class="ass-btn" data-a="aparelho-normal">Voltar a ser um aparelho normal</button></div>
-        <p class="ass-miudo">Só um gestor, entrado com o PIN, tira o modo loja. O "Sair" do dia a dia só encerra a vez de quem estava usando.</p>`
+        <p class="ass-miudo">Só um gestor, entrado com o PIN, tira o modo loja. O "Sair" do dia a dia só encerra a vez de quem estava usando. Aqui o CRM mostra os contatos da loja e não tem a aba Equipe (que é de quem entra com e-mail e senha).</p>`
       : `<p class="ass-texto" style="margin-top:0">O computador do caixa ou o tablet do balcão é usado por várias pessoas? Transforme-o em aparelho da loja: cada um entra com o próprio PIN e não consegue abrir o que a função não permite, como o lucro e o Controle financeiro.</p>
         <p class="ass-miudo">Use no aparelho da loja, não no seu celular. Antes, cadastre você mesmo na equipe com a função Gestor, para conseguir entrar com tudo liberado.</p>
         <div class="ass-acoes pd-acoes-esq"><button type="button" class="ass-btn ass-btn-forte" data-a="aparelho-loja">Usar este aparelho como aparelho da loja</button></div>`}
@@ -234,7 +241,7 @@
         break;
       case 'aparelho-loja':
         if (!D.equipe.some((o) => o.ativo && o.papel === 'gestor')) { alertar('Antes, adicione você mesmo na equipe com a função Gestor (e um PIN). Senão ninguém consegue entrar com tudo liberado neste aparelho.'); break; }
-        if (!(await confirmarAcao({ titulo: 'Usar como aparelho da loja?', mensagem: 'Daqui em diante, quem usar este aparelho vai escolher o nome e digitar o PIN, e só vai ver o que a função permite. Seu celular continua normal.', botao: 'Usar como aparelho da loja', perigo: false, sempre: true }))) break;
+        if (!(await confirmarAcao({ titulo: 'Usar como aparelho da loja?', mensagem: 'Daqui em diante, quem usar este aparelho vai escolher o nome e digitar o PIN, e só vai ver o que a função permite. No CRM, quem entra com PIN usa os contatos da loja; a aba Equipe do CRM (chat, gestão de consultores) fica só para quem entra com o próprio e-mail e senha. Seu celular continua normal.', botao: 'Usar como aparelho da loja', perigo: false, sempre: true }))) break;
         try { const r = await api('POST', '/acesso/aparelho-loja'); localStorage.setItem('token', r.token); localStorage.removeItem('pdv-operador'); window.location.href = '/'; } catch (e) { alertar(e.message); }
         break;
       case 'aparelho-normal':

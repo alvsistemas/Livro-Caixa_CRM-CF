@@ -304,7 +304,7 @@ let limiteEquipes = 10;
 // Gestor atuando no funil de um consultor: { userId, nome } enquanto estiver lá dentro
 let atuandoComo = null;
 let metaBackupAtuandoComo = null;
-const PAGINAS_ATUANDO_COMO = ['dashboard','pipeline','leads','equipe'];
+const PAGINAS_ATUANDO_COMO = ['dashboard','pipeline','leads','tarefas','equipe'];
 let agendaSubTab = 'calendario';
 let gerotSemanaAtual = inicioDaSemana(new Date());
 let gerotBlocos = [];
@@ -434,7 +434,7 @@ async function apiRequestUmaVez(method, path, body, timeoutMs){
   if(token) opts.headers['Authorization'] = 'Bearer ' + token;
   if(window.Acesso) Object.assign(opts.headers, Acesso.cabecalhos()); // aparelho da loja: quem entrou com o PIN
   // gestor no funil de um consultor: só as rotas do funil vão "como" ele (o servidor confere e registra)
-  if(atuandoComo && /^\/(board|columns|cards|tasks|funis|historico-contato|campos-personalizados)(\/|\?|$)/.test(path)) opts.headers['X-Atuar-Como'] = atuandoComo.userId;
+  if(atuandoComo && (/^\/(board|columns|cards|tasks|funis|historico-contato|campos-personalizados)(\/|\?|$)/.test(path) || /^\/financeiro\/fechamento\/(modo$|[^/]+\/depois$)/.test(path) || /^\/calendar\/agenda-mes(\?|$)/.test(path))) opts.headers['X-Atuar-Como'] = atuandoComo.userId;
   if(body !== undefined){
     opts.headers['Content-Type'] = 'application/json';
     opts.body = JSON.stringify(body);
@@ -466,6 +466,8 @@ async function apiRequestUmaVez(method, path, body, timeoutMs){
     let msg = 'Erro na requisição ao servidor';
     let data = null;
     try{ data = await res.json(); if(data && data.error) msg = data.error; }catch(e){}
+    // o gestor perdeu o acesso ao funil (saiu da equipe, deixou de ser gestor, o consultor saiu): volta para o próprio
+    if(data && data.sairDoFunil && atuandoComo){ const nome = atuandoComo.nome; setTimeout(()=>{ sairDoFunilDe().then(()=>{ errorMsg = `Você não tem mais acesso ao funil de ${nome}. Voltamos para o seu.`; renderApp(); }); }, 0); }
     const servidorAcordando = res.status === 502 || res.status === 503 || res.status === 504;
     if(servidorAcordando && (method === 'GET' || (data && data.tentarDeNovo))){
       return { __repetir:true, mensagem: msg === 'Erro na requisição ao servidor' ? 'O servidor está acordando. Tente de novo em alguns segundos.' : msg };
@@ -477,11 +479,18 @@ async function apiRequestUmaVez(method, path, body, timeoutMs){
 }
 
 /* ---------- carregamento inicial ---------- */
+// link vindo de outro app (ex.: PDV "Abrir no CRM"): index.html?contato=<id> abre a ficha
+let contatoDaUrl = (()=>{ try{ return new URLSearchParams(location.search).get('contato'); }catch(e){ return null; } })();
 async function loadBoard(){
   try{
     const data = await apiRequest('GET', '/board');
     board = { columns: data.columns, cards: data.cards };
     errorMsg = null;
+    if(contatoDaUrl){
+      const id = contatoDaUrl; contatoDaUrl = null;
+      try{ history.replaceState({}, '', location.pathname); }catch(e){}
+      if(board.cards.some(c=> c.id === id)) setTimeout(()=>{ goToPage('leads'); openEditCard(id); }, 0);
+    }
   }catch(e){
     board = { columns: [], cards: [] };
     errorMsg = 'Não foi possível carregar os dados do servidor. Verifique se a API e o MongoDB estão rodando.';
@@ -1395,6 +1404,7 @@ async function loadEquipe(){
   }
   equipeLoaded = true;
   if(!equipe) equipeTela = 'lista';
+  if(metaVendasEquipeCarregada && (equipe ? equipe.id : null) !== metaEquipeDeQual) loadMetaVendasEquipe();
   renderApp();
   if(equipe && currentPage === 'equipe' && equipeTela === 'equipe') carregarAbaDaEquipe();
 }
@@ -1897,6 +1907,7 @@ async function entrarNoFunilDe(userId, nome){
     atuandoComo = { userId, nome };
     metaVendasValor = meta;
     funilAtualId = null; funis = []; board = { columns: [], cards: [] }; tasks = []; loaded = false;
+    agendaLoaded = false; agendaTarefas = []; agendaEventosGoogle = [];
     await Promise.all([loadBoard(), loadFunis(), loadTasks(), loadCamposPersonalizados()]);
     if(currentPage === 'pipeline') renderApp(); else goToPage('pipeline');
   }catch(e){
@@ -1910,7 +1921,9 @@ async function sairDoFunilDe(){
   if(metaBackupAtuandoComo !== null) metaVendasValor = metaBackupAtuandoComo;
   metaBackupAtuandoComo = null;
   funilAtualId = null; funis = []; board = { columns: [], cards: [] }; tasks = [];
+  agendaLoaded = false; agendaTarefas = []; agendaEventosGoogle = [];
   await Promise.all([loadBoard(), loadFunis(), loadTasks(), loadCamposPersonalizados()]);
+  loadAgendaMes(agendaMesAtual);
   equipeSubTab = 'supervisao';
   if(currentPage === 'equipe') renderApp(); else { goToPage('equipe'); }
   equipeTela = 'equipe'; supervisaoLoaded = false; carregarAbaDaEquipe(); renderApp();
@@ -2592,9 +2605,12 @@ async function importarArquivoBackup(file){
         });
         const resposta = await res.json();
         if(!res.ok) throw new Error(resposta.error || 'Não foi possível importar o backup.');
-        const totalOk = Object.values(resposta.resultado||{}).reduce((s,r)=>s+(r.ok||0),0);
-        const totalErro = Object.values(resposta.resultado||{}).reduce((s,r)=>s+(r.erro||0),0);
-        backupMsg = { tipo:'ok', texto: `Backup restaurado: ${totalOk} registro(s) atualizado(s)${totalErro?`, ${totalErro} com erro`:''}.` };
+        // o PDV volta com as suas tabelas dentro de resultado.pdv (ou só um aviso, em backups antigos)
+        const res0 = { ...(resposta.resultado||{}) }; const pdv = res0.pdv; delete res0.pdv;
+        const partes = [...Object.values(res0), ...(pdv && !pdv.aviso ? Object.values(pdv) : [])];
+        const totalOk = partes.reduce((s,r)=>s+(r.ok||0),0);
+        const totalErro = partes.reduce((s,r)=>s+(r.erro||0),0);
+        backupMsg = { tipo:'ok', texto: `Backup restaurado: ${totalOk} registro(s) atualizado(s)${totalErro?`, ${totalErro} com erro`:''}.${pdv && !pdv.aviso ? ' O PDV também foi restaurado (as fotos dos produtos e a equipe com PIN não vão no backup).' : ''}${pdv && pdv.aviso ? ' ' + pdv.aviso : ''}` };
         // recarrega os dados principais da tela, já que podem ter mudado
         await Promise.all([loadBoard(), loadTasks(), loadContratos()]);
       }catch(e){
@@ -2676,12 +2692,26 @@ function tratarRetornoDoGoogle(){
 }
 
 /* ---------- derivações (Pipeline) ---------- */
+// mês de início do contato; contatos antigos (ou de backups antigos) sem ele usam a data de criação
+function mesInicioDoContato(c){
+  if(c.mesInicioContato) return c.mesInicioContato.slice(0,7);
+  if(!c.createdAt) return '';
+  const d = new Date(c.createdAt);
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+}
+// dia do início do contato (o mesmo campo que o filtro do mês do Pipeline usa), à meia-noite local;
+// sem ele, o dia em que o contato foi cadastrado. Assim a Visão geral e o Pipeline contam igual.
+function dataInicioDoContato(c){
+  const m = /^(\d{4})-(\d{2})(?:-(\d{2}))?/.exec(c.mesInicioContato || '');
+  if(m) return new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3] || 1));
+  return c.createdAt ? new Date(c.createdAt) : null;
+}
 function monthsList(){
-  const set = new Set([currentMonthKey(), ...board.cards.map(c=>c.mesInicioContato).filter(Boolean).map(d=>d.slice(0,7))]);
+  const set = new Set([currentMonthKey(), ...board.cards.map(mesInicioDoContato).filter(Boolean)]);
   return Array.from(set).sort((a,b)=> a<b?1:-1);
 }
 function visibleCards(){
-  let cards = filterMonth ? board.cards.filter(c=>c.mesInicioContato && c.mesInicioContato.slice(0,7)===filterMonth) : board.cards;
+  let cards = filterMonth ? board.cards.filter(c=> mesInicioDoContato(c)===filterMonth) : board.cards;
   cards = cards.filter(c=>!c.arquivado);
   if(filtroEsfriando){
     const limite = Date.now() - 7*24*60*60*1000;
@@ -2744,9 +2774,8 @@ function periodRange(period){
 function cardsInPeriod(){
   const { start, end } = periodRange(dashboardPeriod);
   return board.cards.filter(c=>{
-    if(!c.createdAt) return false;
-    const d = new Date(c.createdAt);
-    return d >= start && d <= end;
+    const d = dataInicioDoContato(c);
+    return !!d && d >= start && d <= end;
   });
 }
 function vendidoNoMesAtual(){
@@ -2778,7 +2807,10 @@ async function salvarMetaVendas(){
   editandoMetaVendas = false;
   renderApp();
 }
+let metaEquipeDeQual = null; // de qual equipe é a meta carregada (trocou de equipe: recarrega)
 async function loadMetaVendasEquipe(){
+  if(acessoCrm && acessoCrm.tipo !== 'dono'){ metaVendasEquipeCarregada = true; return; } // equipe do CRM: só com login próprio
+  metaEquipeDeQual = equipe ? equipe.id : null;
   try{
     const data = await apiRequest('GET', `/equipe/meta-vendas/${currentMonthKey()}`);
     metaVendasEquipeValor = data.valorMeta || 0;
@@ -2833,7 +2865,7 @@ function leadsPorPeriodoBuckets(){
   }
   if(!buckets.length) buckets.push({ date:new Date(start), count:0 });
   cards.forEach(c=>{
-    const d = new Date(c.createdAt);
+    const d = dataInicioDoContato(c);
     for(let i=buckets.length-1;i>=0;i--){
       if(d >= buckets[i].date){ buckets[i].count++; break; }
     }
@@ -3123,7 +3155,9 @@ async function abrirDuplicadosModal(){
   try{
     const r = await apiRequest('GET', '/cards/duplicados');
     duplicados.grupos = r.grupos || [];
-    duplicados.grupos.forEach(g=>{ duplicados.escolha[g.chave] = g.contatos[0].id; }); // o mais antigo fica, por padrão
+    // fica, por padrão, o contato que já tem a venda (em Ganho ou com fechamento); senão o mais antigo
+    const temVenda = (c)=>{ const card = board.cards.find(k=> k.id === c.id); const col = card && board.columns.find(k=> k.id === card.columnId); return !!(card && ((col && col.tipo === 'ganho') || (card.fechamento && !card.fechamento.cancelado))); };
+    duplicados.grupos.forEach(g=>{ duplicados.escolha[g.chave] = (g.contatos.find(temVenda) || g.contatos[0]).id; });
   }catch(e){ duplicados.erro = e.message || 'Não foi possível procurar os duplicados.'; }
   renderDuplicadosModal();
 }
@@ -5425,7 +5459,8 @@ function renderAgendaDiaModal(){
 }
 
 function renderTarefasPage(){
-  const abas = [['calendario','Calendário'],['gerot','Rotina']];
+  const abas = atuandoComo ? [['calendario','Calendário']] : [['calendario','Calendário'],['gerot','Rotina']]; // a rotina é pessoal de quem está logado
+  if(atuandoComo && agendaSubTab !== 'calendario') agendaSubTab = 'calendario';
   return `
     <div class="page-head">
       <div>
@@ -5434,7 +5469,7 @@ function renderTarefasPage(){
       </div>
       ${agendaSubTab==='calendario' ? `
         <div class="page-head-actions">
-          ${calendarConnected ? `<button class="btn-outline" data-action="sync-calendar-now" ${calendarSyncing?'disabled':''}>${calendarSyncing?'Sincronizando…':'📅 Sincronizar Agenda'}</button>` : ''}
+          ${calendarConnected && !atuandoComo ? `<button class="btn-outline" data-action="sync-calendar-now" ${calendarSyncing?'disabled':''}>${calendarSyncing?'Sincronizando…':'📅 Sincronizar Agenda'}</button>` : ''}
           <button class="btn-primary" data-action="open-new-task">+ Nova tarefa</button>
         </div>
       ` : ''}
@@ -7569,9 +7604,38 @@ async function toggleArquivarCard(){
     renderApp();
   }
 }
+// Compras no balcão (PDV) do mesmo telefone: aparece na ficha quando a pessoa também é cliente do PDV
+let balcaoDoCard = { id: null, carregando: false, clientes: [] };
+async function carregarComprasNoBalcao(cardId){
+  balcaoDoCard = { id: cardId, carregando: true, clientes: [] };
+  try{ const r = await apiRequest('GET', `/cards/${cardId}/balcao`); if(balcaoDoCard.id === cardId) balcaoDoCard.clientes = r.clientes || []; }
+  catch(e){ /* sem PDV ou sem acesso: a ficha só não mostra o bloco */ }
+  if(balcaoDoCard.id !== cardId) return;
+  balcaoDoCard.carregando = false;
+  const el = document.getElementById('f-balcao');
+  if(el && modalForm && modalForm.id === cardId) el.outerHTML = renderComprasNoBalcao(modalForm);
+}
+function renderComprasNoBalcao(f){
+  const b = balcaoDoCard;
+  if(!f || b.id !== f.id || b.carregando || !b.clientes.length) return '<div id="f-balcao" hidden></div>';
+  return `<div id="f-balcao" class="balcao-crm">
+    <div class="balcao-crm-titulo">🛒 Compras no balcão <span>(PDV · mesmo telefone)</span></div>
+    ${b.clientes.map(c=>`
+      <div class="balcao-crm-resumo">
+        <div><b>${c.compras}</b><span>${c.compras === 1 ? 'compra' : 'compras'}</span></div>
+        <div><b>${fmtBRL(c.total)}</b><span>no total</span></div>
+        <div><b>${c.compras ? fmtBRL(c.ticket) : '—'}</b><span>ticket médio</span></div>
+        <div><b>${c.ultimaCompra ? `${c.ultimaCompra.slice(8,10)}/${c.ultimaCompra.slice(5,7)}/${c.ultimaCompra.slice(2,4)}` : '—'}</b><span>última compra</span></div>
+      </div>
+      ${c.vendas.length ? `<ul class="balcao-crm-lista">${c.vendas.map(v=>`<li><span>${v.data.split('-').reverse().join('/')} · ${esc(v.itens)}</span><span class="mono">${fmtBRL(v.total)}</span></li>`).join('')}</ul>` : ''}
+      <a class="balcao-crm-link" href="estoque/#clientes/${c.id}">Abrir no PDV →</a>
+    `).join('')}
+  </div>`;
+}
 function openEditCard(id){
   const card = board.cards.find(c=>c.id===id);
   if(!card) return;
+  if(card.telefone) carregarComprasNoBalcao(id); else balcaoDoCard = { id, carregando:false, clientes:[] };
   modalForm = {
     ...card, __isNew:false,
     clienteFisica: card.tipoPessoa==='juridica' ? '' : (card.cliente||''),
@@ -8039,6 +8103,7 @@ function renderModal(){
               ? `<p class="settings-page-note fech-aviso-valor">O valor do card mudou depois do fechamento (era ${fmtBRL(f.fechamento.valorOriginal)}). Os lançamentos no financeiro não mudam sozinhos. <button type="button" class="fech-link" id="f-refazer-fechamento" style="display:inline">Refazer o fechamento?</button></p>` : ''}
             <div class="ai-result" id="f-ai-mensagem-result" style="display:none;"></div>
             <div class="wa-conversa" id="f-historico" style="display:none;"></div>
+            ${!f.__isNew ? renderComprasNoBalcao(f) : ''}
           </div>
           <div class="field">
             <label>Observações (opcional)</label>
@@ -9290,6 +9355,7 @@ function renderSuportePage(){
       <div class="settings-page-section">
         <h3>Perguntas frequentes</h3>
         <p class="settings-page-note"><b>Como mudo a cor do painel?</b><br/>Configurações → Aparência e acessibilidade.</p>
+        <p class="settings-page-note"><b>Por que não aparece a aba Equipe?</b><br/>A Equipe do CRM (chat, gestão e "Abrir funil" dos consultores) é para quem entra com o próprio e-mail e senha. Quem entra com nome e PIN (funcionário da loja ou aparelho da loja) usa os contatos da loja e não vê essa aba. Para usar a equipe, entre com o seu e-mail e senha.</p>
         <p class="settings-page-note"><b>Como deixo a letra maior?</b><br/>Configurações → Aparência e acessibilidade → Tamanho da letra. Lá também tem alto contraste e menos animação.</p>
         <p class="settings-page-note"><b>Como conecto a Google Agenda?</b><br/>Configurações → Integrações → Google Agenda.</p>
       </div>

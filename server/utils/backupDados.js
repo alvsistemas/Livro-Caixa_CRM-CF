@@ -15,20 +15,11 @@ const PossivelLead = require('../models/PossivelLead');
 const Anexo = require('../models/Anexo');
 const RegraComissao = require('../models/RegraComissao');
 const { carregarFinanceiro } = require('./financeiro');
-const Estoque = require('./estoque');
-const Fidelidade = require('./fidelidade');
-const { hojeBR } = require('./fechamento');
 
-// PDV: cópia para consulta (produtos sem as fotos, vendas, compras, pedidos e clientes).
-// Os lançamentos de dinheiro já vão em controleFinanceiro.
-async function caixaEstoque(userId) {
-  const [negocio, produtos, vendas, compras, pedidos, clientes] = await Promise.all([
-    Estoque.lerNegocio(userId), Estoque.listarProdutos(userId), Estoque.listarVendas(userId, { limite: 200000 }), Estoque.listarCompras(userId, { limite: 200000 }), Estoque.listarPedidos(userId),
-    Fidelidade.listarClientes(userId, {}, hojeBR()),
-  ]);
-  if (!negocio && !produtos.length) return null;
-  return { negocio, produtos: produtos.map(({ foto, ...p }) => p), vendas, compras, pedidos, clientes };
-}
+// PDV: as tabelas do PDV, para dar para restaurar (utils/backupPdv.js). Os lançamentos de dinheiro
+// já vão em controleFinanceiro (com a ligação extras.estoque para as vendas e compras daqui).
+const { exportarPdv } = require('./backupPdv');
+const caixaEstoque = (userId) => exportarPdv(userId);
 
 // Monta o objeto de backup de um usuário (usado tanto pelo botão "Backup" quanto pelo backup
 // automático semanal por e-mail). Tokens e segredos nunca entram. Com incluirAnexos=false o
@@ -80,7 +71,7 @@ async function montarBackup(userId, { incluirAnexos = true } = {}) {
     possiveisLeads: possiveisLeads.map((d) => d.toJSON()),
     controleFinanceiro: financeiro, // lançamentos, cartões, investimentos, objetivos, perfil e config
   };
-  if (estoque) backup.caixaEstoque = estoque; // só para consulta: a restauração não recria o estoque
+  if (estoque) backup.pdv = estoque; // tabelas do PDV (sem fotos, PINs e segredos) — a restauração recria
   if (incluirAnexos) backup.anexos = anexos.map((d) => d.toJSON());
   return backup;
 }

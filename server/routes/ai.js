@@ -1,4 +1,5 @@
 const express = require('express');
+const { resumoDoPdv } = require('../utils/pdvResumo');
 const { isValidId } = require('../db/ids');
 const auth = require('../middleware/auth');
 const Card = require('../models/Card');
@@ -9,7 +10,7 @@ const Funil = require('../models/Funil');
 const { perguntarIA, chamarIA } = require('../utils/ia');
 const { resumoComissoesDoMes } = require('../utils/comissaoResumo');
 const { carregarFinanceiro, salvarSecaoFinanceiro } = require('../utils/financeiro');
-const { resumoDoMes, lancamentosDoMes, cartoesObjetivosInvestimentos } = require('../utils/financeiroResumo');
+const { resumoDoMes, lancamentosDoMes, cartoesObjetivosInvestimentos, dadosDoCrm } = require('../utils/financeiroResumo');
 
 const router = express.Router();
 router.use(auth); // todas as rotas de IA exigem login
@@ -132,6 +133,8 @@ E estas são as áreas do Controle financeiro. A barra lateral mostra à mostra 
 
 **Lançar pela conversa**: quando a pessoa pedir para lançar, registrar ou anotar um gasto ou uma receita (ex.: "gastei 52 reais no mercado no débito", "recebi 1.500 do cliente João"), use a ferramenta criar_lancamento. Só pergunte se faltar o valor. Não pergunte detalhes opcionais: escolha a categoria pelo contexto, use a data de hoje se ela não disser outra e a forma de pagamento que ela mencionar (débito = Conta Corrente, crédito = Cartão de Crédito). Depois confirme em uma frase o que foi lançado (valor, categoria, data e forma) e diga que dá pra ajustar em Lançamentos. Nunca crie lançamentos que a pessoa não pediu, e um pedido cria um lançamento só (a não ser que ela liste vários).
 
+**PDV (vendas no balcão, estoque, caixa, mesas)**: quando a pessoa perguntar sobre vendas do balcão/restaurante, o que mais vende, estoque baixo ou acabando, caixa aberto, mesas abertas há muito tempo, pedidos do cardápio esperando ou fiado, use a ferramenta resumo_pdv. Se ela disser que a conta não tem PDV, explique que o PDV é o terceiro aplicativo (liga no Controle financeiro, na tela de escolha).
+
 **Plano**: o Livro-Caixa tem um plano só, com tudo liberado: CRM, Controle financeiro, PDV, equipe com funções e PIN, restaurante (cardápio digital, mesas, cozinha), nota fiscal, este assistente com IA, Google Agenda, relatórios avançados e ações automáticas. Dá para pagar mensal ou anual, na tela de assinatura.
 
 Se o usuário perguntar algo específico dos dados dele (tipo "quantos contatos eu tenho", "quanto vou receber de comissão", "quanto gastei esse mês", "qual foi meu lucro"), USE as ferramentas disponíveis pra consultar os dados reais antes de responder — nunca invente números. Valores em reais, no formato brasileiro (R$ 1.234,56). Se a pergunta não tiver nada a ver com o sistema ou com as finanças e vendas da pessoa, responda com educação que seu foco é ajudar com o Livro-Caixa.`;
@@ -172,6 +175,11 @@ async function contextoDaPessoa(userId, contexto) {
 // Ferramentas que o assistente pode usar pra consultar os dados de verdade do usuário
 // (a IA decide sozinha quando precisa de cada uma, com base na pergunta)
 const FERRAMENTAS_ASSISTENTE = [
+  {
+    name: 'resumo_pdv',
+    description: 'PDV (vendas no balcão/restaurante): vendas de hoje, de ontem e do mês (total, quantidade, ticket médio, lucro bruto), os mais vendidos do mês, produtos com estoque baixo ou que acabaram, se o caixa está aberto (e desde quando), caixa ou mesas esquecidos abertos, pedidos do cardápio esperando e fiado em aberto. Use para qualquer pergunta sobre o balcão, o restaurante, o estoque ou o caixa.',
+    input_schema: { type: 'object', properties: {} },
+  },
   {
     name: 'resumo_pipeline',
     description: 'Retorna um resumo do funil de vendas do usuário: quantos clientes em cada coluna/etapa, valor total por coluna, e quantos estão quentes/mornos/frios. Use quando o usuário perguntar sobre o estado atual do funil, quantos leads tem, etc.',
@@ -242,7 +250,15 @@ const FERRAMENTAS_ASSISTENTE = [
   },
 ];
 
+// Quem entra com nome e PIN só usa o que a função dele vê (totais do PDV pedem "Relatórios")
+function ferramentasPara(req) {
+  const a = req.acesso;
+  if (!a || a.tipo === 'dono') return FERRAMENTAS_ASSISTENTE;
+  return FERRAMENTAS_ASSISTENTE.filter((f) => f.name !== 'resumo_pdv' || (a.perm && a.perm.relatorios));
+}
+
 async function executarFerramenta(nome, input, userId) {
+  if (nome === 'resumo_pdv') return resumoDoPdv(userId);
   if (nome === 'resumo_pipeline') {
     const columns = await Column.find({ userId });
     const cards = (await Card.find({ userId, arquivado: { $ne: true } }));
@@ -283,15 +299,7 @@ async function executarFerramenta(nome, input, userId) {
     const dados = await carregarFinanceiro(userId);
     if (nome === 'cartoes_objetivos_investimentos') return cartoesObjetivosInvestimentos(dados);
     const mes = /^\d{4}-\d{2}$/.test(String(input && input.mes || '')) ? input.mes : new Date().toISOString().slice(0, 7);
-    const modo = (dados.config && dados.config.integracaoCrm) || 'vendas';
-    const crm = { colunas: [], cards: [], contratos: [] };
-    if (modo === 'vendas') {
-      crm.colunas = await Column.find({ userId, tipo: 'ganho' });
-      crm.cards = crm.colunas.length ? await Card.find({ userId, columnId: { $in: crm.colunas.map((c) => c._id) } }) : [];
-    }
-    if (modo === 'comissoes' || (modo === 'vendas' && dados.config && dados.config.descontarComissoes)) {
-      crm.contratos = await Contrato.find({ userId });
-    }
+    const crm = await dadosDoCrm(userId); // mesmos dados e regra das abas Painel e Lucro
     if (nome === 'resumo_financeiro') return resumoDoMes(dados, crm, mes);
     return lancamentosDoMes(dados, crm, mes, { tipo: input && input.tipo, categoria: input && input.categoria });
   }
@@ -379,7 +387,7 @@ router.post('/assistente', async (req, res) => {
       const data = await chamarIA({
         system: systemPrompt,
         mensagens: historico,
-        tools: FERRAMENTAS_ASSISTENTE,
+        tools: ferramentasPara(req),
         maxTokens: 700,
       });
 
@@ -390,7 +398,9 @@ router.post('/assistente', async (req, res) => {
         for (const bloco of blocosFerramenta) {
           let resultado;
           try {
-            resultado = await executarFerramenta(bloco.name, bloco.input, req.userId);
+            resultado = ferramentasPara(req).some((f) => f.name === bloco.name)
+              ? await executarFerramenta(bloco.name, bloco.input, req.userId)
+              : { erro: 'A função desta pessoa não tem acesso a essa informação.' };
             if (bloco.name === 'criar_lancamento' && resultado && resultado.ok) dadosAlterados = true;
           } catch (err) {
             resultado = { erro: 'Não foi possível consultar essa informação agora.' };

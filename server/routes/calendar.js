@@ -119,7 +119,8 @@ router.get('/agenda-mes', auth, async (req, res) => {
     const user = await User.findById(req.userId);
     // eventos do Google só no plano que tem a integração (as tarefas aparecem em todos)
     const planoTemGoogle = !req.assinatura || req.assinatura.recursos.googleAgenda;
-    if (planoTemGoogle && user && user.googleCalendar && user.googleCalendar.refreshToken) {
+    // gestor no funil de um consultor: só as tarefas; o Google Agenda do consultor é pessoal
+    if (!req.atuandoComo && planoTemGoogle && user && user.googleCalendar && user.googleCalendar.refreshToken) {
       try {
         eventosGoogle = await listarEventosPrimario(user, inicioMes, fimMes);
         const extras = await EventoGoogleExtra.find({ userId: req.userId, eventId: { $in: eventosGoogle.map((e) => e.id) } }).populate('leadId', 'cliente');

@@ -414,9 +414,10 @@ router.get('/supervisao/:userId/dashboard', async (req, res) => {
 router.get('/meta-vendas/:mes', async (req, res) => {
   try {
     const user = await User.findById(req.userId);
-    if (!user.equipeId) return res.status(400).json({ error: 'Você não faz parte de nenhuma equipe.' });
-
     const mes = req.params.mes;
+    // sem equipe não é erro: o painel só não mostra a meta da equipe
+    if (!user.equipeId) return res.json({ mes, valorMeta: 0, vendidoNoMes: 0, souGestor: false, semEquipe: true });
+
     if (!/^\d{4}-\d{2}$/.test(mes)) return res.status(400).json({ error: 'Mês inválido.' });
     const [meta, membros] = await Promise.all([
       MetaVendasEquipe.findOne({ equipeId: user.equipeId, mes }),

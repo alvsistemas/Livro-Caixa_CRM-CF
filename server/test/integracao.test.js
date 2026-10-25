@@ -2094,6 +2094,99 @@ describe('API com PostgreSQL (integração)', { skip: pular }, () => {
     assert.equal(ver.dados.minhasEquipes.length, 0);
   });
 
+  test('ligações: atuar como × fechamento, permissões em várias equipes, juntar com venda e meta sem equipe', async () => {
+    const nova = async (nome, email) => { const r = await api('POST', '/api/auth/register', { nome, email, senha: 'senha123' }); return { token: r.dados.token, id: r.dados.user.id }; };
+    const g = await nova('Gê Gestor', 'ge.lig@teste.com');
+    const c = await nova('Cá Consultor', 'ca.lig@teste.com');
+    // meta da equipe sem equipe: 200 (antes dava 400 a cada abertura do CRM)
+    const semEq = await api('GET', '/api/equipe/meta-vendas/2026-10', undefined, c.token);
+    assert.equal(semEq.status, 200); assert.equal(semEq.dados.semEquipe, true);
+    const eq = await api('POST', '/api/equipe', { nome: 'Ligações' }, g.token);
+    await api('POST', '/api/equipe/entrar', { codigo: eq.dados.codigoConvite }, c.token);
+    const como = (m, caminho, corpo) => fetch(`${base}${caminho}`, { method: m, headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${g.token}`, 'X-Atuar-Como': c.id }, body: corpo ? JSON.stringify(corpo) : undefined }).then(async (r) => ({ status: r.status, dados: await r.json().catch(() => null) }));
+    // gestor ganha a venda no funil do consultor: o fechamento fica pendente PARA O CONSULTOR
+    await api('PUT', '/api/financeiro/fechamento/modo', { modo: 'vendas' }, c.token);
+    const quadro = (await como('GET', '/api/board')).dados;
+    const ab = quadro.columns.find((x) => x.tipo === 'aberto'); const ga = quadro.columns.find((x) => x.tipo === 'ganho');
+    const card = await como('POST', '/api/cards', { cliente: 'Venda pelo gestor', columnId: ab.id, valor: 800 });
+    assert.equal((await como('PUT', `/api/cards/${card.dados.id}`, { columnId: ga.id })).status, 200);
+    const modo = await como('GET', '/api/financeiro/fechamento/modo');
+    assert.equal(modo.status, 200); assert.equal(modo.dados.modo, 'vendas');
+    const dep = await como('POST', `/api/financeiro/fechamento/${card.dados.id}/depois`);
+    assert.equal(dep.status, 200, JSON.stringify(dep.dados)); assert.equal(dep.dados.card.fechamentoPendente, true);
+    assert.equal((await como('POST', `/api/financeiro/fechamento/${card.dados.id}`, { valorFinal: 800 })).status, 403); // lançar é só do consultor
+    assert.equal((await como('GET', '/api/financeiro')).status, 403);
+    // agenda do consultor no "Abrir funil": só as tarefas (sem o Google Agenda dele)
+    const ag = await como('GET', `/api/calendar/agenda-mes?mes=${new Date().toISOString().slice(0, 7)}`);
+    assert.equal(ag.status, 200, JSON.stringify(ag.dados)); assert.deepEqual(ag.dados.eventosGoogle, []);
+    // várias equipes: vale a regra mais restrita entre as equipes em que a pessoa é membro
+    await api('PUT', '/api/equipe/permissoes', { abas: { financeiro: false } }, g.token);
+    assert.equal((await api('GET', '/api/financeiro', undefined, c.token)).status, 403);
+    await api('POST', '/api/equipe', { nome: 'Do Cá' }, c.token); // cria a própria e ela fica aberta
+    assert.equal((await api('GET', '/api/financeiro', undefined, c.token)).status, 403);
+    // juntar duplicados: o contato que tem a venda não vai para os arquivados
+    const vend = await api('POST', '/api/cards', { cliente: 'Duplo', telefone: '11 96666-2222', columnId: ga.id, valor: 300 }, c.token);
+    const outro = await api('POST', '/api/cards', { cliente: 'Duplo B', telefone: '+55 11 6666-2222', columnId: ab.id }, c.token);
+    const errado = await api('POST', '/api/cards/unificar', { manterId: outro.dados.id, juntarIds: [vend.dados.id] }, c.token);
+    assert.equal(errado.status, 400); assert.match(errado.dados.error, /Escolha manter esse contato/);
+    assert.equal((await api('POST', '/api/cards/unificar', { manterId: vend.dados.id, juntarIds: [outro.dados.id] }, c.token)).status, 200);
+  });
+
+  test('ligações entre os apps: cliente do PDV × CRM, vendas do CRM no servidor, Painel do dono, backup do PDV', async () => {
+    const r0 = await api('POST', '/api/auth/register', { nome: 'Lia Loja', email: 'lia.lig@teste.com', senha: 'senha123' });
+    const t = r0.dados.token;
+    await api('PUT', '/api/estoque/negocio', { tipo: 'loja', nome: 'Loja da Lia', controlaEstoque: true }, t);
+    const prod = (await api('POST', '/api/estoque/produtos', { nome: 'Caneca', preco: 30, custo: 10, estoqueInicial: 20 }, t)).dados.produto;
+    const cli = (await api('POST', '/api/estoque/clientes', { nome: 'Rosa', telefone: '(11) 94444-3333' }, t)).dados.cliente;
+    assert.equal((await api('POST', '/api/estoque/vendas', { meio: 'pix', clienteId: cli.id, itens: [{ produtoId: prod.id, qtd: 2 }] }, t)).status, 200);
+    // PDV -> CRM: ainda não está no CRM; "Levar para o CRM" cria o contato (uma vez só)
+    let crm = await api('GET', `/api/estoque/clientes/${cli.id}/crm`, undefined, t);
+    assert.equal(crm.status, 200); assert.equal(crm.dados.negociacoes.length, 0); assert.equal(crm.dados.temTelefone, true);
+    const levar = await api('POST', `/api/estoque/clientes/${cli.id}/crm`, {}, t);
+    assert.equal(levar.status, 200, JSON.stringify(levar.dados)); assert.equal(levar.dados.criado, true);
+    assert.equal((await api('POST', `/api/estoque/clientes/${cli.id}/crm`, {}, t)).dados.jaExistia, true);
+    crm = await api('GET', `/api/estoque/clientes/${cli.id}/crm`, undefined, t);
+    assert.equal(crm.dados.negociacoes.length, 1); assert.equal(crm.dados.negociacoes[0].tipo, 'aberto');
+    // CRM -> PDV: a ficha do contato mostra as compras no balcão (telefone escrito de outro jeito)
+    const board = (await api('GET', '/api/board', undefined, t)).dados;
+    const ganho = board.columns.find((c) => c.tipo === 'ganho');
+    const outro = (await api('POST', '/api/cards', { cliente: 'Rosa (outro cadastro)', telefone: '+55 11 4444-3333', columnId: board.columns[0].id }, t)).dados;
+    const balcao = await api('GET', `/api/cards/${outro.id}/balcao`, undefined, t);
+    assert.equal(balcao.status, 200);
+    assert.equal(balcao.dados.clientes.length, 1);
+    assert.equal(balcao.dados.clientes[0].compras, 1); assert.equal(balcao.dados.clientes[0].total, 60);
+    // vendas do CRM calculadas no servidor: cards arquivados vêm marcados e não viram venda
+    const venda = (await api('POST', '/api/cards', { cliente: 'Venda CRM', columnId: ganho.id, valor: 500, mes: new Date().toISOString().slice(0, 10) }, t)).dados;
+    const arq = (await api('POST', '/api/cards', { cliente: 'Venda arquivada', columnId: ganho.id, valor: 900, mes: new Date().toISOString().slice(0, 10) }, t)).dados;
+    await api('PUT', `/api/cards/${arq.id}/arquivar`, {}, t);
+    const fcrm = await api('GET', '/api/financeiro/crm', undefined, t);
+    assert.equal(fcrm.status, 200);
+    assert.equal(fcrm.dados.cards.find((c) => c.id === arq.id).arquivado, true);
+    assert.ok(fcrm.dados.colunas.some((c) => c.tipo === 'ganho'));
+    // Painel do dono: balcão + CRM, e o resultado da Empresa no financeiro
+    const painel = await api('GET', '/api/gestao', undefined, t);
+    assert.equal(painel.status, 200, JSON.stringify(painel.dados));
+    assert.equal(painel.dados.resumo.vendidoNoMes.balcao, 60);
+    assert.equal(painel.dados.resumo.vendidoNoMes.crm, 500); // o arquivado não entra
+    assert.equal(painel.dados.resumo.vendidoNoMes.total, 560);
+    assert.ok(painel.dados.resumo.financeiro.empresa.receitas >= 560, JSON.stringify(painel.dados.resumo.financeiro));
+    assert.ok(Array.isArray(painel.dados.resumo.mesasEsquecidas));
+    // backup: o PDV vai em "pdv" (sem fotos e sem o código da loja) e volta na restauração
+    const exp = await api('GET', '/api/backup/exportar-tudo', undefined, t);
+    assert.ok(exp.dados.pdv && exp.dados.pdv.estoque_produtos.length === 1);
+    assert.equal(exp.dados.pdv.estoque_negocio[0].codigo_equipe, undefined);
+    assert.equal(exp.dados.pdv.estoque_produtos[0].foto, undefined);
+    const r2 = await api('POST', '/api/auth/register', { nome: 'Lia Nova', email: 'lia.nova@teste.com', senha: 'senha123' });
+    const imp = await api('POST', '/api/backup/importar-tudo', exp.dados, r2.dados.token);
+    assert.equal(imp.status, 200, JSON.stringify(imp.dados));
+    assert.equal(imp.dados.resultado.pdv.produtos.ok, 1);
+    assert.equal(imp.dados.resultado.pdv.vendas.ok, 1);
+    const prods2 = (await api('GET', '/api/estoque/produtos', undefined, r2.dados.token)).dados.produtos;
+    assert.equal(prods2.length, 1); assert.equal(prods2[0].estoque, 18);
+    const clis2 = (await api('GET', '/api/estoque/clientes', undefined, r2.dados.token)).dados.clientes;
+    assert.equal(clis2[0].compras, 1);
+  });
+
   test('sair de todos os aparelhos invalida o token antigo', async () => {
     const t = contas.caio.token;
     assert.equal((await api('POST', '/api/auth/logout-all', {}, t)).status, 204);

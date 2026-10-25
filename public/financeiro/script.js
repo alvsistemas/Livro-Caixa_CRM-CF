@@ -236,8 +236,9 @@ async function salvarTudoAgora() {
 /* ----------------------------------------------------------------------- */
 async function carregarCrm() {
   try {
-    const [board, comissoes] = await Promise.all([api("GET", "/board"), api("GET", "/comissoes")]);
-    state.crm = { columns: board.columns || [], cards: board.cards || [], contratos: comissoes.contratos || [], carregado: true, erro: null };
+    // o servidor junta vendas e comissões da conta inteira (mesma regra do Painel do dono e da IA)
+    const d = await api("GET", "/financeiro/crm");
+    state.crm = { columns: d.colunas || [], cards: d.cards || [], contratos: d.contratos || [], carregado: true, erro: null };
   } catch (e) {
     state.crm = { columns: [], cards: [], contratos: [], carregado: false, erro: e.message };
   }
@@ -245,63 +246,11 @@ async function carregarCrm() {
 function modoIntegracao() { return (state.config && state.config.integracaoCrm) || "vendas"; }
 // mês de venda do card: o campo "Mês de venda" do CRM ("YYYY-MM" ou "YYYY-MM-DD");
 // sem ele, a data em que o card entrou na coluna de ganho
-function dataVendaDoCard(c) {
-  if (/^\d{4}-\d{2}-\d{2}/.test(c.mes || "")) return c.mes.slice(0, 10);
-  if (/^\d{4}-\d{2}/.test(c.mes || "")) return c.mes.slice(0, 7) + "-01";
-  const ref = c.colunaDesde || c.updatedAt || c.createdAt;
-  return ref ? String(ref).slice(0, 10) : todayISO();
-}
-// valor da parcela "idx" (0 = primeira) de um contrato de comissão do CRM
-function parcelaDoContrato(ct, idx) {
-  if (Array.isArray(ct.blocos) && ct.blocos.length) {
-    let inicio = 0;
-    for (const b of ct.blocos) {
-      const n = Math.max(1, parseInt(b.parcelas, 10) || 1);
-      if (idx < inicio + n) return Number(b.value) || 0;
-      inicio += n;
-    }
-    return 0;
-  }
-  const p1 = ct.parcelas1 != null ? ct.parcelas1 : ct.parcelas;
-  return idx < p1 ? (Number(ct.value) || 0) : (Number(ct.value2) || 0);
-}
+// as regras ficam em calculos.js (as mesmas que o servidor usa no Painel do dono, na IA e no e-mail)
+const parcelaDoContrato = (ct, idx) => Calculos.parcelaDoContrato(ct, idx);
 function crmRowsForMonth(month) {
-  const modo = modoIntegracao();
-  if (modo === "nenhum" || !state.crm.carregado) return [];
-  const rows = [];
-  const status = month > mesAtual() ? "Previsto" : "Pago";
-  const contratosDoMes = (tipo, categoria, escopoFixo) => {
-    state.crm.contratos.forEach((ct) => {
-      const anchor = String(ct.date || "").slice(0, 7);
-      if (!/^\d{4}-\d{2}$/.test(anchor)) return;
-      if (ct.canceladoNoMes && month >= ct.canceladoNoMes) return; // cancelado: para de contar a partir desse mês
-      const idx = monthsBetween(anchor, month);
-      const total = Number(ct.parcelas) || 1;
-      if (idx < 0 || idx >= total) return;
-      const value = parcelaDoContrato(ct, idx);
-      if (value <= 0) return;
-      rows.push({
-        tx: { id: `crm-comissao-${ct.id}`, origem: "crm", date: `${month}-01`, desc: `${tipo === "Receita" ? "Comissão" : "Comissão paga"} — ${ct.desc || "Contrato"}`, type: tipo, category: categoria, scope: escopoFixo || (ct.scope === "Empresa" ? "Empresa" : "Pessoal"), account: "—", status, value },
-        value, badge: `${idx + 1}/${total}`,
-      });
-    });
-  };
-  if (modo === "vendas") {
-    const ganho = new Set(state.crm.columns.filter((c) => c.tipo === "ganho").map((c) => c.id));
-    state.crm.cards.forEach((c) => {
-      if (!ganho.has(c.columnId)) return;
-      if (c.fechamento && !c.fechamento.cancelado) return; // fechamento feito: as parcelas já são lançamentos de verdade
-      const data = dataVendaDoCard(c);
-      if (monthKey(data) !== month) return;
-      const value = Number(c.valor) || 0;
-      if (value <= 0) return;
-      rows.push({ tx: { id: `crm-venda-${c.id}`, origem: "crm", date: data, desc: `Venda — ${c.cliente || "Cliente"}`, type: "Receita", category: "Vendas", scope: "Empresa", account: "—", status: "Pago", value }, value, badge: null });
-    });
-    if (state.config.descontarComissoes) contratosDoMes("Despesa", "Comissões", "Empresa");
-  } else if (modo === "comissoes") {
-    contratosDoMes("Receita", "Comissão");
-  }
-  return rows;
+  if (!state.crm.carregado) return [];
+  return Calculos.linhasDoCrm({ config: state.config, colunas: state.crm.columns, cards: state.crm.cards, contratos: state.crm.contratos }, month);
 }
 function totalCrm(rows) { return rows.filter((r) => r.tx.origem === "crm" && r.tx.type === "Receita").reduce((a, r) => a + r.value, 0); }
 

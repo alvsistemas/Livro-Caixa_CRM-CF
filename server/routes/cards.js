@@ -19,6 +19,7 @@ const { dispararWebhooks } = require('../utils/dispararWebhooks');
 const { validarAtribuicao, colunaEquivalente, proximaOrdem, transferirCard } = require('../utils/atribuirLead');
 const { enviarPush } = require('../utils/push');
 const { chaveTelefone } = require('../utils/telefone');
+const { comprasNoBalcao } = require('../utils/ligacaoClientes');
 const { transacao } = require('../db/pool');
 const HistoricoContato = require('../models/HistoricoContato');
 const MensagemAgendada = require('../models/MensagemAgendada');
@@ -78,6 +79,19 @@ function filtrarCampos(body) {
 /* ---------- contatos duplicados ----------
    Dois contatos são o mesmo quando a chave do telefone é igual (só dígitos, sem 55, sem o 9 extra
    do celular). A tela mostra os grupos; a pessoa escolhe qual manter; o resto é juntado nele. */
+// GET /api/cards/:id/balcao -> compras desse contato no PDV (cliente do PDV com o mesmo telefone)
+router.get('/:id/balcao', async (req, res) => {
+  try {
+    if (!isValidId(req.params.id)) return res.status(400).json({ error: 'ID inválido.' });
+    const card = await Card.findOne({ _id: req.params.id, userId: req.userId }).select('telefone');
+    if (!card) return res.status(404).json({ error: 'Contato não encontrado.' });
+    res.json({ clientes: await comprasNoBalcao(req.userId, card.telefone) });
+  } catch (err) {
+    console.error('Erro ao ler as compras no balcão:', err.message);
+    res.status(500).json({ error: 'Não foi possível ler as compras no balcão.' });
+  }
+});
+
 // GET /api/cards/duplicados -> grupos de contatos com o mesmo telefone
 router.get('/duplicados', async (req, res) => {
   try {
@@ -120,6 +134,17 @@ router.post('/unificar', async (req, res) => {
     const chave = chaveTelefone(manter.telefone);
     if (!chave || outros.some((o) => chaveTelefone(o.telefone) !== chave)) {
       return res.status(400).json({ error: 'Só dá para juntar contatos com o mesmo telefone.' });
+    }
+    // contato com venda (em Ganho ou com fechamento) não vai para os arquivados: a venda continuaria
+    // contando no financeiro e nas comissões, mas sumiria do CRM. Quem tem a venda é que fica.
+    const colunasGanho = new Set((await Column.find({ userId: req.userId, tipo: 'ganho' })).map((c) => String(c._id)));
+    const temVenda = (c) => colunasGanho.has(String(c.columnId)) || !!(c.fechamento && !c.fechamento.cancelado);
+    const comVenda = outros.filter(temVenda);
+    if (comVenda.length) {
+      const nomes = comVenda.map((c) => `"${c.cliente}"`).join(', ');
+      return res.status(400).json({ error: temVenda(manter) || comVenda.length > 1
+        ? `${nomes} também tem uma venda registrada. Contatos com vendas diferentes não podem ser juntados.`
+        : `${nomes} já tem uma venda registrada. Escolha manter esse contato.` });
     }
     await transacao(async () => {
       const ids = outros.map((o) => o._id);

@@ -50,9 +50,24 @@ describe('resumo financeiro para a IA', () => {
       { desc: 'Cancelado', scope: 'Pessoal', date: '2026-08-01', parcelas: 6, parcelas1: 6, value: 80, value2: 80, canceladoNoMes: '2026-10' },
     ];
     const linhas = linhasDoCrm({ config: { integracaoCrm: 'comissoes' }, contratos }, '2026-10');
-    assert.deepEqual(linhas.map((l) => [l.tx.desc, l.valor]), [['Contrato A', 100], ['Contrato B', 500]]);
+    assert.deepEqual(linhas.map((l) => [l.tx.desc, l.valor]), [['Comissão — Contrato A', 100], ['Comissão — Contrato B', 500]]);
     assert.deepEqual(linhasDoCrm({ config: { integracaoCrm: 'comissoes' }, contratos }, '2026-11').map((l) => l.valor), [100, 50]);
     assert.equal(linhasDoCrm({ config: { integracaoCrm: 'nenhum' }, contratos }, '2026-10').length, 0);
+  });
+
+  test('vendas do CRM: mesma regra do site (sem dobrar quem tem fechamento, sem arquivados)', () => {
+    const crm = {
+      config: { integracaoCrm: 'vendas' },
+      colunas: [{ _id: 'g1', tipo: 'ganho' }, { _id: 'a1', tipo: 'aberto' }],
+      cards: [
+        { _id: 'c1', cliente: 'Sem fechamento', columnId: 'g1', valor: 1000, mes: '2026-10-05' },
+        { _id: 'c2', cliente: 'Com fechamento', columnId: 'g1', valor: 2000, mes: '2026-10-06', fechamento: { valorFinal: 1900 } },
+        { _id: 'c3', cliente: 'Fechamento desfeito', columnId: 'g1', valor: 300, mes: '2026-10-07', fechamento: { valorFinal: 300, cancelado: { em: '2026-10-08' } } },
+        { _id: 'c4', cliente: 'Arquivado', columnId: 'g1', valor: 700, mes: '2026-10-08', arquivado: true },
+        { _id: 'c5', cliente: 'Em aberto', columnId: 'a1', valor: 900, mes: '2026-10-08' },
+      ],
+    };
+    assert.deepEqual(linhasDoCrm(crm, '2026-10').map((l) => [l.tx.desc, l.valor]), [['Venda — Sem fechamento', 1000], ['Venda — Fechamento desfeito', 300]]);
   });
 
   test('lista de lançamentos filtra por tipo e categoria', () => {

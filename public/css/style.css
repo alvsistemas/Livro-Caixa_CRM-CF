@@ -1210,3 +1210,17 @@ tr.membro-supervisor-destaque td:last-child{ border-right:1px solid var(--gold);
 @media (max-width:768px){
   .atuando-banner{ flex-direction:column; align-items:stretch; border-radius:10px; font-size:12px; position:static; }
 }
+
+/* ---------- Ficha do CRM: compras no balcão (PDV, mesmo telefone) ---------- */
+.balcao-crm{ margin-top:12px; border:1px solid var(--line); border-radius:12px; padding:12px 14px; background:var(--col-bg); }
+.balcao-crm-titulo{ font-size:13px; font-weight:700; color:var(--ink); margin-bottom:10px; }
+.balcao-crm-titulo span{ font-weight:500; color:var(--ink-soft); }
+.balcao-crm-resumo{ display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:8px; }
+.balcao-crm-resumo div{ display:flex; flex-direction:column; gap:2px; min-width:0; }
+.balcao-crm-resumo b{ font-family:'IBM Plex Mono',monospace; font-size:13px; color:var(--ink); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.balcao-crm-resumo span{ font-size:11px; color:var(--ink-soft); }
+.balcao-crm-lista{ list-style:none; margin:10px 0 0; padding:0; display:flex; flex-direction:column; gap:4px; }
+.balcao-crm-lista li{ display:flex; justify-content:space-between; gap:10px; font-size:12.5px; color:var(--ink-soft); border-top:1px dashed var(--line); padding-top:4px; }
+.balcao-crm-lista li span:first-child{ min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.balcao-crm-link{ display:inline-block; margin-top:8px; font-size:12.5px; font-weight:600; color:var(--accent); text-decoration:none; }
+@media (max-width:520px){ .balcao-crm-resumo{ grid-template-columns:repeat(2,minmax(0,1fr)); } }

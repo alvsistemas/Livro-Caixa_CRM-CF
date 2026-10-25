@@ -7,6 +7,7 @@ const Column = require('../models/Column');
 const Contrato = require('../models/Contrato');
 const { isValidId } = require('../db/ids');
 const fechamento = require('../utils/fechamento');
+const { dadosDoCrm } = require('../utils/financeiroResumo');
 
 const router = express.Router();
 router.use(auth); // tudo do Controle financeiro exige login
@@ -21,6 +22,17 @@ router.get('/', async (req, res) => {
   } catch (err) {
     console.error('Erro ao carregar o Controle financeiro:', err.message);
     res.status(500).json({ error: 'Erro ao carregar o Controle financeiro.' });
+  }
+});
+
+// GET /api/financeiro/crm -> vendas e comissões do CRM da conta inteira, para as abas Painel e Lucro.
+// Antes o site lia /api/board (que, para vendedor com PIN, traz só os contatos dele) e calculava sozinho.
+router.get('/crm', async (req, res) => {
+  try {
+    res.json(await dadosDoCrm(req.userId));
+  } catch (err) {
+    console.error('Erro ao ler o CRM para o financeiro:', err.message);
+    res.status(500).json({ error: 'Não foi possível ler os dados do CRM agora.' });
   }
 });
 

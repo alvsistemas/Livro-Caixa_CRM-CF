@@ -21,6 +21,7 @@ const { criarMiddlewareLimite } = require('../utils/limiteTaxa');
 const A = require('../utils/acesso');
 const { query } = require('../db/pool');
 
+const L = require('../utils/ligacaoClientes');
 const router = express.Router();
 router.use(auth);
 
@@ -265,6 +266,40 @@ router.post('/clientes', rota(async (req) => ({ cliente: await F.salvarCliente(r
 router.put('/clientes/:id', rota(async (req) => ({ cliente: await F.salvarCliente(req.userId, req.body || {}, req.params.id, hojeBR()) }), 'Erro ao salvar o cliente', 'caixa'));
 router.delete('/clientes/:id', rota(async (req) => { await F.excluirCliente(req.userId, req.params.id); return { ok: true }; }, 'Erro ao excluir o cliente', 'cancelar'));
 router.post('/clientes/:id/ajuste', rota(async (req) => F.ajustarBeneficio(req.userId, req.params.id, req.body || {}, await programaDoUsuario(req.userId), hojeBR()), 'Erro ao ajustar', 'cancelar'));
+// Ligação com o CRM (mesmo telefone): ver a negociação e criar o contato lá. Só para quem usa o CRM.
+const usaCrm = (req) => {
+  if (req.op && (req.pdv.exigirOperador || (req.acesso && req.acesso.tipo !== 'dono'))) return !!A.permissoesDe(req.op).crm;
+  return !req.acesso || req.acesso.tipo === 'dono' || !!(req.acesso.perm && req.acesso.perm.crm);
+};
+const clienteDoPdv = async (req) => {
+  if (!/^[0-9a-f-]{36}$/i.test(String(req.params.id))) throw new E.ErroEstoque('Cliente não encontrado.');
+  const { rows } = await query('SELECT nome, telefone, obs FROM estoque_clientes WHERE user_id = $1::uuid AND id = $2::uuid', [req.userId, req.params.id]);
+  if (!rows[0]) throw new E.ErroEstoque('Cliente não encontrado.');
+  return rows[0];
+};
+router.get('/clientes/:id/crm', rota(async (req) => {
+  if (!usaCrm(req)) return { semAcesso: true, negociacoes: [] };
+  const cliente = await clienteDoPdv(req);
+  return { negociacoes: await L.negociacoesNoCrm(req.userId, cliente.telefone), temTelefone: !!cliente.telefone };
+}, 'Erro ao ler o CRM'));
+router.post('/clientes/:id/crm', rota(async (req) => {
+  if (!usaCrm(req)) throw new ErroPermissao('A sua função não usa o CRM. Fale com o gestor.');
+  const cliente = await clienteDoPdv(req);
+  if (!cliente.telefone) throw new E.ErroEstoque('Cadastre o telefone do cliente antes de levar para o CRM.');
+  const ja = await L.negociacoesNoCrm(req.userId, cliente.telefone);
+  if (ja.length) return { contato: ja[0], jaExistia: true };
+  const Column = require('../models/Column'); const Card = require('../models/Card');
+  const colunas = await Column.find({ userId: req.userId, tipo: 'aberto' }).sort({ ordem: 1 });
+  if (!colunas.length) throw new E.ErroEstoque('O CRM não tem uma etapa "em aberto" para receber o contato.');
+  const col = colunas[0];
+  const ultimo = await Card.findOne({ userId: req.userId, columnId: col._id }).sort('-ordem');
+  const card = await Card.create({
+    userId: req.userId, columnId: col._id, ordem: ultimo ? ultimo.ordem + 1000 : 1000, cliente: cliente.nome || 'Cliente do balcão',
+    telefone: cliente.telefone, obs: cliente.obs || '', etiquetas: ['cliente do balcão'],
+    mesInicioContato: hojeBR(), ...(req.acesso && req.acesso.operador ? { responsavelOpId: req.acesso.operador.id } : {}),
+  });
+  return { contato: { id: String(card._id), cliente: card.cliente, etapa: col.nome, tipo: col.tipo, valor: 0 }, criado: true };
+}, 'Erro ao criar o contato no CRM', 'clientes'));
 router.get('/clientes/:id/fiado', rota((req) => C.contaFiado(req.userId, req.params.id), 'Erro ao carregar o fiado'));
 router.post('/clientes/:id/fiado/receber', rota((req) => C.receberFiado(req.userId, req.params.id, req.body || {}, nomeDoOperador(req)), 'Erro ao receber o fiado', 'caixa'));
 
