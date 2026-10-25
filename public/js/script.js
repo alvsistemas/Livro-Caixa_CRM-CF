@@ -297,6 +297,8 @@ let equipeNomeNovo = '';
 let equipeCodigoEntrar = '';
 let equipeMsg = null;
 let equipeSubTab = 'chat';
+let equipeTela = 'lista';        // 'lista' = tela Equipes (todas); 'equipe' = dentro da equipe aberta
+let equipeNovaAberta = false;     // painel do + (criar ou entrar com código)
 let minhasEquipes = [];          // todas as equipes de que a pessoa faz parte (uma fica aberta)
 let limiteEquipes = 10;
 // Gestor atuando no funil de um consultor: { userId, nome } enquanto estiver lá dentro
@@ -1392,12 +1394,14 @@ async function loadEquipe(){
     minhasEquipes = [];
   }
   equipeLoaded = true;
+  if(!equipe) equipeTela = 'lista';
   renderApp();
-  if(equipe && currentPage === 'equipe'){
-    if(equipeSubTab==='chat' && !chatLoaded) loadChat();
-    if(equipeSubTab==='supervisao' && equipe.souSupervisor && !supervisaoLoaded) loadSupervisao();
-    if(equipeSubTab==='monitoramento' && equipe.souSupervisorDeDados && !monitoramentoLoaded) loadMonitoramento();
-  }
+  if(equipe && currentPage === 'equipe' && equipeTela === 'equipe') carregarAbaDaEquipe();
+}
+function carregarAbaDaEquipe(){
+  if(!['chat','supervisao','permissoes'].includes(equipeSubTab) || (equipeSubTab !== 'chat' && !equipe.souSupervisor)) equipeSubTab = 'chat';
+  if(equipeSubTab==='chat' && !chatLoaded) loadChat();
+  if(equipeSubTab==='supervisao' && !supervisaoLoaded) loadSupervisao();
 }
 async function loadChat(){
   if(!equipe){ chatLoaded = true; renderApp(); return; }
@@ -1471,7 +1475,9 @@ async function abrirDashboardDeMembro(userId, nome){
 }
 function sairDashboardDeMembro(){
   goToPage('equipe'); // a própria goToPage já restaura board/tasks/meta ao sair do dashboard
+  equipeTela = 'equipe';
   equipeSubTab = 'supervisao';
+  carregarAbaDaEquipe();
   renderApp();
 }
 
@@ -1821,7 +1827,7 @@ async function criarEquipe(){
     await apiRequest('POST', '/equipe', { nome });
     equipeNomeNovo = '';
     equipeMsg = null;
-    limparDadosDaEquipeAberta(); equipeSubTab = 'chat';
+    limparDadosDaEquipeAberta(); equipeSubTab = 'chat'; equipeTela = 'equipe'; equipeNovaAberta = false;
     await loadEquipe();
   }catch(e){
     equipeMsg = { tipo:'erro', texto: e.message || 'Não foi possível criar a equipe.' };
@@ -1835,7 +1841,7 @@ async function entrarNaEquipe(){
     await apiRequest('POST', '/equipe/entrar', { codigo });
     equipeCodigoEntrar = '';
     equipeMsg = null;
-    limparDadosDaEquipeAberta(); equipeSubTab = 'chat';
+    limparDadosDaEquipeAberta(); equipeSubTab = 'chat'; equipeTela = 'equipe'; equipeNovaAberta = false;
     await loadEquipe();
   }catch(e){
     equipeMsg = { tipo:'erro', texto: e.message || 'Não foi possível entrar na equipe.' };
@@ -1853,6 +1859,7 @@ async function sairDaEquipe(equipeId){
   try{
     await apiRequest('POST', '/equipe/sair', equipeId ? { equipeId } : {});
     limparDadosDaEquipeAberta();
+    equipeTela = 'lista';
     await loadEquipe();
   }catch(e){
     errorMsg = e.message || 'Não foi possível sair da equipe.';
@@ -1860,14 +1867,19 @@ async function sairDaEquipe(equipeId){
   }
 }
 // Troca a equipe aberta (a pessoa continua em todas): chat, gestão e permissões passam a ser os da nova
+// Entra numa equipe da lista: ela vira a aberta (chat, gestão e permissões passam a ser os dela)
 async function abrirEquipeDaLista(equipeId){
   if(atuandoComo){ errorMsg = 'Saia do funil de ' + atuandoComo.nome + ' antes de trocar de equipe.'; renderApp(); return; }
+  const ja = minhasEquipes.find(e=> e.id === equipeId && e.ativa);
+  if(ja && equipe){ equipeTela = 'equipe'; equipeSubTab = 'chat'; renderApp(); carregarAbaDaEquipe(); window.scrollTo(0, 0); return; }
   try{
     await apiRequest('POST', '/equipe/abrir', { equipeId });
     limparDadosDaEquipeAberta();
     equipeMsg = null;
     equipeSubTab = 'chat';
+    equipeTela = 'equipe';
     await loadEquipe();
+    window.scrollTo(0, 0);
   }catch(e){
     errorMsg = e.message || 'Não foi possível abrir a equipe.';
     renderApp();
@@ -1900,7 +1912,8 @@ async function sairDoFunilDe(){
   funilAtualId = null; funis = []; board = { columns: [], cards: [] }; tasks = [];
   await Promise.all([loadBoard(), loadFunis(), loadTasks(), loadCamposPersonalizados()]);
   equipeSubTab = 'supervisao';
-  if(currentPage === 'equipe') renderApp(); else goToPage('equipe');
+  if(currentPage === 'equipe') renderApp(); else { goToPage('equipe'); }
+  equipeTela = 'equipe'; supervisaoLoaded = false; carregarAbaDaEquipe(); renderApp();
 }
 async function regenerarCodigoEquipe(){
   try{
@@ -3246,11 +3259,10 @@ function goToPage(page){
   }
   if(page === 'equipe'){
     equipeMsg = null;
-    if(equipe){
-      if(equipeSubTab==='chat' && !chatLoaded) loadChat();
-      if(equipeSubTab==='supervisao' && equipe.souSupervisor && !supervisaoLoaded) loadSupervisao();
-      if(equipeSubTab==='monitoramento' && equipe.souSupervisorDeDados && !monitoramentoLoaded) loadMonitoramento();
-    }
+    // sempre abre na tela Equipes (a lista); atuando no funil de alguém, volta direto para a equipe
+    equipeTela = atuandoComo && equipe ? 'equipe' : 'lista';
+    equipeNovaAberta = false;
+    if(equipeTela === 'equipe') carregarAbaDaEquipe(); else loadEquipe();
   }
   if(page === 'comissoes'){
     loadContratos(); // recarrega sempre, pra pegar comissões que o Pipeline gerou automaticamente
@@ -5700,6 +5712,7 @@ const CONFIG_CATEGORIAS = [
   ]},
   { grupo: 'Sistema', itens: [
     ['manutencao', 'Manutenção'],
+    ['monitoramento', 'Monitoramento de erros'],
   ]},
 ];
 
@@ -6338,6 +6351,7 @@ function renderConfiguracoesPage(){
     'campos': renderConfigCampos,
     'importar': renderConfigImportar,
     'manutencao': renderConfigManutencao,
+    'monitoramento': ()=> podeVerMonitoramento() ? renderMonitoramentoConteudo() : renderConfigPerfil(),
   };
   const renderFn = CONTEUDO_CATEGORIA[configCategoriaAtiva] || renderConfigPerfil;
   return `
@@ -6351,7 +6365,7 @@ function renderConfiguracoesPage(){
     <div class="config-layout ${configMobileConteudo ? 'mostrando-conteudo' : 'mostrando-lista'}">
       <div class="config-sidebar">
         ${CONFIG_CATEGORIAS.map(g=>{
-          const itens = g.itens.filter(([key])=> !acessoCrm || acessoCrm.gestor || key === 'aparencia'); // equipe: só a aparência
+          const itens = g.itens.filter(([key])=> (!acessoCrm || acessoCrm.gestor || key === 'aparencia') && (key !== 'monitoramento' || podeVerMonitoramento())); // equipe: só a aparência
           return itens.length ? `
           <div class="config-sidebar-grupo">${g.grupo}</div>
           ${itens.map(([key,label])=>`<button class="config-sidebar-item ${configCategoriaAtiva===key?'active':''}" data-action="set-config-categoria" data-categoria="${key}">${label}</button>`).join('')}
@@ -6442,8 +6456,13 @@ function bindAppEvents(){
   app.querySelectorAll('[data-action="abrir-equipe-lista"]').forEach(btn=>{
     btn.addEventListener('click', ()=> abrirEquipeDaLista(btn.dataset.equipeId));
   });
-  const trocarEquipeSel = app.querySelector('[data-action="trocar-equipe"]');
-  if(trocarEquipeSel) trocarEquipeSel.addEventListener('change', (e)=> abrirEquipeDaLista(e.target.value));
+  const novaEquipeBtn = app.querySelector('[data-action="nova-equipe-toggle"]');
+  if(novaEquipeBtn) novaEquipeBtn.addEventListener('click', ()=> alternarNovaEquipe());
+  const equipesVoltarBtn = app.querySelector('[data-action="equipes-voltar"]');
+  if(equipesVoltarBtn) equipesVoltarBtn.addEventListener('click', ()=>{
+    if(atuandoComo){ errorMsg = 'Saia do funil de ' + atuandoComo.nome + ' antes de voltar para as equipes.'; renderApp(); return; }
+    equipeTela = 'lista'; equipeNovaAberta = false; renderApp(); window.scrollTo(0, 0); loadEquipe();
+  });
   app.querySelectorAll('[data-action="sair-equipe-lista"]').forEach(btn=>{
     btn.addEventListener('click', ()=> showConfirm({
       message: `Sair da equipe "${btn.dataset.nome}"? Você perde o chat e a gestão dela — seu funil continua intocado e as outras equipes continuam.`,
@@ -6757,7 +6776,6 @@ function bindAppEvents(){
       equipeSubTab = btn.dataset.subtab;
       if(equipeSubTab==='chat' && !chatLoaded) loadChat();
       if(equipeSubTab==='supervisao' && equipe && equipe.souSupervisor && !supervisaoLoaded) loadSupervisao();
-      if(equipeSubTab==='monitoramento' && equipe && equipe.souSupervisorDeDados && !monitoramentoLoaded) loadMonitoramento();
       renderApp();
     });
   });
@@ -6816,6 +6834,7 @@ function bindAppEvents(){
       configCategoriaAtiva = btn.dataset.categoria;
       configMobileConteudo = true;
       renderApp();
+      if(configCategoriaAtiva === 'monitoramento' && !monitoramentoLoaded) loadMonitoramento();
       if(ehCelular()) window.scrollTo(0, 0);
     });
   });
@@ -8847,27 +8866,93 @@ function renderChatInternoConteudo(){
 }
 function renderEquipePage(){
   if(!equipeLoaded){
-    return `<div class="page-head"><div><h1>Equipe</h1><p>Carregando…</p></div></div>`;
+    return `<div class="page-head"><div><h1>Equipes</h1><p>Carregando…</p></div></div>`;
   }
-  if(!equipe){
-    return renderEquipeSetup('Equipe', 'Você ainda não faz parte de uma equipe');
+  if(equipeTela === 'equipe' && equipe) return renderEquipeAberta();
+  return renderListaDeEquipes();
+}
+
+// Tela "Equipes": as equipes de que a pessoa faz parte. Tocar numa entra nela; o + cria ou entra com código.
+function renderListaDeEquipes(){
+  const vazio = !minhasEquipes.length;
+  const painelAberto = equipeNovaAberta || vazio;
+  const cheio = minhasEquipes.length >= limiteEquipes;
+  return `
+    <div class="page-head equipes-head">
+      <div>
+        <h1>Equipes</h1>
+        <p>${vazio ? 'Você ainda não faz parte de nenhuma equipe' : `Você está em ${minhasEquipes.length} equipe${minhasEquipes.length===1?'':'s'}. Toque numa para entrar.`}</p>
+      </div>
+      ${vazio ? '' : `<button type="button" class="equipes-mais ${painelAberto?'aberto':''}" data-action="nova-equipe-toggle" aria-expanded="${painelAberto}" aria-controls="equipes-nova" title="Criar ou entrar numa equipe" aria-label="Criar ou entrar numa equipe">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+      </button>`}
+    </div>
+    ${painelAberto ? `
+      <div class="equipes-nova" id="equipes-nova">
+        ${cheio ? `<p class="settings-page-note">Você chegou ao limite de ${limiteEquipes} equipes. Saia de alguma para criar ou entrar em outra.</p>` : renderCriarEntrarEquipe()}
+      </div>` : ''}
+    ${vazio ? '' : `
+      <div class="equipes-lista">
+        ${minhasEquipes.map(e=>`
+          <div class="equipe-card">
+            <button type="button" class="equipe-card-abrir" data-action="abrir-equipe-lista" data-equipe-id="${e.id}" aria-label="Entrar na equipe ${esc(e.nome)}">
+              <span class="equipe-card-icone" aria-hidden="true">${esc(iniciaisDoNome(e.nome))}</span>
+              <span class="equipe-card-info">
+                <b>${esc(e.nome)}</b>
+                <span>${e.papel==='supervisor'?'⭐ Gestor':'Membro'} · ${e.membros} pessoa${e.membros===1?'':'s'}</span>
+              </span>
+              <span class="equipe-card-seta" aria-hidden="true">›</span>
+            </button>
+            <button type="button" class="equipe-card-sair" data-action="sair-equipe-lista" data-equipe-id="${e.id}" data-nome="${esc(e.nome)}">Sair</button>
+          </div>`).join('')}
+      </div>`}
+    ${equipeMsg && !painelAberto ? `<p class="settings-page-msg ${equipeMsg.tipo}" style="margin-top:14px;">${esc(equipeMsg.texto)}</p>` : ''}
+  `;
+}
+
+// O + gira e vira X; o painel de criar/entrar desce ao abrir e sobe ao fechar (como no Importar)
+let equipesPainelAnimando = false;
+function alternarNovaEquipe(){
+  if(!minhasEquipes.length || equipesPainelAnimando) return; // sem equipe, o painel fica sempre aberto
+  equipeMsg = null;
+  const parado = semMovimento();
+  if(!equipeNovaAberta){
+    equipeNovaAberta = true;
+    renderApp();
+    const btn = document.querySelector('[data-action="nova-equipe-toggle"]');
+    const el = document.getElementById('equipes-nova');
+    if(!parado && btn){ btn.classList.remove('aberto'); void btn.offsetWidth; btn.classList.add('aberto'); } // a rotação acontece agora
+    if(!parado && el){
+      equipesPainelAnimando = true;
+      el.classList.add('entrando');
+      alturaAnimada(el, 0, el.scrollHeight, 380, ()=>{ equipesPainelAnimando = false; });
+      setTimeout(()=> el.classList.remove('entrando'), 700);
+    }
+    const c = document.getElementById('equipe-nome-novo'); if(c && !ehCelular()) c.focus({ preventScroll:true });
+    return;
   }
+  const btn = document.querySelector('[data-action="nova-equipe-toggle"]');
+  const el = document.getElementById('equipes-nova');
+  const fechar = ()=>{ equipeNovaAberta = false; equipesPainelAnimando = false; renderApp(); };
+  if(parado || !el) return fechar();
+  equipesPainelAnimando = true;
+  if(btn){ btn.classList.remove('aberto'); btn.setAttribute('aria-expanded', 'false'); }
+  el.classList.add('saindo');
+  alturaAnimada(el, el.offsetHeight, 0, 300, fechar);
+}
+
+// Dentro de uma equipe: chat para todos; gestão e permissões para o gestor
+function renderEquipeAberta(){
   const abas = [['chat','Chat']];
   if(equipe.souSupervisor) abas.push(['supervisao','Gestão']);
   if(equipe.souSupervisor && typeof renderPermissoesEquipe === 'function') abas.push(['permissoes','Permissões']);
-  if(equipe.souSupervisorDeDados) abas.push(['monitoramento','Monitoramento']);
-  abas.push(['equipes', minhasEquipes.length > 1 ? `Minhas equipes (${minhasEquipes.length})` : 'Minhas equipes']);
+  if(!abas.some(([k])=> k === equipeSubTab)) equipeSubTab = 'chat';
   return `
+    <button type="button" class="equipes-voltar" data-action="equipes-voltar">‹ Equipes</button>
     <div class="page-head">
       <div>
-        <h1>Equipe</h1>
-        <p>${minhasEquipes.length > 1 ? `
-          <label class="equipe-troca">
-            <span class="sr-only">Equipe aberta</span>
-            <select data-action="trocar-equipe" aria-label="Equipe aberta">
-              ${minhasEquipes.map(e=>`<option value="${e.id}" ${e.ativa?'selected':''}>${esc(e.nome)}${e.papel==='supervisor'?' ⭐':''}</option>`).join('')}
-            </select>
-          </label>` : esc(equipe.nome)} · ${equipe.membros.length} membro${equipe.membros.length===1?'':'s'}</p>
+        <h1>${esc(equipe.nome)}</h1>
+        <p>${equipe.membros.length} membro${equipe.membros.length===1?'':'s'} · você é ${equipe.souSupervisor ? '⭐ Gestor' : 'Membro'}</p>
       </div>
     </div>
     ${abas.length > 1 ? `
@@ -8878,33 +8963,6 @@ function renderEquipePage(){
     ${equipeSubTab==='chat' ? renderChatInternoConteudo() : ''}
     ${equipeSubTab==='supervisao' && equipe.souSupervisor ? renderSupervisaoConteudo() : ''}
     ${equipeSubTab==='permissoes' && equipe.souSupervisor && typeof renderPermissoesEquipe === 'function' ? renderPermissoesEquipe() : ''}
-    ${equipeSubTab==='monitoramento' && equipe.souSupervisorDeDados ? renderMonitoramentoConteudo() : ''}
-    ${equipeSubTab==='equipes' ? renderMinhasEquipes() : ''}
-  `;
-}
-
-// Todas as equipes da pessoa (uma fica aberta) + criar/entrar em mais uma
-function renderMinhasEquipes(){
-  const cheio = minhasEquipes.length >= limiteEquipes;
-  return `
-    <div class="settings-page-section" style="margin-bottom:20px;">
-      <h3>Minhas equipes</h3>
-      <p class="settings-page-note">Você pode fazer parte de até ${limiteEquipes} equipes, com um papel diferente em cada uma. Seu funil é um só e continua seu; o que muda ao trocar é o chat, a gestão e as permissões da equipe aberta.</p>
-      <div class="minhas-equipes-lista">
-        ${minhasEquipes.map(e=>`
-          <div class="minha-equipe-item ${e.ativa?'ativa':''}">
-            <div class="minha-equipe-info">
-              <b>${esc(e.nome)}</b>
-              <span>${e.papel==='supervisor'?'⭐ Gestor':'Membro'} · ${e.membros} pessoa${e.membros===1?'':'s'}${e.ativa?' · <span class="minha-equipe-aberta">Aberta</span>':''}</span>
-            </div>
-            <div class="settings-btn-row">
-              ${e.ativa ? '' : `<button class="btn-primary" data-action="abrir-equipe-lista" data-equipe-id="${e.id}">Abrir</button>`}
-              <button class="btn-outline" data-action="sair-equipe-lista" data-equipe-id="${e.id}" data-nome="${esc(e.nome)}">Sair</button>
-            </div>
-          </div>`).join('')}
-      </div>
-    </div>
-    ${cheio ? `<p class="settings-page-note">Você chegou ao limite de ${limiteEquipes} equipes. Saia de alguma para criar ou entrar em outra.</p>` : renderCriarEntrarEquipe()}
   `;
 }
 
@@ -9011,6 +9069,11 @@ function renderSupervisaoConteudo(){
       `}
     </div>
   `;
+}
+// Monitoramento de erros (em Configurações → Sistema): só quem é "supervisor de dados" em alguma equipe
+function podeVerMonitoramento(){
+  if(acessoCrm && acessoCrm.tipo !== 'dono') return false;
+  return minhasEquipes.some(e=> e.supervisorDeDados) || !!(equipe && equipe.souSupervisorDeDados);
 }
 function renderMonitoramentoConteudo(){
   return `
@@ -10142,7 +10205,7 @@ function closeConfirm(){ if(confirmState && confirmState.soltar) confirmState.so
 // (equipe), para o menu já abrir só com o que a função permite; o servidor confere de novo logo depois.
 var acessoCrm = (function(){ const g = window.Acesso && Acesso.guardada && Acesso.guardada(); return g ? { tipo:g.tipo, permissoes:g.permissoes || {}, gestor:!!g.gestor } : { tipo:'dono', permissoes:{}, gestor:true }; })();
 const PERM_DA_PAGINA = { comissoes:'comissoes', automacoes:'config', fluxos:'config', 'import-export':'config', equipe:'config' };
-function podeNaPagina(pg){ if(!acessoCrm || acessoCrm.tipo === 'dono') return true; const k = PERM_DA_PAGINA[pg] || 'crm'; return !!acessoCrm.permissoes[k]; }
+function podeNaPagina(pg){ if(!acessoCrm || acessoCrm.tipo === 'dono') return true; if(pg === 'equipe') return false; /* equipe do CRM: só com login próprio */ const k = PERM_DA_PAGINA[pg] || 'crm'; return !!acessoCrm.permissoes[k]; }
 function aplicarFuncaoNaTela(){
   if(!acessoCrm || acessoCrm.tipo === 'dono') return;
   document.querySelectorAll('[data-action="nav"][data-page]').forEach((el)=>{ const pg = el.dataset.page; if(pg !== 'configuracoes' && pg !== 'suporte' && !podeNaPagina(pg)) el.remove(); });
@@ -10195,7 +10258,8 @@ async function iniciarCrm(){
   loadMetaVendas();
   loadMetaVendasEquipe();
   if(!agendaLoaded) loadAgendaMes(agendaMesAtual); // carrega em segundo plano — o Dashboard também usa eventos do Google em "Tarefas abertas"
-  if(pode('config')){ loadEquipe(); loadWebhooksSaida(); }
+  if(acessoCrm.tipo === 'dono') loadEquipe(); // equipe do CRM: só com login próprio
+  if(pode('config')) loadWebhooksSaida();
   loadAutomacoes();
   loadFluxos();
 }

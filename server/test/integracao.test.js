@@ -1910,6 +1910,10 @@ describe('API com PostgreSQL (integração)', { skip: pular }, () => {
     assert.equal((await api('POST', '/api/estoque/caixa/abrir', { trocoInicial: 50 }, tc)).status, 200);
     assert.equal((await api('POST', '/api/estoque/caixa/abrir', { trocoInicial: 50 }, tv)).status, 403, 'vendedor não mexe no caixa');
     const tg = (await api('POST', '/api/acesso/entrar', { codigo, id: gestor.id, pin: '1111' })).dados.token;
+    // a equipe do CRM é de quem tem login próprio: nem o gestor que entrou com PIN mexe nela
+    assert.equal((await api('GET', '/api/equipe', undefined, tg)).status, 403);
+    assert.equal((await api('POST', '/api/equipe', { nome: 'Pelo PIN' }, tg)).status, 403);
+    assert.equal((await api('GET', '/api/monitoramento/erros', undefined, tg)).status, 403);
     assert.equal((await api('GET', '/api/financeiro', undefined, tg)).status, 200);
     assert.equal((await api('POST', `/api/estoque/vendas/${venda.dados.venda.id}/cancelar`, {}, tg)).status, 200);
     // totais da loja: o vendedor vê só as vendas dele; os valores do caixa ficam com quem cuida do caixa

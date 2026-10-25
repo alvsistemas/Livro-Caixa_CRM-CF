@@ -125,6 +125,11 @@ module.exports = async function auth(req, res, next) {
     }
     // Função de quem está usando (funcionário ou aparelho da loja): o servidor confere cada rota
     if (acesso.tipo !== 'dono') {
+      // A equipe do CRM é de quem tem o próprio login (cada um com o seu funil). Quem entra com
+      // nome e PIN usa o CRM da loja, mas não mexe na equipe do CRM do dono nem no monitoramento.
+      if (/^\/api\/(equipe|monitoramento)(\/|$)/.test(caminho)) {
+        return res.status(403).json({ error: 'A equipe do CRM é só para quem entra com o próprio e-mail e senha.', funcao: true });
+      }
       if (assinatura.recursos && assinatura.recursos.equipe === false && !caminho.startsWith('/api/acesso')) {
         return res.status(403).json({ error: 'O acesso da equipe faz parte do plano Completo. Peça para o dono da conta.', recurso: 'equipe', funcao: true });
       }

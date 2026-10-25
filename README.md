@@ -479,7 +479,12 @@ usuário" — é uma camada nova, sem mexer em nenhum dado que já existia:
   membro — nunca os clientes individuais de ninguém
 - Uma pessoa pode estar em **até 10 equipes** (versão 20261163), com um papel
   diferente em cada uma. Uma fica **aberta** (chat, gestão e permissões são os
-  dela); troca pelo seletor no topo da página Equipe ou em "Minhas equipes".
+  dela). Ao clicar em Equipe aparece a tela **Equipes** com um cartão por equipe
+  (tocar entra nela; "Sair" fica à direita do cartão) e um **+** para criar ou entrar
+  com código; dentro da equipe, "‹ Equipes" volta para a lista. O monitoramento de
+  erros saiu da equipe e foi para Configurações → Sistema (só supervisor de dados).
+  A equipe do CRM é só para quem entra com o próprio e-mail e senha: quem usa nome e
+  PIN (equipe da loja) trabalha no CRM da loja e não vê nem mexe nessa equipe (403).
   Tabela `equipe_membros` (migração `019_equipes_varias.sql`); os campos de
   equipe em `usuarios` espelham a equipe aberta (`server/utils/equipesDoUsuario.js`).
   Sair de uma equipe (ou ser removido) não apaga nada do funil
