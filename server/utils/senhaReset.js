@@ -8,14 +8,16 @@ function hashToken(token) {
   return crypto.createHash('sha256').update(String(token)).digest('hex');
 }
 
-function gerarTokenReset(agora = Date.now()) {
+// minutos: quanto tempo o link vale (60 no "Esqueci minha senha"; 7 dias na conta criada pelo gestor)
+function gerarTokenReset(agora = Date.now(), minutos = VALIDADE_MINUTOS) {
   const token = crypto.randomBytes(32).toString('hex');
   return {
     token, // vai no link do e-mail
     hash: hashToken(token), // vai pro banco
-    expira: new Date(agora + VALIDADE_MINUTOS * 60 * 1000),
+    expira: new Date(agora + minutos * 60 * 1000),
   };
 }
+const DIAS_CONTA_NOVA = 7;
 
 // Confere se o token recebido bate com o que está guardado e ainda não venceu.
 function tokenResetValido(user, token, agora = Date.now()) {
@@ -26,4 +28,4 @@ function tokenResetValido(user, token, agora = Date.now()) {
   return a.length === b.length && crypto.timingSafeEqual(a, b);
 }
 
-module.exports = { VALIDADE_MINUTOS, hashToken, gerarTokenReset, tokenResetValido };
+module.exports = { VALIDADE_MINUTOS, DIAS_CONTA_NOVA, hashToken, gerarTokenReset, tokenResetValido };

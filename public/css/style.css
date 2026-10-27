@@ -94,9 +94,10 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .stats{ background:var(--accent); border-radius:14px; overflow-x:auto; }
 .stats-label{ padding:14px 24px 0; font-size:11px; letter-spacing:.08em; text-transform:uppercase; color:rgba(255,255,255,.5); }
 .stats-row{ display:flex; }
-.stat{ position:relative; padding:18px 30px 18px 24px; flex-shrink:0; box-sizing:border-box; display:flex; flex-direction:column; justify-content:center; border-left:1px solid rgba(255,255,255,.14); }
+.stat{ position:relative; padding:18px 30px 18px 24px; flex:1 1 auto; min-width:150px; box-sizing:border-box; display:flex; flex-direction:column; justify-content:center; border-left:1px solid rgba(255,255,255,.14); }
 .stat-resize-handle{ position:absolute; right:0; top:0; bottom:0; width:10px; cursor:col-resize; }
 .stat-resize-handle:hover, .stat-resize-handle:active{ background:rgba(255,255,255,.12); }
+.stat.stat-fixo{ flex:0 0 auto; }
 .stat:first-child{ border-left:none; }
 .stat .lbl{ font-size:11px; letter-spacing:.08em; text-transform:uppercase; color:rgba(255,255,255,.55); }
 .stat .val{ font-family:'IBM Plex Mono',monospace; font-size:22px; font-weight:600; color:#FFFFFF; margin-top:4px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
@@ -806,7 +807,14 @@ tr.membro-supervisor-destaque td:last-child{ border-right:1px solid var(--gold);
 .tipo-pessoa-select-btn:hover{ border-color:var(--accent); }
 .tipo-pessoa-select-seta{ transition:transform .15s; color:var(--ink-soft); }
 .tipo-pessoa-select-seta.aberta{ transform:rotate(180deg); }
-.tipo-pessoa-dropdown{ margin-top:6px; border:1px solid var(--line); border-radius:8px; overflow:hidden; background:var(--paper); }
+/* abre POR CIMA do formulário: não empurra os campos de baixo */
+.caixa-escolha{ position:relative; }
+.tipo-pessoa-dropdown{ position:absolute; top:calc(100% + 6px); left:0; right:0; z-index:30; border:1px solid var(--line); border-radius:8px; overflow:hidden; background:var(--paper); box-shadow:0 12px 28px rgba(0,0,0,.16); animation:caixaAbre .14s ease-out; }
+@keyframes caixaAbre{ from{ opacity:0; transform:translateY(-4px); } to{ opacity:1; transform:none; } }
+.caixas-topo-lead{ display:flex; gap:12px; }
+.caixas-topo-lead > .field{ flex:1; min-width:0; }
+.caixas-topo-lead .field{ margin-bottom:0; }
+.tipo-pessoa-escolha-btn .escolha-sub{ display:block; font-size:12px; font-weight:500; color:var(--ink-soft); margin-top:3px; }
 .tipo-pessoa-dropdown-item{ width:100%; text-align:left; padding:10px 14px; min-height:40px; font-size:13px; background:none; border:none; cursor:pointer; color:var(--ink); font-family:inherit; display:flex; align-items:center; justify-content:space-between; }
 .tipo-pessoa-dropdown-item:hover{ background:var(--hover-tint); }
 .tipo-pessoa-dropdown-item + .tipo-pessoa-dropdown-item{ border-top:1px solid var(--line); }
@@ -856,7 +864,7 @@ tr.membro-supervisor-destaque td:last-child{ border-right:1px solid var(--gold);
    com o Controle financeiro); aqui só as cores do CRM ---------- */
 #assistente-root{ --ai-cor:var(--accent); --ai-cor-texto:#fff; --ai-fundo:var(--paper); --ai-linha:var(--line); --ai-texto:var(--ink); --ai-texto-suave:var(--ink-soft); --ai-balao:var(--col-bg); }
 
-.pipeline-ordenar-row{ display:flex; align-items:center; gap:10px; margin:0 0 16px; font-size:13px; color:var(--ink-soft); }
+.pipeline-ordenar-row{ display:flex; align-items:center; gap:10px; margin-left:auto; font-size:13px; color:var(--ink-soft); }
 
 .ordenar-wrap{ position:relative; }
 .ordenar-menu{ top:40px; width:220px; }
@@ -1079,7 +1087,7 @@ tr.membro-supervisor-destaque td:last-child{ border-right:1px solid var(--gold);
   .stats-wrap{ padding:0; }
   .stats-wrap-fixo{ position:static; border-bottom:none; padding-bottom:6px; }
   .stats{ scroll-snap-type:x mandatory; }
-  .stats .stat{ width:46% !important; min-width:150px; scroll-snap-align:start; padding:10px 14px 12px; }
+  .stats .stat{ width:60% !important; min-width:170px; scroll-snap-align:start; padding:10px 14px 12px; }
   .stat-resize-handle{ display:none; }
   .pipeline-ordenar-row{ display:none; }
   main.pipeline-main, .board{ padding-left:0; padding-right:0; margin-left:0; margin-right:0; }
@@ -1224,3 +1232,72 @@ tr.membro-supervisor-destaque td:last-child{ border-right:1px solid var(--gold);
 .balcao-crm-lista li span:first-child{ min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .balcao-crm-link{ display:inline-block; margin-top:8px; font-size:12.5px; font-weight:600; color:var(--accent); text-decoration:none; }
 @media (max-width:520px){ .balcao-crm-resumo{ grid-template-columns:repeat(2,minmax(0,1fr)); } }
+
+/* ---------- Gestão da equipe (seções como em Configurações) ---------- */
+.gestao-conta{ display:inline-block; min-width:20px; padding:0 6px; margin-left:4px; border-radius:999px; background:var(--hover-tint); color:var(--ink-soft); font-size:11px; font-weight:600; text-align:center; }
+.config-sidebar-item.active .gestao-conta{ background:rgba(255,255,255,.25); color:inherit; }
+.gestao-titulo-linha{ display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:10px; }
+.gestao-titulo-linha h3{ margin:0; }
+.gestao-mini{ padding:6px 10px; font-size:12px; min-height:34px; }
+.membros-lista{ display:flex; flex-direction:column; gap:8px; }
+.membro-card{ display:flex; align-items:center; gap:12px; padding:12px 14px; border:1px solid var(--line); border-radius:12px; background:var(--paper); flex-wrap:wrap; }
+.membro-card.gestor{ border-color:var(--accent); }
+.membro-avatar{ width:40px; height:40px; border-radius:50%; flex-shrink:0; display:flex; align-items:center; justify-content:center; background:var(--ink); color:var(--paper); font-size:13px; font-weight:700; }
+.membro-info{ display:flex; flex-direction:column; gap:2px; flex:1; min-width:160px; }
+.membro-info b{ font-size:14px; color:var(--ink); }
+.membro-info > span{ font-size:12px; color:var(--ink-soft); overflow:hidden; text-overflow:ellipsis; }
+.membro-voce{ font-weight:500; color:var(--ink-soft); }
+.membro-selos{ display:flex; gap:6px; flex-wrap:wrap; margin-top:3px; }
+.membro-selo{ font-size:11px; font-weight:600; padding:2px 8px; border-radius:999px; background:var(--hover-tint); color:var(--ink-soft); }
+.membro-selo.forte{ background:var(--accent); color:#fff; }
+.membro-acoes{ display:flex; gap:6px; flex-wrap:wrap; align-items:center; }
+.gestao-codigo{ display:flex; align-items:center; gap:10px; }
+.gestao-codigo span{ font-family:'IBM Plex Mono',monospace; font-weight:700; font-size:20px; letter-spacing:.08em; padding:8px 14px; border:1px dashed var(--line); border-radius:10px; color:var(--ink); }
+.gestao-link{ display:flex; gap:8px; margin-top:10px; }
+.gestao-link input{ flex:1; min-width:0; font-size:12px; }
+@media (max-width:768px){ .membro-acoes{ width:100%; } .gestao-layout .field-row{ grid-template-columns:1fr; } .gestao-layout .config-sidebar-item .gestao-conta{ margin-left:auto; margin-right:10px; } }
+
+/* cartão do funil: WhatsApp só com o ícone, para o telefone aparecer inteiro */
+.wa-btn.wa-btn-icone{ width:34px; height:34px; min-width:34px; padding:0; border-radius:50%; justify-content:center; flex-shrink:0; }
+.card-phone-row .phone-text{ min-width:0; }
+
+/* ---------- Relatórios do CRM: gráfico dos 12 meses (sem a lista de meses zerados) ---------- */
+.rel-graficos{ display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+.rel-graficos .dash-panel{ margin-bottom:0; }
+.rel-graficos + .dash-panel{ margin-top:16px; }
+.rel-grafico{ display:grid; grid-template-columns:repeat(12, minmax(0,1fr)); gap:4px; align-items:end; height:190px; padding-top:18px; }
+.rel-coluna{ display:flex; flex-direction:column; align-items:center; height:100%; min-width:0; }
+.rel-valor{ position:absolute; bottom:100%; left:50%; transform:translateX(-50%); margin-bottom:3px; font-size:10px; color:var(--ink-soft); white-space:nowrap; }
+.rel-barra-area{ flex:1; width:100%; display:flex; align-items:flex-end; justify-content:center; border-bottom:1px solid var(--line); }
+.rel-barra{ position:relative; width:70%; max-width:28px; background:var(--accent); border-radius:5px 5px 0 0; transition:height .3s ease; }
+.rel-mes{ font-size:11px; color:var(--ink-soft); margin-top:6px; text-transform:capitalize; }
+.rel-lista{ list-style:none; margin:14px 0 0; padding:0; display:flex; flex-direction:column; gap:6px; }
+.rel-lista li{ display:flex; justify-content:space-between; gap:10px; font-size:13px; color:var(--ink-soft); border-top:1px dashed var(--line); padding-top:6px; }
+.rel-lista b{ color:var(--ink); font-weight:600; }
+@media (max-width:900px){ .rel-graficos{ grid-template-columns:1fr; } .rel-valor{ display:none; } .rel-valor.rel-max{ display:block; } }
+
+/* Celular: sinal de "continua" na faixa do resumo do funil (some quando chega ao fim) */
+@media (max-width:900px){
+  .stats-wrap{ position:relative; }
+  .stats-wrap::after{ content:'›'; position:absolute; top:0; right:0; bottom:0; width:46px; border-radius:0 14px 14px 0;
+    display:flex; align-items:center; justify-content:flex-end; padding-right:8px; box-sizing:border-box;
+    font-size:24px; line-height:1; color:#fff; pointer-events:none;
+    background:linear-gradient(to right, transparent, var(--accent) 70%);
+    animation:stats-continua 1.6s ease-in-out 2; transition:opacity .2s; }
+  .stats-wrap.no-fim::after{ opacity:0; }
+  .stats{ scrollbar-width:none; }
+  .stats::-webkit-scrollbar{ display:none; }
+}
+@keyframes stats-continua{ 0%,100%{ padding-right:8px; } 50%{ padding-right:3px; } }
+
+/* Negociações (computador): abas, resumo e colunas alinhados com o título; filtro na linha das abas */
+.main-area-pipeline .tabs{ padding-left:0; padding-right:0; }
+.main-area-pipeline .stats-wrap{ padding-left:0; padding-right:0; }
+main.pipeline-main{ padding-left:0; padding-right:0; padding-top:16px; }
+.pipeline-ordenar-row .ordenar-menu{ left:auto; right:0; }
+
+/* Cartão do funil: uma faixa só à esquerda — pontinhos para arrastar e, embaixo, o botão de trocar de etapa */
+.card-faixa{ flex-shrink:0; width:40px; display:flex; flex-direction:column; align-items:center; background:var(--col-bg); border-right:1px dashed var(--line); }
+.card-faixa .card-drag-handle{ flex:1; width:100%; align-items:flex-end; padding-bottom:10px; background:none; border-right:none; }
+.card-faixa .card-move-wrap{ width:100%; background:none; border-right:none; padding-bottom:12px; align-items:flex-start; flex:1; }
+.card-faixa .card-move-btn{ width:30px; height:30px; border:1px solid var(--line); background:var(--paper); color:var(--ink); }

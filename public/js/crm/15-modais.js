@@ -1,12 +1,41 @@
+// CRM · 15-modais.js — ficha do contato, tarefa, perfil e e-mail. Os arquivos js/crm/ são carregados em ordem pelo index.html e
+// compartilham as mesmas variáveis globais (é o antigo script.js dividido, como no CRM de consórcio).
 /* ---------- modal do cliente ---------- */
 function openNewCard(columnId){
   const colId = columnId || ((board.columns.find(c=>c.tipo==='aberto') || board.columns[0] || {}).id);
   escolhaTipoPessoaColId = colId;
+  // gestor com mais gente na equipe: primeiro escolhe se o contato é dele (Padrão) ou de alguém da equipe (Gestor)
+  if(podeAtribuirLeads()){ escolhaModoGestor = null; renderEscolhaModoGestorModal(); return; }
+  escolhaModoGestor = false;
   renderEscolhaTipoPessoaModal();
 }
 function fecharEscolhaTipoPessoa(){
   escolhaTipoPessoaColId = null;
+  escolhaModoGestor = null;
   document.getElementById('modal-root').innerHTML = '';
+}
+function renderEscolhaModoGestorModal(){
+  const root = document.getElementById('modal-root');
+  root.innerHTML = `
+    <div class="overlay" id="escolha-tipo-overlay">
+      <div class="modal" style="max-width:380px;">
+        <div class="modal-head">
+          <h3>Novo contato</h3>
+          <button id="escolha-tipo-close" aria-label="Fechar">✕</button>
+        </div>
+        <div class="modal-body" style="display:flex; flex-direction:column; gap:10px;">
+          <p class="settings-page-note" style="margin:0 0 4px">Para quem é este contato?</p>
+          <button type="button" class="tipo-pessoa-escolha-btn" data-modo="0">Padrão<span class="escolha-sub">Fica nas suas negociações</span></button>
+          <button type="button" class="tipo-pessoa-escolha-btn" data-modo="1">⭐ Gestor<span class="escolha-sub">Cadastrar direto para alguém da equipe</span></button>
+        </div>
+      </div>
+    </div>
+  `;
+  document.getElementById('escolha-tipo-close').addEventListener('click', fecharEscolhaTipoPessoa);
+  document.getElementById('escolha-tipo-overlay').addEventListener('click', (e)=>{ if(e.target.id==='escolha-tipo-overlay') fecharEscolhaTipoPessoa(); });
+  root.querySelectorAll('[data-modo]').forEach(btn=>{
+    btn.addEventListener('click', ()=>{ escolhaModoGestor = btn.dataset.modo === '1'; renderEscolhaTipoPessoaModal(); });
+  });
 }
 function renderEscolhaTipoPessoaModal(){
   const root = document.getElementById('modal-root');
@@ -14,7 +43,7 @@ function renderEscolhaTipoPessoaModal(){
     <div class="overlay" id="escolha-tipo-overlay">
       <div class="modal" style="max-width:380px;">
         <div class="modal-head">
-          <h3>Novo lead</h3>
+          <h3>Novo contato</h3>
           <button id="escolha-tipo-close">✕</button>
         </div>
         <div class="modal-body" style="display:flex; flex-direction:column; gap:10px;">
@@ -31,18 +60,27 @@ function renderEscolhaTipoPessoaModal(){
   });
 }
 function abrirNovoCardComTipo(columnId, tipoPessoa){
-  // se a pessoa estiver vendo um mês específico no Pipeline, começa nesse mês (dia 1);
-  // no mês atual ou em "Geral", usa a data de hoje, com o dia certinho
-  const dataInicial = (filterMonth && filterMonth !== hojeLocalISO().slice(0,7)) ? `${filterMonth}-01` : hojeLocalISO();
+  // início de contato = hoje (data de Brasília). Vendo outro mês nas Negociações, usa o mesmo dia
+  // naquele mês (senão o cliente novo sumiria da tela que a pessoa está olhando)
+  const hoje = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo' }).format(new Date());
+  let dataInicial = hoje;
+  if(filterMonth && filterMonth !== hoje.slice(0,7)){
+    const [a, m] = filterMonth.split('-').map(Number);
+    const ultimoDia = new Date(a, m, 0).getDate();
+    dataInicial = `${filterMonth}-${String(Math.min(Number(hoje.slice(8,10)), ultimoDia)).padStart(2,'0')}`;
+  }
   modalForm = {
     __isNew: true, id:null, columnId,
     cliente:'', valor:0, temperatura:'morno', telefone:'', obs:'',
     mes: '', mesInicioContato: dataInicial, // início de contato já vem preenchido (é agora); mês de venda fica em branco até a venda acontecer de verdade
-    etiquetas: [], camposPersonalizados: {}, tipoCarta: 'imovel',
+    etiquetas: [], camposPersonalizados: {}, tipoProduto: tipoProdutoPadrao(),
     tipoPessoa, clienteFisica:'', clienteJuridica:'',
     cnpj:'', razaoSocial:'', inscricaoEstadual:'', ramoAtividade:'', contatoNome:'', contatoCargo:'',
   };
+  if(escolhaModoGestor && podeAtribuirLeads()) modalForm.__modoGestor = true;
+  escolhaModoGestor = null;
   tipoPessoaDropdownAberto = false;
+  modoGestorDropdownAberto = false;
   extrasTela = null; // sem isso, se a última coisa vista tivesse sido a tela de Extras
                       // de outro cliente, o formulário de novo lead nascia mostrando
                       // aquela tela por engano, em vez do formulário de verdade
@@ -68,9 +106,38 @@ async function toggleArquivarCard(){
     renderApp();
   }
 }
+// Compras no balcão (PDV) do mesmo telefone: aparece na ficha quando a pessoa também é cliente do PDV
+let balcaoDoCard = { id: null, carregando: false, clientes: [] };
+async function carregarComprasNoBalcao(cardId){
+  balcaoDoCard = { id: cardId, carregando: true, clientes: [] };
+  try{ const r = await apiRequest('GET', `/cards/${cardId}/balcao`); if(balcaoDoCard.id === cardId) balcaoDoCard.clientes = r.clientes || []; }
+  catch(e){ /* sem PDV ou sem acesso: a ficha só não mostra o bloco */ }
+  if(balcaoDoCard.id !== cardId) return;
+  balcaoDoCard.carregando = false;
+  const el = document.getElementById('f-balcao');
+  if(el && modalForm && modalForm.id === cardId) el.outerHTML = renderComprasNoBalcao(modalForm);
+}
+function renderComprasNoBalcao(f){
+  const b = balcaoDoCard;
+  if(!f || b.id !== f.id || b.carregando || !b.clientes.length) return '<div id="f-balcao" hidden></div>';
+  return `<div id="f-balcao" class="balcao-crm">
+    <div class="balcao-crm-titulo">🛒 Compras no balcão <span>(PDV · mesmo telefone)</span></div>
+    ${b.clientes.map(c=>`
+      <div class="balcao-crm-resumo">
+        <div><b>${c.compras}</b><span>${c.compras === 1 ? 'compra' : 'compras'}</span></div>
+        <div><b>${fmtBRL(c.total)}</b><span>no total</span></div>
+        <div><b>${c.compras ? fmtBRL(c.ticket) : '—'}</b><span>ticket médio</span></div>
+        <div><b>${c.ultimaCompra ? `${c.ultimaCompra.slice(8,10)}/${c.ultimaCompra.slice(5,7)}/${c.ultimaCompra.slice(2,4)}` : '—'}</b><span>última compra</span></div>
+      </div>
+      ${c.vendas.length ? `<ul class="balcao-crm-lista">${c.vendas.map(v=>`<li><span>${v.data.split('-').reverse().join('/')} · ${esc(v.itens)}</span><span class="mono">${fmtBRL(v.total)}</span></li>`).join('')}</ul>` : ''}
+      <a class="balcao-crm-link" href="estoque/#clientes/${c.id}">Abrir no PDV →</a>
+    `).join('')}
+  </div>`;
+}
 function openEditCard(id){
   const card = board.cards.find(c=>c.id===id);
   if(!card) return;
+  if(card.telefone) carregarComprasNoBalcao(id); else balcaoDoCard = { id, carregando:false, clientes:[] };
   modalForm = {
     ...card, __isNew:false,
     clienteFisica: card.tipoPessoa==='juridica' ? '' : (card.cliente||''),
@@ -212,7 +279,7 @@ function renderExtrasOverlayHtml(f){
         ${tarefasRapidasLista.map((t,i)=>`
           <div class="field-row-flex tarefa-rapida-linha">
             <input type="text" class="tarefa-rapida-titulo-input" data-idx="${i}" value="${esc(t.titulo)}" placeholder="Ex: Ligar amanhã de manhã" />
-            <input type="date" class="tarefa-rapida-data-input" data-idx="${i}" value="${t.data || new Date().toISOString().slice(0,10)}" style="max-width:160px;" />
+            <input type="date" class="tarefa-rapida-data-input" data-idx="${i}" value="${t.data || hojeLocalISO()}" style="max-width:160px;" />
             ${i === tarefasRapidasLista.length-1
               ? `<button type="button" class="icon-btn" data-action="tarefa-rapida-add-linha" title="Adicionar outra tarefa">+</button>`
               : `<button type="button" class="icon-btn" data-action="tarefa-rapida-remover-linha" data-idx="${i}" title="Remover essa tarefa">✕</button>`
@@ -238,7 +305,7 @@ function renderExtrasOverlayHtml(f){
           </button>
         `).join('')}
       </div>
-    ` : '<p class="dash-empty">Nenhuma tarefa ainda pra esse lead.</p>';
+    ` : '<p class="dash-empty">Nenhuma tarefa ainda pra esse contato.</p>';
   } else if(extrasTela === 'historico'){
     titulo = 'Histórico de contato';
     voltarPara = 'menu';
@@ -415,34 +482,43 @@ function renderModal(){
           <button id="modal-close">✕</button>
         </div>
         <div class="modal-body">
-          ${podeAtribuirLeads() ? `
-          <div class="field">
-            <label>Modo</label>
-            <div class="modo-gestor-toggle">
-              <button type="button" class="modo-gestor-btn ${!f.__modoGestor?'ativo':''}" data-modo-gestor="0">Padrão</button>
-              <button type="button" class="modo-gestor-btn ${f.__modoGestor?'ativo':''}" data-modo-gestor="1">⭐ Gestor</button>
+          <div class="field-row caixas-topo-lead">
+            ${podeAtribuirLeads() ? `
+            <div class="field caixa-escolha">
+              <button type="button" class="tipo-pessoa-select-btn" id="f-modo-gestor-select" aria-haspopup="listbox" aria-expanded="${modoGestorDropdownAberto}">
+                <span>${f.__modoGestor ? '⭐ Gestor' : 'Padrão'}</span>
+                <span class="tipo-pessoa-select-seta ${modoGestorDropdownAberto?'aberta':''}">▾</span>
+              </button>
+              ${modoGestorDropdownAberto ? `
+                <div class="tipo-pessoa-dropdown" role="listbox">
+                  <button type="button" class="tipo-pessoa-dropdown-item" data-modo-gestor="0">Padrão ${!f.__modoGestor?'✓':''}</button>
+                  <button type="button" class="tipo-pessoa-dropdown-item" data-modo-gestor="1">⭐ Gestor ${f.__modoGestor?'✓':''}</button>
+                </div>` : ''}
+            </div>` : ''}
+            <div class="field caixa-escolha">
+              <button type="button" class="tipo-pessoa-select-btn" id="f-tipo-pessoa-select" aria-haspopup="listbox" aria-expanded="${tipoPessoaDropdownAberto}">
+                <span>${f.tipoPessoa==='juridica' ? '🏢 Pessoa jurídica' : '👤 Pessoa física'}</span>
+                <span class="tipo-pessoa-select-seta ${tipoPessoaDropdownAberto?'aberta':''}">▾</span>
+              </button>
+              ${tipoPessoaDropdownAberto ? `
+                <div class="tipo-pessoa-dropdown" role="listbox">
+                  <button type="button" class="tipo-pessoa-dropdown-item" data-tipo-pessoa="fisica">👤 Pessoa física ${f.tipoPessoa!=='juridica'?'✓':''}</button>
+                  <button type="button" class="tipo-pessoa-dropdown-item" data-tipo-pessoa="juridica">🏢 Pessoa jurídica ${f.tipoPessoa==='juridica'?'✓':''}</button>
+                </div>
+              ` : ''}
             </div>
+          </div>
+          ${podeAtribuirLeads() && f.__modoGestor ? `
+          <div class="field">
             ${f.__modoGestor ? `
-              <label style="margin-top:10px">${f.__isNew ? 'Adicionar este lead para' : 'Passar este lead para'}</label>
+              <label style="margin-top:10px">${f.__isNew ? 'Adicionar este contato para' : 'Passar este contato para'}</label>
               <select id="f-atribuir-para">
                 <option value="">Selecione uma pessoa…</option>
                 ${equipe.membros.filter(m=>!m.souEu).map(m=>`<option value="${m.id}" ${f.__atribuirParaId===m.id?'selected':''}>${esc(m.nome||m.email)}${m.papel==='supervisor'?' ⭐':''}</option>`).join('')}
               </select>
-              <p class="settings-page-note" style="margin:6px 0 0">${f.__isNew ? 'O lead vai direto para o pipeline da pessoa escolhida, na coluna de mesmo nome (ou na primeira em aberto).' : 'O lead sai do seu pipeline e vai para o da pessoa escolhida, junto com conversas, anexos, tarefas e histórico.'}</p>
+              <p class="settings-page-note" style="margin:6px 0 0">${f.__isNew ? 'O contato vai direto para as negociações da pessoa escolhida, na coluna de mesmo nome (ou na primeira em aberto).' : 'O contato sai das suas negociações e vai para o da pessoa escolhida, junto com conversas, anexos, tarefas e histórico.'}</p>
             ` : ''}
           </div>` : ''}
-          <div class="field">
-            <button type="button" class="tipo-pessoa-select-btn" id="f-tipo-pessoa-select">
-              <span>${f.tipoPessoa==='juridica' ? '🏢 Pessoa jurídica' : '👤 Pessoa física'}</span>
-              <span class="tipo-pessoa-select-seta ${tipoPessoaDropdownAberto?'aberta':''}">▾</span>
-            </button>
-            ${tipoPessoaDropdownAberto ? `
-              <div class="tipo-pessoa-dropdown">
-                <button type="button" class="tipo-pessoa-dropdown-item" data-tipo-pessoa="fisica">👤 Pessoa física ${f.tipoPessoa!=='juridica'?'✓':''}</button>
-                <button type="button" class="tipo-pessoa-dropdown-item" data-tipo-pessoa="juridica">🏢 Pessoa jurídica ${f.tipoPessoa==='juridica'?'✓':''}</button>
-              </div>
-            ` : ''}
-          </div>
           <div class="field">
             <label>${f.tipoPessoa==='juridica' ? 'Nome fantasia' : 'Nome do cliente'}</label>
             <input type="text" id="f-cliente" value="${esc(f.tipoPessoa==='juridica' ? (f.clienteJuridica||'') : (f.clienteFisica||''))}" placeholder="${f.tipoPessoa==='juridica' ? 'Ex: Padaria do João' : 'Ex: Ana Souza'}" />
@@ -479,7 +555,7 @@ function renderModal(){
           ` : ''}
           <div class="field-row">
             <div class="field">
-              <label>Valor de crédito</label>
+              <label>Valor da negociação</label>
               <div class="money-wrap">
                 <span>R$</span>
                 <input type="text" inputmode="numeric" id="f-valor" value="${f.valor ? Number(f.valor).toLocaleString('pt-BR') : ''}" placeholder="0" />
@@ -492,10 +568,10 @@ function renderModal(){
               </select>
             </div>
           </div>
-          <div class="field" ${perfilRH()?'style="display:none;"':''}>
-            <label>Tipo de carta de crédito</label>
-            <select id="f-tipo-carta">
-              ${renderOpcoesTipoCarta(f.tipoCarta||'imovel')}
+          <div class="field">
+            <label>Produto / serviço</label>
+            <select id="f-tipo-produto">
+              ${renderOpcoesTipoProduto(f.tipoProduto||'padrao')}
             </select>
           </div>
           <div class="field-row">
@@ -526,14 +602,19 @@ function renderModal(){
                 ${WA_ICON} Abrir WhatsApp
               </button>
               ${!f.__isNew && integracoesConfig.assistenteIA ? `<button type="button" class="ai-btn" id="f-ai-mensagem">${ICON_SPARKLE} Sugerir mensagem</button>` : ''}
-              ${!f.__isNew && whatsappConnected ? `<button type="button" class="ai-btn" id="f-ver-conversa">${WA_ICON} Ver conversa</button>` : ''}
               ${!f.__isNew ? `<button type="button" class="ai-btn" id="f-ver-historico">🕘 Ver histórico</button>` : ''}
-              ${(!f.__isNew && !perfilRH()) ? `<button type="button" class="ai-btn" id="f-gerar-proposta">📄 Gerar proposta</button>` : ''}
+              ${!f.__isNew ? `<button type="button" class="ai-btn" id="f-gerar-proposta">📄 Gerar proposta</button>` : ''}
+              ${!f.__isNew && (board.columns.find(c=>c.id===((board.cards.find(k=>k.id===f.id)||{}).columnId))||{}).tipo==='ganho' && typeof abrirFechamento === 'function'
+                ? `<button type="button" class="ai-btn" id="f-fechamento">💰 ${f.fechamento && !f.fechamento.cancelado ? 'Fechamento: ' + fmtBRL(f.fechamento.valorFinal) : 'Fechamento da venda'}</button>` : ''}
+              ${!f.__isNew && f.fechamento && !f.fechamento.cancelado && typeof abrirDevolucao === 'function'
+                ? `<button type="button" class="ai-btn" id="f-devolucao">↩ Devolução</button>` : ''}
               ${!f.__isNew ? `<button type="button" class="ai-btn" id="f-toggle-arquivar">${f.arquivado?'📦 Desarquivar':'📦 Arquivar'}</button>` : ''}
             </div>
+            ${!f.__isNew && valorMudouDepoisDoFechamento(board.cards.find(k=>k.id===f.id))
+              ? `<p class="settings-page-note fech-aviso-valor">O valor do card mudou depois do fechamento (era ${fmtBRL(f.fechamento.valorOriginal)}). Os lançamentos no financeiro não mudam sozinhos. <button type="button" class="fech-link" id="f-refazer-fechamento" style="display:inline">Refazer o fechamento?</button></p>` : ''}
             <div class="ai-result" id="f-ai-mensagem-result" style="display:none;"></div>
-            <div class="wa-conversa" id="f-wa-conversa" style="display:none;"></div>
             <div class="wa-conversa" id="f-historico" style="display:none;"></div>
+            ${!f.__isNew ? renderComprasNoBalcao(f) : ''}
           </div>
           <div class="field">
             <label>Observações (opcional)</label>
@@ -552,23 +633,9 @@ function renderModal(){
               <button type="button" class="btn-outline" id="f-abrir-extras" style="width:100%;">⋯ Extras (etiquetas, anexos, tarefas, histórico)</button>
             </div>
           ` : ''}
-          ${!f.__isNew && f.sugestaoIA && f.sugestaoIA.texto ? `
-            <div class="field">
-              <div class="ai-result" style="display:block;">
-                <p class="settings-page-subtitle">✨ Sugestão da IA proativa</p>
-                <p>${esc(f.sugestaoIA.texto)}</p>
-                ${f.sugestaoIA.tarefaTitulo ? `<p class="settings-page-note">Tarefa sugerida: <b>${esc(f.sugestaoIA.tarefaTitulo)}</b> (${f.sugestaoIA.tarefaDias||3} dia(s))</p>` : ''}
-                <div class="ai-result-actions">
-                  <button type="button" class="btn-outline" id="f-sugestao-copiar">Copiar mensagem</button>
-                  ${f.sugestaoIA.tarefaTitulo ? `<button type="button" class="btn-outline" id="f-sugestao-criar-tarefa">Criar tarefa sugerida</button>` : ''}
-                  <button type="button" class="btn-outline" id="f-sugestao-descartar">Descartar</button>
-                </div>
-              </div>
-            </div>
-          ` : ''}
         </div>
         <div class="modal-foot">
-          ${(!f.__isNew && podeExcluirLeads()) ? `<button class="delete-link" id="f-delete">🗑 Excluir</button>` : '<span></span>'}
+          ${!f.__isNew ? `<button class="delete-link" id="f-delete">🗑 Excluir</button>` : '<span></span>'}
           <div class="modal-foot-actions">
             ${mensagemSalvoCard ? `<span class="mensagem-salvo-toast">${esc(mensagemSalvoCard)}</span>` : ''}
             <button class="btn-outline" id="f-cancel" ${salvandoCard?'disabled':''}>Cancelar</button>
@@ -607,51 +674,21 @@ function renderModal(){
   if(aiMensagemBtn) aiMensagemBtn.addEventListener('click', sugerirMensagemIA);
   const aiTarefaBtn = document.getElementById('f-ai-tarefa');
   if(aiTarefaBtn) aiTarefaBtn.addEventListener('click', sugerirTarefaIA);
-  const sugestaoCopiarBtn = document.getElementById('f-sugestao-copiar');
-  if(sugestaoCopiarBtn) sugestaoCopiarBtn.addEventListener('click', ()=>{
-    navigator.clipboard.writeText(modalForm.sugestaoIA.texto).catch(()=>{});
-  });
-  const sugestaoCriarTarefaBtn = document.getElementById('f-sugestao-criar-tarefa');
-  if(sugestaoCriarTarefaBtn) sugestaoCriarTarefaBtn.addEventListener('click', async ()=>{
-    sugestaoCriarTarefaBtn.disabled = true;
-    try{
-      const venc = new Date();
-      venc.setDate(venc.getDate() + (modalForm.sugestaoIA.tarefaDias||3));
-      const nova = await apiRequest('POST', '/tasks', {
-        titulo: modalForm.sugestaoIA.tarefaTitulo, vencimento: venc.toISOString().slice(0,10),
-        prioridade:'media', leadId: modalForm.id, descricao:'',
-      });
-      tasks.push(nova);
-      sugestaoCriarTarefaBtn.textContent = '✓ Tarefa criada';
-    }catch(e){
-      errorMsg = 'Não foi possível criar a tarefa.';
-      renderApp();
-    }
-  });
-  const sugestaoDescartarBtn = document.getElementById('f-sugestao-descartar');
-  if(sugestaoDescartarBtn) sugestaoDescartarBtn.addEventListener('click', async ()=>{
-    try{
-      const atualizado = await apiRequest('DELETE', `/cards/${modalForm.id}/sugestao-ia`);
-      const idx = board.cards.findIndex(c=>c.id===modalForm.id);
-      if(idx>-1) board.cards[idx] = atualizado;
-      modalForm.sugestaoIA = atualizado.sugestaoIA;
-      renderModal();
-    }catch(e){
-      errorMsg = 'Não foi possível descartar a sugestão.';
-      renderApp();
-    }
-  });
-  const verConversaBtn = document.getElementById('f-ver-conversa');
-  if(verConversaBtn) verConversaBtn.addEventListener('click', abrirConversaWhatsapp);
   const verHistoricoBtn = document.getElementById('f-ver-historico');
   if(verHistoricoBtn) verHistoricoBtn.addEventListener('click', abrirHistoricoCard);
+  const fechamentoBtn = document.getElementById('f-fechamento');
+  if(fechamentoBtn) fechamentoBtn.addEventListener('click', ()=>{ const id = modalForm.id; closeModal(); abrirFechamento(id); });
+  const refazerFechBtn = document.getElementById('f-refazer-fechamento');
+  if(refazerFechBtn) refazerFechBtn.addEventListener('click', ()=>{ const id = modalForm.id; closeModal(); abrirFechamento(id); });
+  const devolucaoBtn = document.getElementById('f-devolucao');
+  if(devolucaoBtn) devolucaoBtn.addEventListener('click', ()=>{ const id = modalForm.id; closeModal(); abrirDevolucao(id); });
   const gerarPropostaBtn = document.getElementById('f-gerar-proposta');
   if(gerarPropostaBtn) gerarPropostaBtn.addEventListener('click', abrirPropostaModal);
   const toggleArquivarBtn = document.getElementById('f-toggle-arquivar');
   if(toggleArquivarBtn) toggleArquivarBtn.addEventListener('click', toggleArquivarCard);
   document.getElementById('f-coluna').addEventListener('change', (e)=> modalForm.columnId = e.target.value);
-  const tipoCartaEl = document.getElementById('f-tipo-carta');
-  if(tipoCartaEl) tipoCartaEl.addEventListener('change', (e)=> modalForm.tipoCarta = e.target.value);
+  const tipoProdutoEl = document.getElementById('f-tipo-produto');
+  if(tipoProdutoEl) tipoProdutoEl.addEventListener('change', (e)=> modalForm.tipoProduto = e.target.value);
   document.getElementById('f-mes').addEventListener('change', (e)=>{
     modalForm.mes = e.target.value;
     atualizarNotaCicloDeVenda();
@@ -678,10 +715,20 @@ function renderModal(){
     });
   });
 
+  // as duas caixas do topo abrem por cima do formulário (não empurram nada) e fecham ao clicar fora
   document.getElementById('f-tipo-pessoa-select').addEventListener('click', ()=>{
-    tipoPessoaDropdownAberto = !tipoPessoaDropdownAberto;
+    tipoPessoaDropdownAberto = !tipoPessoaDropdownAberto; modoGestorDropdownAberto = false;
     renderModal();
   });
+  const modoSel = document.getElementById('f-modo-gestor-select');
+  if(modoSel) modoSel.addEventListener('click', ()=>{
+    modoGestorDropdownAberto = !modoGestorDropdownAberto; tipoPessoaDropdownAberto = false;
+    renderModal();
+  });
+  if(tipoPessoaDropdownAberto || modoGestorDropdownAberto){
+    const fecharFora = (e)=>{ if(!e.target.closest('.caixa-escolha')){ tipoPessoaDropdownAberto = false; modoGestorDropdownAberto = false; renderModal(); } };
+    const m = root.querySelector('.modal'); if(m) m.addEventListener('click', fecharFora);
+  }
   document.querySelectorAll('.tipo-pessoa-dropdown-item').forEach(btn=>{
     btn.addEventListener('click', ()=>{
       modalForm.tipoPessoa = btn.dataset.tipoPessoa;
@@ -703,12 +750,12 @@ function renderModal(){
   if(contatoCargoInput) contatoCargoInput.addEventListener('input', (e)=> modalForm.contatoCargo = e.target.value);
 
   root.querySelectorAll('[data-modo-gestor]').forEach(btn=>{
-    btn.addEventListener('click', ()=>{ modalForm.__modoGestor = btn.dataset.modoGestor==='1'; if(!modalForm.__modoGestor) modalForm.__atribuirParaId = ''; renderModal(); });
+    btn.addEventListener('click', ()=>{ modalForm.__modoGestor = btn.dataset.modoGestor==='1'; modoGestorDropdownAberto = false; if(!modalForm.__modoGestor) modalForm.__atribuirParaId = ''; renderModal(); });
   });
   const atribuirParaSel = document.getElementById('f-atribuir-para');
   if(atribuirParaSel) atribuirParaSel.addEventListener('change', (e)=> modalForm.__atribuirParaId = e.target.value);
   document.getElementById('f-save').addEventListener('click', saveCardFromModal);
-  if(!f.__isNew && document.getElementById('f-delete')){
+  if(!f.__isNew){
     document.getElementById('f-delete').addEventListener('click', ()=>{
       showConfirm({
         message: 'Excluir este cliente do funil? Essa ação não pode ser desfeita.',
@@ -791,6 +838,13 @@ function renderEditarPerfilModal(){
               <span class="opcao-perfil-nota">Como seu nome aparece pro resto da equipe.</span>
             </span>
           </button>
+          ${(!acessoCrm || acessoCrm.tipo === 'dono') ? `<button type="button" class="opcao-perfil-btn" data-action="editar-perfil-email">
+            <span class="opcao-perfil-icon">${ICON_MAIL}</span>
+            <span>
+              <strong>Trocar e-mail</strong>
+              <span class="opcao-perfil-nota">O e-mail com que você entra e recebe os avisos.</span>
+            </span>
+          </button>` : ''}
         </div>
       </div>
     </div>
@@ -806,6 +860,84 @@ function renderEditarPerfilModal(){
     closeEditarPerfilModal();
     abrirAlterarNomeModal();
   });
+  const emailOpcao = document.querySelector('[data-action="editar-perfil-email"]');
+  if(emailOpcao) emailOpcao.addEventListener('click', ()=>{ closeEditarPerfilModal(); abrirAlterarEmailModal(); });
+}
+
+/* ---------- trocar o e-mail da conta (pede a senha; o e-mail antigo recebe um aviso) ---------- */
+let modalAlterarEmailAberto = false;
+let emailTroca = { novo:'', senha:'', salvando:false, msg:null };
+function abrirAlterarEmailModal(){
+  emailTroca = { novo:'', senha:'', salvando:false, msg:null };
+  modalAlterarEmailAberto = true;
+  renderAlterarEmailModal();
+  const el = document.getElementById('s-email-novo'); if(el) el.focus();
+}
+function closeAlterarEmailModal(){
+  modalAlterarEmailAberto = false;
+  const root = document.getElementById('modal-root');
+  if(root) root.innerHTML = '';
+}
+function renderAlterarEmailModal(){
+  const root = document.getElementById('modal-root');
+  if(!modalAlterarEmailAberto){ root.innerHTML=''; return; }
+  const semSenha = currentUser && currentUser.temSenha === false;
+  root.innerHTML = `
+    <div class="overlay" id="alterar-email-overlay">
+      <div class="modal" role="dialog" aria-modal="true" aria-labelledby="alterar-email-titulo">
+        <div class="modal-head">
+          <h3 id="alterar-email-titulo">Trocar e-mail</h3>
+          <button id="alterar-email-close" aria-label="Fechar">✕</button>
+        </div>
+        <div class="modal-body">
+          <p class="settings-page-note" style="margin-top:0;">Hoje você entra com <strong>${esc((currentUser && currentUser.email) || '')}</strong>. Depois da troca, o login, a recuperação de senha e todos os avisos passam a usar o e-mail novo, e o antigo recebe um aviso de que a troca foi feita.</p>
+          ${semSenha ? `<p class="settings-page-msg erro">Sua conta entra com o Google e ainda não tem senha. Crie uma senha em Login e segurança para poder trocar o e-mail.</p>` : `
+          <div class="field">
+            <label for="s-email-novo">E-mail novo</label>
+            <input type="email" id="s-email-novo" value="${esc(emailTroca.novo)}" placeholder="voce@exemplo.com" autocomplete="email" />
+          </div>
+          <div class="field">
+            <label for="s-email-senha">Sua senha atual</label>
+            <input type="password" id="s-email-senha" value="${esc(emailTroca.senha)}" autocomplete="current-password" />
+          </div>`}
+          ${emailTroca.msg ? `<p class="settings-page-msg ${emailTroca.msg.tipo}" role="alert">${esc(emailTroca.msg.texto)}</p>` : ''}
+        </div>
+        <div class="modal-foot">
+          <span></span>
+          <div class="modal-foot-actions">
+            <button class="btn-outline" id="alterar-email-cancelar">${semSenha ? 'Fechar' : 'Cancelar'}</button>
+            ${semSenha ? '' : `<button class="btn-save" id="s-email-salvar" ${emailTroca.salvando?'disabled':''}>${emailTroca.salvando?'Salvando…':'Trocar e-mail'}</button>`}
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+  document.getElementById('alterar-email-close').addEventListener('click', closeAlterarEmailModal);
+  document.getElementById('alterar-email-cancelar').addEventListener('click', closeAlterarEmailModal);
+  document.getElementById('alterar-email-overlay').addEventListener('click', (e)=>{ if(e.target.id==='alterar-email-overlay') closeAlterarEmailModal(); });
+  const novo = document.getElementById('s-email-novo'); const senha = document.getElementById('s-email-senha');
+  if(novo) novo.addEventListener('input', (e)=> emailTroca.novo = e.target.value);
+  if(senha){ senha.addEventListener('input', (e)=> emailTroca.senha = e.target.value); senha.addEventListener('keydown', (e)=>{ if(e.key === 'Enter') salvarEmailNovo(); }); }
+  const salvar = document.getElementById('s-email-salvar'); if(salvar) salvar.addEventListener('click', salvarEmailNovo);
+}
+async function salvarEmailNovo(){
+  const novo = emailTroca.novo.trim();
+  if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(novo)){ emailTroca.msg = { tipo:'erro', texto:'Digite um e-mail válido.' }; renderAlterarEmailModal(); return; }
+  if(!emailTroca.senha){ emailTroca.msg = { tipo:'erro', texto:'Digite a sua senha atual.' }; renderAlterarEmailModal(); return; }
+  emailTroca.salvando = true; emailTroca.msg = null; renderAlterarEmailModal();
+  try{
+    await apiRequest('PUT', '/auth/email', { email: novo, senha: emailTroca.senha });
+    await refreshCurrentUser();
+    // as opções da aba E-mail mostram o endereço: carrega de novo
+    resumoDiario.carregado = false; emailTarefas.carregado = false; backupAuto.carregado = false;
+    closeAlterarEmailModal();
+    avatarMsg = { tipo:'ok', texto:'E-mail trocado. Daqui em diante, entre com ' + novo.toLowerCase() + '.' };
+    renderApp();
+  }catch(e){
+    emailTroca.salvando = false;
+    emailTroca.msg = { tipo:'erro', texto: e.message || 'Não foi possível trocar o e-mail.' };
+    renderAlterarEmailModal();
+  }
 }
 
 /* ---------- visualização grande da foto (toque-e-segure no avatar) ---------- */
@@ -1048,9 +1180,9 @@ function renderEventoGoogleModal(){
             </div>
           </div>
           <div class="field">
-            <label>Lead relacionado</label>
+            <label>Contato relacionado</label>
             <select id="eg-lead">
-              <option value="">Sem lead</option>
+              <option value="">Sem contato</option>
               ${board.cards.map(c=>`<option value="${c.id}" ${f.leadId===c.id?'selected':''}>${esc(c.cliente) || 'Sem nome'}</option>`).join('')}
             </select>
           </div>
@@ -1058,7 +1190,7 @@ function renderEventoGoogleModal(){
             <label>Descrição</label>
             <textarea id="eg-descricao" rows="3" placeholder="Detalhes do evento...">${esc(f.descricao||'')}</textarea>
           </div>
-          <p class="settings-page-note">Título, data, hora e descrição mudam o evento de verdade, direto no seu Google Agenda. Prioridade e lead relacionado são exclusivos daqui do CRM — o Google não tem esses campos, então ficam guardados só aqui, amarrados a esse evento.</p>
+          <p class="settings-page-note">Título, data, hora e descrição mudam o evento de verdade, direto no seu Google Agenda. Prioridade e contato relacionado são exclusivos daqui do CRM — o Google não tem esses campos, então ficam guardados só aqui, amarrados a esse evento.</p>
         </div>
         <div class="modal-foot">
           <button class="delete-link" id="eg-delete">🗑 Excluir</button>
@@ -1117,9 +1249,9 @@ function renderTaskModal(){
             </div>
           </div>
           <div class="field">
-            <label>Lead relacionado</label>
+            <label>Contato relacionado</label>
             <select id="t-lead">
-              <option value="">Sem lead</option>
+              <option value="">Sem contato</option>
               ${board.cards.map(c=>`<option value="${c.id}" ${f.leadId===c.id?'selected':''}>${esc(c.cliente) || 'Sem nome'}</option>`).join('')}
             </select>
           </div>
@@ -1153,11 +1285,10 @@ function renderTaskModal(){
   document.getElementById('t-save').addEventListener('click', saveTaskFromModal);
   if(!f.__isNew){
     document.getElementById('t-delete').addEventListener('click', ()=>{
-      showConfirm({
+      showConfirm({ chave:'tarefa',
         message: 'Excluir esta tarefa? Essa ação não pode ser desfeita.',
         onConfirm: ()=>{ deleteTaskById(f.id); closeTaskModal(); closeConfirm(); },
       });
     });
   }
 }
-

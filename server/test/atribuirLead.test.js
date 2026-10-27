@@ -5,6 +5,7 @@ process.env.JWT_SECRET = process.env.JWT_SECRET || 'segredo-de-teste';
 
 const User = require('../models/User');
 const Column = require('../models/Column');
+const Funil = require('../models/Funil');
 const { validarAtribuicao, colunaEquivalente } = require('../utils/atribuirLead');
 const EQ = require('../utils/equipesDoUsuario');
 
@@ -57,7 +58,29 @@ test('a coluna equivalente é a de mesmo nome e tipo; senão a primeira em abert
     { _id: 'x2', nome: 'negociação', tipo: 'aberto', ordem: 2 },
   ];
   Column.find = () => ({ sort: async () => doAlvo });
+  Funil.find = () => ({ sort: async () => [] });
+  Funil.findById = async () => null;
   assert.equal((await colunaEquivalente('origem', MEMBRO))._id, 'x2');
   colunas.origem.nome = 'Outra coisa';
   assert.equal((await colunaEquivalente('origem', MEMBRO))._id, 'x1');
+});
+
+test('com vários funis, usa o funil de mesmo nome (ou o primeiro) antes de procurar nos outros', async () => {
+  const colunas = { origem: { _id: 'origem', nome: 'Leads', tipo: 'aberto', funilId: 'fg' } };
+  const funis = { fg: { _id: 'fg', nome: 'Imóveis' } };
+  Column.findById = async (id) => colunas[id] || null;
+  Funil.findById = async (id) => funis[id] || null;
+  const funisAlvo = [{ _id: 'f1', nome: 'Veículos', ordem: 0 }, { _id: 'f2', nome: 'imóveis', ordem: 1 }];
+  const doAlvo = [
+    { _id: 'v-leads', nome: 'Leads', tipo: 'aberto', funilId: 'f1', ordem: 1 },
+    { _id: 'i-novos', nome: 'Novos', tipo: 'aberto', funilId: 'f2', ordem: 2 },
+    { _id: 'i-leads', nome: 'Leads', tipo: 'aberto', funilId: 'f2', ordem: 3 },
+  ];
+  Funil.find = () => ({ sort: async () => funisAlvo });
+  Column.find = () => ({ sort: async () => doAlvo });
+  assert.equal((await colunaEquivalente('origem', MEMBRO))._id, 'i-leads'); // funil "Imóveis", não o "Leads" de Veículos
+  colunas.origem.nome = 'Outra';
+  assert.equal((await colunaEquivalente('origem', MEMBRO))._id, 'i-novos'); // primeira em aberto do funil certo
+  funis.fg.nome = 'Não existe';
+  assert.equal((await colunaEquivalente('origem', MEMBRO))._id, 'v-leads'); // sem funil de mesmo nome: o primeiro funil
 });

@@ -15,14 +15,14 @@
 
   /* ----------------------------- utilidades ----------------------------- */
   const $ = (s, el = document) => el.querySelector(s);
-  const esc = (s) => String(s == null ? "" : s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
-  const fmt = (n) => n === undefined && ACESSO && !pode("custos") ? "—" : (Number(n) || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+  const esc = (s) => Comum.esc(s); // ../js/comum.js (o mesmo nos três aplicativos)
+  const fmt = (n) => n === undefined && ACESSO && !pode("custos") ? "—" : Comum.dinheiro(n);
   const fmtN = (n, casas = 3) => (Number(n) || 0).toLocaleString("pt-BR", { maximumFractionDigits: casas });
   const num = (v) => { if (v === null || v === undefined || v === "") return NaN; const n = Number(String(v).replace(/\s/g, "").replace(/\.(?=\d{3}(\D|$))/g, "").replace(",", ".")); return Number.isFinite(n) ? n : NaN; };
   const numOu = (v, padrao = 0) => { const n = num(v); return Number.isNaN(n) ? padrao : n; };
   const r2 = (n) => Math.round(n * 100) / 100;
-  const hoje = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; };
-  const dataBR = (iso) => { if (!iso) return ""; const [a, m, d] = String(iso).slice(0, 10).split("-"); return `${d}/${m}/${a}`; };
+  const hoje = () => Comum.hojeISO();
+  const dataBR = (iso) => Comum.dataBR(iso);
   const horaBR = (iso) => new Date(iso).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
   const MESES = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"];
   const UNIDADE_NOME = { un: "unidade", kg: "kg", g: "g", l: "litro", ml: "ml", m: "metro", cx: "caixa", pct: "pacote" };
@@ -745,7 +745,7 @@
     }
     return { sub, desc, benef, benefNome, total: r2(sub - desc - benef), itens: S.carrinho.reduce((a, i) => a + numOu(i.qtd), 0) };
   }
-  const telFmt = (t) => { const d = String(t || "").replace(/\D/g, ""); return d.length === 11 ? `(${d.slice(0, 2)}) ${d.slice(2, 7)}-${d.slice(7)}` : d.length === 10 ? `(${d.slice(0, 2)}) ${d.slice(2, 6)}-${d.slice(6)}` : d; };
+  const telFmt = (t) => Comum.telefone(t);
   // Bloco do cliente no carrinho: busca, escolhido e o que ele tem no programa
   function clienteCartHtml(t) {
     const c = S.cartCli; const prog = programa();
@@ -1055,16 +1055,18 @@
       <div class="chips"><button class="chip ${!S.filtroProd ? "ativo" : ""}" data-a="filtro-prod" data-v="">Ativos</button><button class="chip ${S.filtroProd === "atencao" ? "ativo" : ""}" data-a="filtro-prod" data-v="atencao">Estoque baixo${atencao ? ` (${atencao})` : ""}</button><button class="chip ${S.filtroProd === "inativos" ? "ativo" : ""}" data-a="filtro-prod" data-v="inativos">Inativos</button></div></div>`;
     if (!S.produtos.length) return html + `<div class="card vazio"><b>Nenhum produto ainda</b>Cadastre o que você vende: nome, preço, custo e, se quiser, variações como tamanho ou cor.<br/><br/><button class="btn acento" data-a="novo-produto">Cadastrar o primeiro produto</button></div>`;
     if (!lista.length) return html + `<div class="card vazio">Nenhum produto neste filtro.</div>`;
-    html += `<div class="card" style="padding:6px 8px"><div class="tabela-wrap"><table class="tabela"><thead><tr><th>Produto</th><th class="dir">Preço</th>${pode("custos") ? `<th class="dir">Custo</th><th class="dir">Margem</th>` : ""}<th class="dir">Estoque</th><th></th></tr></thead><tbody>
+    html += `<div class="card" style="padding:6px 8px"><div class="tabela-wrap"><table class="tabela tabela-produtos"><thead><tr><th>Produto</th><th class="dir">Preço</th>${pode("custos") ? `<th class="dir so-desk">Custo</th><th class="dir so-desk">Margem</th>` : ""}<th class="dir so-desk">Estoque</th><th class="so-desk"></th></tr></thead><tbody>
       ${lista.map((p) => {
         const m = margem(p);
         const est = !p.controlaEstoque ? `<span class="selo livre">sem controle</span>` : `<span class="num">${fmtN(p.estoque)} ${unid(p.unidade)}</span> <span class="selo ${p.situacao}">${p.situacao === "ok" ? "ok" : p.situacao === "baixo" ? "baixo" : "acabou"}</span>`;
+        // no celular o estoque (e o "Ajustar") vai embaixo do nome, para a lista caber sem rolar para o lado
+        const estCel = `<div class="so-cel prod-est-cel">${est}${p.controlaEstoque && pode("produtos") ? ` <button class="btn mini claro" data-a="ajustar" data-id="${p.id}">Ajustar</button>` : ""}</div>`;
         return `<tr ${pode("produtos") ? `class="clicavel" data-a="editar-produto" data-id="${p.id}"` : ""}>
-          <td><div class="prod-cel"><span class="miniatura" ${p.foto ? `style="background-image:url('${esc(p.foto)}')"` : ""}>${p.foto ? "" : inicial(p.nome)}</span><div><div class="prod-nome">${esc(p.nome)}${p.ativo ? "" : ` <span class="selo neutro">inativo</span>`}</div><div class="prod-cat">${esc(p.categoria || "Sem categoria")}${p.variacoes.length ? ` · ${p.variacoes.length} variações` : ""}${restaurante() && !p.noCardapio ? " · fora do cardápio" : ""}</div></div></div></td>
-          <td class="dir num">${fmt(p.preco)}</td>${pode("custos") ? `<td class="dir num">${fmt(p.custo)}</td>
-          <td class="dir">${m === null ? "—" : `<span class="${m < 0 ? "negativo" : ""}">${m}%</span>`}</td>` : ""}
-          <td class="dir" style="white-space:nowrap">${est}</td>
-          <td class="dir">${p.controlaEstoque && pode("produtos") ? `<button class="btn mini claro" data-a="ajustar" data-id="${p.id}">Ajustar</button>` : ""}</td>
+          <td><div class="prod-cel"><span class="miniatura" ${p.foto ? `style="background-image:url('${esc(p.foto)}')"` : ""}>${p.foto ? "" : inicial(p.nome)}</span><div><div class="prod-nome">${esc(p.nome)}${p.ativo ? "" : ` <span class="selo neutro">inativo</span>`}</div><div class="prod-cat">${esc(p.categoria || "Sem categoria")}${p.variacoes.length ? ` · ${p.variacoes.length} variações` : ""}${restaurante() && !p.noCardapio ? " · fora do cardápio" : ""}</div>${estCel}</div></div></td>
+          <td class="dir num">${fmt(p.preco)}</td>${pode("custos") ? `<td class="dir num so-desk">${fmt(p.custo)}</td>
+          <td class="dir so-desk">${m === null ? "—" : `<span class="${m < 0 ? "negativo" : ""}">${m}%</span>`}</td>` : ""}
+          <td class="dir so-desk" style="white-space:nowrap">${est}</td>
+          <td class="dir so-desk">${p.controlaEstoque && pode("produtos") ? `<button class="btn mini claro" data-a="ajustar" data-id="${p.id}">Ajustar</button>` : ""}</td>
         </tr>`;
       }).join("")}</tbody></table></div></div>`;
     return html;

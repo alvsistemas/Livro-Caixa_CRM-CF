@@ -58,7 +58,7 @@ function recursoDoCaminho(caminho, metodo = 'GET') {
   // CRM
   if (/^\/api\/(automacoes|fluxos)(\/|$)/.test(caminho) && grava) return 'automacoes';
   if (/^\/api\/equipe\/?$/.test(caminho) && metodo === 'POST') return 'equipe'; // criar uma equipe (entrar numa é livre)
-  if (/^\/api\/equipe\/(supervisao|permissoes|regenerar-codigo)(\/|$)/.test(caminho)) return 'equipe';
+  if (/^\/api\/equipe\/(supervisao|permissoes|regenerar-codigo|criar-membro)(\/|$)/.test(caminho)) return 'equipe';
   // agenda-mes fica aberta (traz as tarefas do calendário); lá dentro os eventos do Google
   // só entram se o plano tiver a integração
   if (/^\/api\/calendar\/(connect-url|eventos)/.test(caminho)) return 'googleAgenda';

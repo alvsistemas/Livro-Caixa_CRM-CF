@@ -2,7 +2,7 @@
    O código vem no link que o gestor manda (?c=CODIGO) e fica guardado neste aparelho. */
 (function () {
   const $ = (s) => document.querySelector(s);
-  const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const esc = (s) => Comum.esc(s); // js/comum.js
   const guardado = () => { try { return localStorage.getItem('loja-codigo') || ''; } catch (e) { return ''; } };
   const doLink = new URLSearchParams(location.search).get('c') || '';
   const E = { codigo: (doLink || guardado()).toUpperCase(), loja: null, pessoas: [], pessoa: null, erro: '', carregando: false };

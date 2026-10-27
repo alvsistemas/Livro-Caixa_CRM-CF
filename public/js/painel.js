@@ -3,8 +3,8 @@
    operadores do PDV (/api/estoque/operadores). Só o dono (ou quem tem a função de gestor). */
 (function () {
   const $ = (s) => document.querySelector(s);
-  const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-  const fmt = (v) => (Number.isFinite(Number(v)) ? Number(v).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : '—');
+  const esc = (s) => Comum.esc(s); // js/comum.js
+  const fmt = (v) => (Number.isFinite(Number(v)) ? Comum.dinheiro(v) : '—');
   const quando = (d) => {
     if (!d) return 'nunca';
     const t = new Date(d); const min = Math.round((Date.now() - t.getTime()) / 60000);

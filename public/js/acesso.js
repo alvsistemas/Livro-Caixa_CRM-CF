@@ -7,7 +7,7 @@
    O servidor é quem decide (utils/acesso.js); aqui só se mostra o que a pessoa pode usar. */
 (function () {
   const CHAVE_OP = 'pdv-operador';
-  const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const esc = (s) => Comum.esc(s); // js/comum.js
   const lerToken = () => { try { return localStorage.getItem('token') || ''; } catch (e) { return ''; } };
   function payload() {
     try { return JSON.parse(atob(lerToken().split('.')[1].replace(/-/g, '+').replace(/_/g, '/'))) || {}; } catch (e) { return {}; }

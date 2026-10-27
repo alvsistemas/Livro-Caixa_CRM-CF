@@ -26,7 +26,7 @@
 
   const lerLocal = (k) => { try { return localStorage.getItem(k); } catch (e) { return null; } };
   const gravarLocal = (k, v) => { try { localStorage.setItem(k, v); } catch (e) { /* navegador sem armazenamento */ } };
-  const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const esc = (s) => Comum.esc(s); // js/comum.js
 
   const st = {
     contexto: 'crm',

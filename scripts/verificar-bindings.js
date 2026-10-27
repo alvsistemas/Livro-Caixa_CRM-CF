@@ -24,8 +24,12 @@
 const fs = require('fs');
 const path = require('path');
 
-const alvo = process.argv[2] || path.join(__dirname, '..', 'public', 'js', 'script.js');
-const codigo = fs.readFileSync(alvo, 'utf8');
+// padrão: o CRM inteiro (js/crm/*.js, o antigo script.js em partes)
+const pastaCrm = path.join(__dirname, '..', 'public', 'js', 'crm');
+const alvo = process.argv[2] || pastaCrm;
+const codigo = fs.statSync(alvo).isDirectory()
+  ? fs.readdirSync(alvo).filter((f) => f.endsWith('.js')).sort().map((f) => fs.readFileSync(path.join(alvo, f), 'utf8')).join('\n')
+  : fs.readFileSync(alvo, 'utf8');
 
 // 1) todo data-action="valor-fixo" (ignora os que usam ${...} dinâmico,
 //    esses não dá pra conferir por string fixa)

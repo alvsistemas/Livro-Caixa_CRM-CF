@@ -1,8 +1,8 @@
 /* ================================================================
-   Painel do Consórcio — front-end
+   Livro-Caixa — front-end
    Estrutura com barra lateral (Dashboard / Pipeline / Leads / Tarefas),
    inspirada no CRM Foco, mantendo tudo que já existia (MongoDB via
-   API REST, modo noturno, cor de destaque, WhatsApp, arraste de cards).
+   API REST, modo noturno, cor de destaque, botão do WhatsApp, arraste de cards).
 ================================================================ */
 
 const API_BASE = '/api';
@@ -15,21 +15,12 @@ if('serviceWorker' in navigator){
 }
 
 /* ---------- helpers ---------- */
-// data de hoje no fuso do aparelho (AAAA-MM-DD); toISOString() usaria UTC e viraria o dia à noite
-// em equipe, só o gestor exclui leads (o servidor também confere)
-function podeExcluirLeads(){ return !(typeof equipe !== 'undefined' && equipe && !equipe.souSupervisor); }
-// versão administrativa (recrutamento), aberta em /adm: mesmo painel, com vocabulário e funil de contratação
-function perfilRH(){ try{ return !!(currentUser && currentUser.perfil === 'rh'); }catch(e){ return false; } }
-function hojeLocalISO(){
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
-}
-const fmtBRL = (n) => new Intl.NumberFormat('pt-BR', { style:'currency', currency:'BRL', minimumFractionDigits:2, maximumFractionDigits:2 }).format(n || 0);
+const fmtBRL = (n) => Comum.dinheiro(n); // js/comum.js (o mesmo nos três aplicativos)
 const MESES_ABREV = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
 const MESES_CHEIO = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
-const currentMonthKey = () => { const d=new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`; };
+const currentMonthKey = () => Comum.mesISO();
 // Acha a segunda-feira da semana de uma data, no formato "YYYY-MM-DD" — usado como
-// identificador de cada semana do GEROT.
+// identificador de cada semana da Rotina.
 function inicioDaSemana(data){
   const d = new Date(data);
   const diaSemana = d.getDay(); // 0=domingo, 1=segunda, ...
@@ -49,7 +40,7 @@ const maskInteiro = (raw) => {
   const numero = parseInt(digits,10);
   return { numero, texto: numero.toLocaleString('pt-BR') };
 };
-const esc = (s='') => String(s).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+const esc = (s) => Comum.esc(s);
 function formatDate(iso){
   if(!iso) return '';
   const d = new Date(iso);
@@ -80,17 +71,15 @@ const ICON_SETTINGS = `<svg width="17" height="17" viewBox="0 0 24 24" fill="non
 const ICON_SPARKLE = `<svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2l1.6 5.4L19 9l-5.4 1.6L12 16l-1.6-5.4L5 9l5.4-1.6L12 2Z"/><path d="M19 14l.8 2.2L22 17l-2.2.8L19 20l-.8-2.2L16 17l2.2-.8L19 14Z"/><path d="M5 14l.8 2.2L8 17l-2.2.8L5 20l-.8-2.2L2 17l2.2-.8L5 14Z"/></svg>`;
 const ICON_BELL = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>`;
 const ICON_BUSCA = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>`;
-const ICON_CONVERSAS = `<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>`;
-const ICON_DISPAROS = `<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>`;
 const ICON_RELATORIOS = `<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>`;
 const ICON_SUPORTE = `<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>`;
 const ICON_CHAT_INTERNO = `<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>`;
 const ICON_SUPERVISAO = `<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8Z"/><circle cx="12" cy="12" r="3"/></svg>`;
 const ICON_AUTOMACOES = `<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>`;
 const ICON_FLUXOS = `<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="5" cy="6" r="2"/><circle cx="5" cy="18" r="2"/><circle cx="19" cy="12" r="2"/><path d="M5 8v8"/><path d="M7 6h6a4 4 0 0 1 4 4"/><path d="M7 18h6a4 4 0 0 0 4-4"/></svg>`;
-const ICON_AGENDAMENTOS = `<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><path d="M12 14v3l2 1"/></svg>`;
 const ICON_IMPORT_EXPORT = `<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 17l-4-4 4-4"/><path d="M4 13h11a4 4 0 0 0 4-4V7"/><path d="M16 7l4 4-4 4"/><path d="M20 11H9a4 4 0 0 0-4 4v2"/></svg>`;
 const ICON_LOGOUT = `<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>`;
+const ICON_MAIL = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-10 6L2 7"/></svg>`;
 const ICON_EDIT = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4Z"/></svg>`;
 const ICON_REORDER = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 6h13"/><path d="M8 12h13"/><path d="M8 18h13"/><path d="M3 6h.01"/><path d="M3 12h.01"/><path d="M3 18h.01"/></svg>`;
 const ICON_FUNNEL = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="4" y1="6" x2="20" y2="6"/><line x1="7" y1="12" x2="17" y2="12"/><line x1="10" y1="18" x2="14" y2="18"/></svg>`;
@@ -140,7 +129,7 @@ function setDarkMode(ligado){
 setDarkMode(getDarkMode());
 
 /* ---------- nome do site (fixo) ---------- */
-document.title = 'Painel CRM';
+document.title = 'CRM — Livro-Caixa';
 
 /* ---------- sessão / login ---------- */
 function getToken(){ return localStorage.getItem('token'); }
@@ -148,7 +137,8 @@ function getCurrentUser(){
   try{ return JSON.parse(localStorage.getItem('user') || 'null'); }
   catch(e){ return null; }
 }
-function logout(){
+function logout(completo){
+  if(window.Acesso){ Acesso.sair(completo === true); return; }
   localStorage.removeItem('token');
   localStorage.removeItem('user');
   window.location.href = 'login.html';
@@ -211,23 +201,7 @@ let cardTouchDrag = null; // { cardId, cardEl, btn, arrastando, ultimoX, ultimoY
 let cardTouchLongPressTimer = null; // timer do "segurar pra arrastar" do card no celular (precisa existir antes do 1º toque, senão soltar o mouse no desktop gera erro no console)
 let autoScrollDoArrastoInterval = null;
 let arrastoRafPendente = false; // limita o trabalho pesado do arrastar a 1x por quadro de tela
-let assistenteBolhaX = null; // null = fica na posição padrão (canto inferior direito) até a pessoa arrastar
-let assistenteBolhaY = null;
-let assistenteAberto = false;
-let assistenteMensagens = [];
-let assistenteEnviando = false;
-let assistenteAnimando = null; // 'abrindo' | 'fechando' | null — só anima na abertura/fechamento, não a cada re-render
-let assistenteEditandoNome = false;
-const ASSISTENTE_NOME_PADRAO = 'Assistente do CRM';
-let assistenteNome = ASSISTENTE_NOME_PADRAO;
-try{ assistenteNome = (localStorage.getItem('assistente-nome')||'').trim().slice(0,30) || ASSISTENTE_NOME_PADRAO; }catch(err){}
-let assistenteDrag = null; // { startX, startY, bolhaXInicial, bolhaYInicial, moveu, pointerId }
-try{
-  const posSalva = JSON.parse(localStorage.getItem('assistente-bolha-pos')||'null');
-  if(posSalva && typeof posSalva.x==='number' && typeof posSalva.y==='number'){
-    assistenteBolhaX = posSalva.x; assistenteBolhaY = posSalva.y;
-  }
-}catch(e){}
+// Assistente de IA (bolinha): componente compartilhado com o Controle financeiro, em js/assistente-ia.js
 let menuDiaAberto = null; // { diaISO, x, y } — dia com o menu de copiar/mover aberto, ou null
 let checklistDiaModal = null; // { diaISO, modo, marcados:Set } — telinha de escolher quais itens do dia entram na cópia/mover
 let longPressDisparou = false; // marca que o menu já abriu pelo toque, pra ignorar o "click" fantasma que o touch dispara em seguida
@@ -236,42 +210,11 @@ let calendarSyncing = false;
 // Integrações que dependem de credenciais do servidor (não do usuário) — otimista por
 // padrão (tudo true) até a checagem real chegar, pra nunca esconder nada à toa por causa
 // de uma resposta lenta. Ver server/routes/config.js.
-let integracoesConfig = { googleAgenda:true, assistenteIA:true, whatsappWebhook:true, instagramWebhook:true, telegramAlerta:true, emailRecuperacao:false, push:false };
+let assinaturaInfo = null; // situação da assinatura (GET /api/assinatura)
+let integracoesConfig = { googleAgenda:true, assistenteIA:true, telegramAlerta:true, emailRecuperacao:false, push:false };
 let icsStatus = null; // { ativo, url } — link de agenda (.ics), alternativa ao Google Agenda
 let icsCarregando = false;
 let icsGerando = false;
-let whatsappConnected = false;
-let whatsappSalvando = false;
-let whatsappConfigMsg = null;
-let whatsappProvedor = 'meta'; // provedor ativo do usuário (vem do servidor)
-let whatsappProvedorEscolhido = 'meta'; // escolha no formulário de conexão
-let whatsappYcloudWebhookPath = null;
-let whatsappYcloudSecretOk = false;
-let agenteIaAtivo = false;
-let iaProativaAtiva = false;
-let agendamentos = [];
-let agendamentosContagem = { pendente:0, enviada:0, cancelada:0, falhou:0 };
-let agendamentosLoaded = false;
-let agendamentoModalForm = null;
-let agendamentoSalvando = false;
-let agendamentoMsg = null;
-let menuTriagem = { ativo:false, mensagemInicial:'', opcoes:[] };
-let menuTriagemCarregado = false;
-let menuTriagemSalvando = false;
-let menuTriagemMsg = null;
-let instagramConnected = false;
-let instagramSalvando = false;
-let instagramConfigMsg = null;
-let conversas = [];
-let conversasLoaded = false;
-let conversaSelecionadaCardId = null;
-let conversaMensagens = [];
-let conversaMensagensLoaded = false;
-let conversaTexto = '';
-let conversaEnviando = false;
-let conversaBusca = '';
-let conversasOverlay = null; // null | 'automacoes' | 'disparos' | 'agendamentos'
-let conversaPollingTimer = null;
 let notifOpen = false;
 let buscaGlobalAberta = false;
 let buscaGlobalTexto = '';
@@ -292,10 +235,9 @@ let agendamentoPublicoForm = {
   colunaDestinoId: (currentUser && currentUser.agendamentoPublico && currentUser.agendamentoPublico.colunaDestinoId) || '',
 };
 const ROTULOS_EVENTOS_WEBHOOK = {
-  'lead.criado': 'Novo lead criado',
-  'lead.movido': 'Lead mudou de coluna',
-  'lead.ganho': 'Lead marcado como ganho',
-  'mensagem.recebida': 'Mensagem recebida no WhatsApp',
+  'lead.criado': 'Novo contato criado',
+  'lead.movido': 'Contato mudou de coluna',
+  'lead.ganho': 'Contato marcado como ganho',
   'tarefa.criada': 'Nova tarefa criada',
 };
 let anexosDoCard = [];
@@ -320,15 +262,10 @@ let anexoEnviando = false;
 let anexoMsg = null;
 let possiveisLeads = [];
 let possiveisLeadsCarregados = false;
-let possiveisSelecionados = new Set(); // ids marcados na lista de possíveis leads
-let possiveisDestinoId = ''; // gestor: pra quem vão os leads ('' = pra mim)
-let possiveisPassandoLote = false;
-let possiveisLoteMsg = null;
 let importPlanilhaLinhas = [];
 let importPlanilhaColunas = [];
 let importPlanilhaNomeArquivo = '';
-let importPainelAbrindo = false; // true só no render em que o painel da planilha ainda está fechado, pra animar a descida
-let importPainelFechando = false;
+let importAnimarEntrada = false; // a planilha acabou de ser escolhida: as informações descem
 let importMapNome = '';
 let importMapTelefone = '';
 let importMapServico = '';
@@ -348,24 +285,6 @@ let auditoriaExpandida = false;
 let configCategoriaAtiva = 'perfil';
 let monitoramentoLoaded = false;
 let monitoramentoErros = [];
-let disparoFiltroColuna = '';
-let disparoFiltroTemp = '';
-let disparoSelecionados = new Set();
-let disparoTexto = '';
-let disparoEnviando = false;
-let disparoResultado = null;
-let disparoUsarTemplate = false;
-let disparoTemplateNome = '';
-let disparoTemplateIdioma = 'pt_BR';
-let disparoTemplateVariaveis = '';
-let disparoTemplatesDisponiveis = [];
-let templatesList = [];
-let templatesCarregados = false;
-let templatesSincronizando = false;
-let templatesMsg = null;
-let templateModalForm = null;
-let templateSalvando = false;
-let templateMsg = null;
 let funis = [];
 let funisLoaded = false;
 let funilAtualId = null;
@@ -374,12 +293,21 @@ let editingFunilName = '';
 let relatorioFunilId = '';
 let equipe = null;
 let equipeLoaded = false;
-let convitesRecebidos = []; // convites que chegaram pro e-mail de quem ainda não tem equipe
-let conviteEmailNovo = '';
 let equipeNomeNovo = '';
 let equipeCodigoEntrar = '';
 let equipeMsg = null;
 let equipeSubTab = 'chat';
+let equipeTela = 'lista';        // 'lista' = tela Equipes (todas); 'equipe' = dentro da equipe aberta
+let equipeNovaAberta = false;
+let gestaoSecao = 'membros';           // seção aberta na Gestão (como em Configurações)
+let gestaoMobileConteudo = false;      // no celular: mostrando a lista de seções ou a seção
+let novoMembroForm = { nome:'', email:'', enviando:false, msg:null, link:null };     // painel do + (criar ou entrar com código)
+let minhasEquipes = [];          // todas as equipes de que a pessoa faz parte (uma fica aberta)
+let limiteEquipes = 10;
+// Gestor atuando no funil de um consultor: { userId, nome } enquanto estiver lá dentro
+let atuandoComo = null;
+let metaBackupAtuandoComo = null;
+const PAGINAS_ATUANDO_COMO = ['dashboard','pipeline','leads','tarefas','equipe'];
 let agendaSubTab = 'calendario';
 let gerotSemanaAtual = inicioDaSemana(new Date());
 let gerotBlocos = [];
@@ -425,8 +353,6 @@ let regraEditForm = null; // editor de uma regra específica, dentro do modal de
 let nomeNovoVal = '';
 let nomeMsg = null;
 let verificandoAtualizacao = false;
-let preenchendoMesInicioContato = false;
-let mesInicioContatoMsg = null;
 let backupGerando = false;
 let backupImportando = false;
 let backupMsg = null;
@@ -452,12 +378,18 @@ let importResultado = null; // { sucesso, falha }
 let importando = false;
 let aiInsights = [];
 let sidebarOpen = false;
+// celular (até 768px): uma etapa por vez nas Negociações, Configurações em lista
+let pipelineEtapaMobileId = null;
+let configMobileConteudo = false;
+let leadsTipoMobile = ''; // filtro dos cartões de contatos no celular: '' | 'aberto' | 'ganho' | 'perdido'
+function ehCelular(){ return !!(window.matchMedia && window.matchMedia('(max-width: 768px)').matches); }
 let insightsCarregando = false;
 let insightsPipelineExpandido = false;
 let modalForm = null;            // objeto do cliente sendo editado/criado
 let escolhaTipoPessoaColId = null; // coluna escolhida ao criar lead novo, enquanto a telinha de física/jurídica está aberta
 let tipoPessoaDropdownAberto = false; // dropdown de física/jurídica, dentro do modal do lead
+let modoGestorDropdownAberto = false; // dropdown Padrão/Gestor, ao lado do de física/jurídica
+let escolhaModoGestor = null;          // novo lead do gestor: null = ainda escolhendo; false = Padrão; true = Gestor
 let taskModalForm = null;        // objeto da tarefa sendo editada/criada
 let eventoGoogleModalForm = null; // { eventId, titulo, data, hora } — edita o evento direto na fonte, no Google
 let confirmState = null;         // { message, onConfirm }
-

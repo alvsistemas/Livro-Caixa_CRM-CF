@@ -2,7 +2,7 @@
    - Membros de equipe: some do menu e da tela o que o gestor não liberou (quem garante
      de verdade é o servidor, que responde 403).
    - Gestor: aba Equipe → Permissões, para escolher as abas e funções dos membros.
-   Usa as globais do script.js (equipe, apiRequest, esc, renderApp, currentPage). */
+   Usa as globais do CRM (js/crm/) (equipe, apiRequest, esc, renderApp, currentPage). */
 
 let minhasPermissoes = null; // { abas, funcoes, restrito }
 let permForm = null;         // cópia em edição, na aba Equipe → Permissões

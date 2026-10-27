@@ -12,6 +12,9 @@ const MetaVendas = require('../models/MetaVendas');
 const Task = require('../models/Task');
 const { registrarAuditoria } = require('../utils/auditoria');
 const P = require('../utils/permissoes');
+const { seedColunasPadrao } = require('../seed');
+const { gerarTokenReset, DIAS_CONTA_NOVA } = require('../utils/senhaReset');
+const { emailConfigurado, enviarEmail, urlBaseDoApp, montarEmailBoasVindasEquipe } = require('../utils/email');
 const EQ = require('../utils/equipesDoUsuario');
 
 const router = express.Router();
@@ -189,6 +192,49 @@ router.post('/regenerar-codigo', async (req, res) => {
     res.json({ codigoConvite: equipe.codigoConvite });
   } catch (err) {
     res.status(500).json({ error: 'Erro ao gerar novo código.' });
+  }
+});
+
+// POST /api/equipe/criar-membro { nome, email } -> o gestor cria a conta de uma pessoa, que já entra
+// como membro da equipe aberta. Sem senha: a pessoa recebe por e-mail um link (7 dias, uso único)
+// para criar a dela. A conta é da pessoa, com a própria assinatura (começa no teste grátis).
+router.post('/criar-membro', async (req, res) => {
+  try {
+    const gestor = await User.findById(req.userId);
+    if (!gestor.equipeId || gestor.papelEquipe !== 'supervisor') return res.status(403).json({ error: 'Só o gestor da equipe pode criar contas.' });
+    const nome = String((req.body && req.body.nome) || '').trim().slice(0, 80);
+    const email = String((req.body && req.body.email) || '').toLowerCase().trim();
+    if (!nome) return res.status(400).json({ error: 'Informe o nome da pessoa.' });
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || email.length > 200) return res.status(400).json({ error: 'Informe um e-mail válido.' });
+    if (await User.findOne({ email })) {
+      return res.status(409).json({ error: 'Já existe uma conta com este e-mail. Mande o código de convite para essa pessoa entrar na equipe.' });
+    }
+    const equipe = await Equipe.findById(gestor.equipeId);
+    const { token, hash, expira } = gerarTokenReset(Date.now(), DIAS_CONTA_NOVA * 24 * 60);
+    // a conta e o funil padrão são de outra pessoa: grava como sistema (o gestor já foi conferido)
+    const novo = await comoSistema(async () => {
+      const u = await User.create({ nome, email, senhaHash: null, resetSenhaHash: hash, resetSenhaExpira: expira });
+      await seedColunasPadrao(u._id);
+      await EQ.entrar(u._id, equipe._id, 'membro', false);
+      await registrarAuditoria(u._id, 'conta_criada_pelo_gestor', `Conta criada por ${gestor.nome || gestor.email} na equipe "${equipe.nome}"`);
+      return u;
+    });
+    registrarAuditoria(req.userId, 'conta_criada_pelo_gestor', `Criou a conta de ${nome} (${email}) na equipe "${equipe.nome}"`);
+    const link = `${urlBaseDoApp()}/login.html?reset=${token}`;
+    let emailEnviado = false;
+    if (emailConfigurado()) {
+      try {
+        const msg = montarEmailBoasVindasEquipe({ nome, gestorNome: gestor.nome || gestor.email, equipeNome: equipe.nome, link, dias: DIAS_CONTA_NOVA });
+        await enviarEmail({ para: email, assunto: msg.assunto, html: msg.html, texto: msg.texto });
+        emailEnviado = true;
+      } catch (e) { console.error('E-mail de boas-vindas da equipe:', e.message); }
+    }
+    // sem e-mail configurado (ou se falhou), o gestor recebe o link para repassar
+    res.status(201).json({ membro: { id: String(novo._id), nome, email }, emailEnviado, ...(emailEnviado ? {} : { link }), validadeDias: DIAS_CONTA_NOVA });
+  } catch (err) {
+    if (err && err.code === '23505') return res.status(409).json({ error: 'Já existe uma conta com este e-mail.' });
+    console.error('Criar conta pela equipe:', err.message);
+    res.status(500).json({ error: 'Erro ao criar a conta.' });
   }
 });
 
@@ -389,7 +435,7 @@ router.get('/supervisao/:userId/dashboard', async (req, res) => {
     const membro = await EQ.membroComoUser(user.equipeId, req.params.userId);
     if (!membro) return res.status(404).json({ error: 'Membro não encontrado nessa equipe.' });
 
-    const mesAtual = new Date().toISOString().slice(0, 7);
+    const mesAtual = require('../utils/fechamento').hojeBR().slice(0, 7); // mês de Brasília (não o UTC)
     // só leitura dos dados do membro, como sistema (o gestor já foi conferido acima)
     const [columns, cards, tasks, meta] = await comoSistema(() => Promise.all([
       Column.find({ userId: membro._id }),

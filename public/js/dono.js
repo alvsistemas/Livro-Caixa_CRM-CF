@@ -4,7 +4,7 @@
   if(!token){ window.location.href = 'login.html'; return; }
 
   const $ = (id) => document.getElementById(id);
-  const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
+  const esc = (s) => Comum.esc(s); // js/comum.js
   const brl = (v) => Number(v || 0).toLocaleString('pt-BR', { style:'currency', currency:'BRL' });
   const data = (v) => { if(!v) return '—'; const s = String(v); const d = /^\d{4}-\d{2}-\d{2}$/.test(s.slice(0, 10)) && s.length <= 10 ? new Date(s + 'T12:00:00') : new Date(s); return d.toLocaleDateString('pt-BR', { timeZone:'America/Sao_Paulo' }); };
   const dataHora = (v) => v ? new Date(v).toLocaleString('pt-BR', { timeZone:'America/Sao_Paulo', day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' }) : '—';

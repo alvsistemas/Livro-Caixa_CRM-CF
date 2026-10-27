@@ -11,7 +11,7 @@
   const CHAVE = 'naoPerguntar';
   const ler = () => { try { return JSON.parse(localStorage.getItem(CHAVE) || '{}') || {}; } catch (e) { return {}; } };
   const gravar = (o) => { try { localStorage.setItem(CHAVE, JSON.stringify(o)); } catch (e) { /* sem armazenamento */ } };
-  const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const esc = (s) => Comum.esc(s); // js/comum.js
   let aberta = null;
 
   function pulada(chave) { return !!(chave && ler()[chave]); }

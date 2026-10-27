@@ -72,7 +72,7 @@ contar() {
 # 1) Sintaxe JS (node --check) — front-end
 # ---------------------------------------------------------------
 passo "1/5 — Sintaxe do JavaScript do front-end"
-for arquivo in public/js/*.js public/financeiro/*.js public/estoque/*.js; do
+for arquivo in public/js/*.js public/js/crm/*.js public/financeiro/*.js public/estoque/*.js; do
   contar
   if node --check "$arquivo" 2>/tmp/erro-sintaxe.txt; then
     ok "$arquivo"
@@ -81,6 +81,24 @@ for arquivo in public/js/*.js public/financeiro/*.js public/estoque/*.js; do
     cat /tmp/erro-sintaxe.txt
   fi
 done
+
+# 1a) O CRM em partes (js/crm/) roda como um script só: o mesmo nome declarado em dois
+#     arquivos quebraria a página. Confere juntando todos, na ordem.
+contar
+cat public/js/crm/*.js > /tmp/crm-junto.js
+if node --check /tmp/crm-junto.js 2>/tmp/erro-sintaxe.txt; then
+  ok "js/crm/ juntos (sem nome repetido entre os arquivos)"
+else
+  falhou "js/crm/ juntos — erro:"
+  cat /tmp/erro-sintaxe.txt
+fi
+
+contar
+if node scripts/verificar-duplicados.js; then
+  ok "nenhuma função de topo repetida (CRM e Controle financeiro)"
+else
+  falhou "função repetida (a última substitui a primeira sem avisar)"
+fi
 
 # ---------------------------------------------------------------
 # 1b) Sintaxe JS (node --check) — back-end (ignora node_modules)
@@ -129,7 +147,7 @@ done
 # ---------------------------------------------------------------
 # 4) Cobertura dos data-action (binding)
 # ---------------------------------------------------------------
-passo "5/5 — Cobertura dos data-action (script.js)"
+passo "5/5 — Cobertura dos data-action (CRM, js/crm/)"
 contar
 if node scripts/verificar-bindings.js; then
   ok "data-action com binding"

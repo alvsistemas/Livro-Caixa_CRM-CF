@@ -1,9 +1,17 @@
+// CRM · 14-eventos.js — bindAppEvents (todos os cliques e campos). Os arquivos js/crm/ são carregados em ordem pelo index.html e
+// compartilham as mesmas variáveis globais (é o antigo script.js dividido, como no CRM de consórcio).
 /* ---------- eventos ---------- */
 function bindAppEvents(){
   const app = document.getElementById('app');
 
-  const hamburgerBtn = app.querySelector('[data-action="toggle-sidebar"]');
-  if(hamburgerBtn) hamburgerBtn.addEventListener('click', ()=>{ sidebarOpen = !sidebarOpen; renderApp(); });
+  // o menu abre pelo hambúrguer (tablet) e pelo "Mais" da barra de baixo (celular)
+  app.querySelectorAll('[data-action="toggle-sidebar"]').forEach(b=> b.addEventListener('click', ()=>{ sidebarOpen = !sidebarOpen; renderApp(); }));
+  app.querySelectorAll('[data-action="etapa-mobile"]').forEach(b=> b.addEventListener('click', ()=> trocarEtapaMobile(b.dataset.colId)));
+  app.querySelectorAll('[data-action="leads-tipo-mobile"]').forEach(b=> b.addEventListener('click', ()=>{ leadsTipoMobile = b.dataset.tipo; renderApp(); }));
+  const configVoltar = app.querySelector('[data-action="config-voltar-mobile"]');
+  if(configVoltar) configVoltar.addEventListener('click', ()=>{ configMobileConteudo = false; renderApp(); window.scrollTo(0, 0); });
+  app.querySelectorAll('.lead-card-mobile').forEach(el=> el.addEventListener('keydown', (e)=>{ if(e.key === 'Enter' || e.key === ' '){ e.preventDefault(); el.click(); } }));
+  app.querySelectorAll('.lead-card-wa').forEach(b=> b.addEventListener('click', (e)=> e.stopPropagation()));
   const closeSidebarEl = app.querySelector('[data-action="close-sidebar"]');
   if(closeSidebarEl) closeSidebarEl.addEventListener('click', ()=>{ sidebarOpen = false; renderApp(); });
   const buscaGlobalBtn = app.querySelector('[data-action="abrir-busca-global"]');
@@ -20,6 +28,15 @@ function bindAppEvents(){
   const reordenarNavBtn = app.querySelector('[data-action="abrir-reordenar-nav"]');
   if(reordenarNavBtn) reordenarNavBtn.addEventListener('click', abrirReordenarNav);
 
+  app.querySelectorAll('[data-action="nav-mais"]').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      const grupo = btn.closest('.nav-mais');
+      const abrir = !grupo.classList.contains('aberto');
+      animarGrupoMais(grupo, abrir);
+      btn.setAttribute('aria-expanded', String(abrir));
+      try{ localStorage.setItem('navMais', abrir ? '1' : '0'); }catch(e){}
+    });
+  });
   app.querySelectorAll('[data-action="nav"]').forEach(btn=>{
     btn.addEventListener('click', ()=> goToPage(btn.dataset.page));
   });
@@ -41,78 +58,63 @@ function bindAppEvents(){
   if(resumoAgoraBtn) resumoAgoraBtn.addEventListener('click', enviarResumoDiarioAgora);
   const emailTarefasBtn = app.querySelector('[data-action="email-tarefas-alternar"]');
   if(emailTarefasBtn) emailTarefasBtn.addEventListener('click', alternarEmailTarefas);
+  const trocarEmailBtn = app.querySelector('[data-action="trocar-email"]');
+  if(trocarEmailBtn) trocarEmailBtn.addEventListener('click', abrirAlterarEmailModal);
   const backupAutoAlternarBtn = app.querySelector('[data-action="backup-auto-alternar"]');
   if(backupAutoAlternarBtn) backupAutoAlternarBtn.addEventListener('click', alternarBackupAuto);
   const backupAutoAgoraBtn = app.querySelector('[data-action="backup-auto-agora"]');
   if(backupAutoAgoraBtn) backupAutoAgoraBtn.addEventListener('click', enviarBackupAutoAgora);
   const verificarAtualizacaoBtn = app.querySelector('[data-action="verificar-atualizacao"]');
   if(verificarAtualizacaoBtn) verificarAtualizacaoBtn.addEventListener('click', verificarAtualizacaoApp);
-  const preencherMesInicioBtn = app.querySelector('[data-action="preencher-mes-inicio-contato"]');
-  if(preencherMesInicioBtn) preencherMesInicioBtn.addEventListener('click', preencherMesInicioContatoAntigos);
   app.querySelectorAll('[data-action="ver-dashboard-membro"]').forEach(btn=>{
     btn.addEventListener('click', ()=> abrirDashboardDeMembro(btn.dataset.userId, btn.dataset.nome));
+  });
+  app.querySelectorAll('[data-action="atuar-como-membro"]').forEach(btn=>{
+    btn.addEventListener('click', ()=> entrarNoFunilDe(btn.dataset.userId, btn.dataset.nome));
+  });
+  const sairFunilBtn = app.querySelector('[data-action="sair-funil-de"]');
+  if(sairFunilBtn) sairFunilBtn.addEventListener('click', sairDoFunilDe);
+  app.querySelectorAll('[data-action="abrir-equipe-lista"]').forEach(btn=>{
+    btn.addEventListener('click', ()=> abrirEquipeDaLista(btn.dataset.equipeId));
+  });
+  // Gestão da equipe: seções como em Configurações
+  app.querySelectorAll('[data-action="set-gestao-secao"]').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      gestaoSecao = btn.dataset.secao; gestaoMobileConteudo = true;
+      if(gestaoSecao === 'desempenho' && !supervisaoLoaded) loadSupervisao();
+      renderApp();
+      if(ehCelular()) window.scrollTo(0, 0);
+    });
+  });
+  const gestaoVoltar = app.querySelector('[data-action="gestao-voltar-mobile"]');
+  if(gestaoVoltar) gestaoVoltar.addEventListener('click', ()=>{ gestaoMobileConteudo = false; renderApp(); window.scrollTo(0, 0); });
+  const nmNome = document.getElementById('nm-nome'); if(nmNome) nmNome.addEventListener('input', (e)=> novoMembroForm.nome = e.target.value);
+  const nmEmail = document.getElementById('nm-email'); if(nmEmail) nmEmail.addEventListener('input', (e)=> novoMembroForm.email = e.target.value);
+  const criarContaBtn = app.querySelector('[data-action="criar-conta-membro"]');
+  if(criarContaBtn) criarContaBtn.addEventListener('click', criarContaMembro);
+  const copiarDaGestao = (texto, btn)=>{ try{ navigator.clipboard.writeText(texto); if(btn) mostrarPopupRapido(btn, 'Copiado'); }catch(e){} };
+  const copiarLinkMembroBtn = app.querySelector('[data-action="copiar-link-membro"]');
+  if(copiarLinkMembroBtn) copiarLinkMembroBtn.addEventListener('click', ()=> copiarDaGestao(novoMembroForm.link || '', copiarLinkMembroBtn));
+  const copiarCodigoEquipeBtn = app.querySelector('[data-action="copiar-codigo-equipe"]');
+  if(copiarCodigoEquipeBtn) copiarCodigoEquipeBtn.addEventListener('click', ()=> copiarDaGestao((equipe && equipe.codigoConvite) || '', copiarCodigoEquipeBtn));
+  const novaEquipeBtn = app.querySelector('[data-action="nova-equipe-toggle"]');
+  if(novaEquipeBtn) novaEquipeBtn.addEventListener('click', ()=> alternarNovaEquipe());
+  const equipesVoltarBtn = app.querySelector('[data-action="equipes-voltar"]');
+  if(equipesVoltarBtn) equipesVoltarBtn.addEventListener('click', ()=>{
+    if(atuandoComo){ errorMsg = 'Saia do funil de ' + atuandoComo.nome + ' antes de voltar para as equipes.'; renderApp(); return; }
+    equipeTela = 'lista'; equipeNovaAberta = false; renderApp(); window.scrollTo(0, 0); loadEquipe();
+  });
+  app.querySelectorAll('[data-action="sair-equipe-lista"]').forEach(btn=>{
+    btn.addEventListener('click', ()=> showConfirm({
+      message: `Sair da equipe "${btn.dataset.nome}"? Você perde o chat e a gestão dela — seu funil continua intocado e as outras equipes continuam.`,
+      confirmLabel: 'Sair da equipe',
+      onConfirm: ()=>{ closeConfirm(); sairDaEquipe(btn.dataset.equipeId); },
+    }));
   });
   const sairDashboardBtn = app.querySelector('[data-action="sair-dashboard-membro"]');
   if(sairDashboardBtn) sairDashboardBtn.addEventListener('click', sairDashboardDeMembro);
   const abrirBackupModalBtn = app.querySelector('[data-action="abrir-backup-modal"]');
   if(abrirBackupModalBtn) abrirBackupModalBtn.addEventListener('click', abrirBackupModal);
-
-  /* -- Conversas (3 colunas) -- */
-  const conversasBuscaInput = document.getElementById('conversas-busca-input');
-  if(conversasBuscaInput) conversasBuscaInput.addEventListener('input', (e)=>{ conversaBusca = e.target.value; renderApp(); });
-  app.querySelectorAll('[data-action="abrir-overlay-conversas"]').forEach(btn=>{
-    btn.addEventListener('click', ()=>{
-      conversasOverlay = btn.dataset.overlay;
-      if(conversasOverlay==='automacoes' && !automacoesLoaded) loadAutomacoes();
-      if(conversasOverlay==='agendamentos' && !agendamentosLoaded) loadAgendamentos();
-      renderApp();
-    });
-  });
-  app.querySelectorAll('[data-action="fechar-overlay-conversas"]').forEach(el=>{
-    el.addEventListener('click', ()=>{ conversasOverlay = null; renderApp(); });
-  });
-  app.querySelectorAll('[data-action="selecionar-conversa"]').forEach(el=>{
-    el.addEventListener('click', ()=> selecionarConversa(el.dataset.cardId));
-  });
-  const conversasNovaMsgInput = document.getElementById('conversas-nova-msg');
-  if(conversasNovaMsgInput){
-    conversasNovaMsgInput.addEventListener('input', (e)=> conversaTexto = e.target.value);
-    conversasNovaMsgInput.addEventListener('keydown', (e)=>{ if(e.key==='Enter') enviarMensagemConversa(); });
-  }
-  const conversasEnviarBtn = document.getElementById('conversas-enviar-btn');
-  if(conversasEnviarBtn) conversasEnviarBtn.addEventListener('click', enviarMensagemConversa);
-  const conversasChatLista = document.getElementById('conversas-chat-lista');
-  if(conversasChatLista) conversasChatLista.scrollTop = conversasChatLista.scrollHeight;
-
-  const cvDetNome = document.getElementById('cv-det-nome');
-  if(cvDetNome) cvDetNome.addEventListener('blur', (e)=> salvarCampoClienteConversa('cliente', e.target.value));
-  const cvDetTelefone = document.getElementById('cv-det-telefone');
-  if(cvDetTelefone) cvDetTelefone.addEventListener('blur', (e)=> salvarCampoClienteConversa('telefone', e.target.value));
-  const cvDetValor = document.getElementById('cv-det-valor');
-  if(cvDetValor){
-    cvDetValor.addEventListener('input', (e)=>{
-      const { texto } = maskInteiro(e.target.value);
-      e.target.value = texto;
-    });
-    cvDetValor.addEventListener('blur', (e)=>{
-      const { numero } = maskInteiro(e.target.value);
-      salvarCampoClienteConversa('valor', numero);
-    });
-  }
-  const cvDetTemp = document.getElementById('cv-det-temp');
-  if(cvDetTemp) cvDetTemp.addEventListener('change', (e)=> salvarCampoClienteConversa('temperatura', e.target.value));
-
-  app.querySelectorAll('[data-action="executar-automacao-manual"]').forEach(btn=>{
-    btn.addEventListener('click', ()=> executarAutomacaoManual(btn.dataset.automacaoId));
-  });
-  app.querySelectorAll('[data-action="editar-automacao-conversa"]').forEach(btn=>{
-    btn.addEventListener('click', ()=> openEditAutomacao(btn.dataset.automacaoId));
-  });
-  const novaAutomacaoConversaBtn = app.querySelector('[data-action="open-new-automacao-conversa"]');
-  if(novaAutomacaoConversaBtn) novaAutomacaoConversaBtn.addEventListener('click', ()=>{
-    const card = board.cards.find(c=>c.id===conversaSelecionadaCardId);
-    openNewAutomacao(card ? card.columnId : null);
-  });
 
   app.querySelectorAll('[data-action="set-accent"]').forEach(btn=>{
     btn.addEventListener('click', ()=>{
@@ -179,7 +181,7 @@ function bindAppEvents(){
   app.querySelectorAll('[data-action="delete-task"]').forEach(btn=>{
     btn.addEventListener('click', ()=>{
       const id = btn.dataset.taskId;
-      showConfirm({
+      showConfirm({ chave:'tarefa',
         message: 'Excluir esta tarefa? Essa ação não pode ser desfeita.',
         onConfirm: ()=>{ deleteTaskById(id); closeConfirm(); closeTaskModal(); },
       });
@@ -283,44 +285,6 @@ function bindAppEvents(){
     cel.addEventListener('touchcancel', ()=>{ clearTimeout(longPressTimer); cel.classList.remove('agenda-cell-pressionando'); });
   });
 
-  /* -- Disparos -- */
-  const disparoColunaSelect = document.getElementById('disparo-coluna');
-  if(disparoColunaSelect) disparoColunaSelect.addEventListener('change', (e)=>{ disparoFiltroColuna = e.target.value; renderApp(); });
-  const disparoTempSelect = document.getElementById('disparo-temp');
-  if(disparoTempSelect) disparoTempSelect.addEventListener('change', (e)=>{ disparoFiltroTemp = e.target.value; renderApp(); });
-  app.querySelectorAll('.disparo-lead-checkbox').forEach(cb=>{
-    cb.addEventListener('change', ()=>{
-      if(cb.checked) disparoSelecionados.add(cb.dataset.cardId);
-      else disparoSelecionados.delete(cb.dataset.cardId);
-      renderApp();
-    });
-  });
-  const disparoTextoEl = document.getElementById('disparo-texto');
-  if(disparoTextoEl) disparoTextoEl.addEventListener('input', (e)=> disparoTexto = e.target.value);
-  const toggleDisparoTemplateEl = app.querySelector('[data-action="toggle-disparo-template"]');
-  if(toggleDisparoTemplateEl) toggleDisparoTemplateEl.addEventListener('click', ()=>{ disparoUsarTemplate = !disparoUsarTemplate; renderApp(); });
-  const disparoTemplateNomeEl = document.getElementById('disparo-template-nome');
-  if(disparoTemplateNomeEl) disparoTemplateNomeEl.addEventListener('input', (e)=> disparoTemplateNome = e.target.value);
-  const disparoTemplateIdiomaEl = document.getElementById('disparo-template-idioma');
-  if(disparoTemplateIdiomaEl) disparoTemplateIdiomaEl.addEventListener('input', (e)=> disparoTemplateIdioma = e.target.value);
-  const disparoTemplateVariaveisEl = document.getElementById('disparo-template-variaveis');
-  if(disparoTemplateVariaveisEl) disparoTemplateVariaveisEl.addEventListener('input', (e)=> disparoTemplateVariaveis = e.target.value);
-  const carregarTemplatesBtn = app.querySelector('[data-action="carregar-templates"]');
-  if(carregarTemplatesBtn) carregarTemplatesBtn.addEventListener('click', carregarTemplatesDisponiveis);
-  const disparoSelTodosBtn = app.querySelector('[data-action="disparo-selecionar-todos"]');
-  if(disparoSelTodosBtn) disparoSelTodosBtn.addEventListener('click', ()=>{
-    board.cards.forEach(c=>{
-      const bateColuna = !disparoFiltroColuna || c.columnId===disparoFiltroColuna;
-      const bateTemp = !disparoFiltroTemp || c.temperatura===disparoFiltroTemp;
-      if(bateColuna && bateTemp && c.telefone) disparoSelecionados.add(c.id);
-    });
-    renderApp();
-  });
-  const disparoLimparBtn = app.querySelector('[data-action="disparo-limpar-selecao"]');
-  if(disparoLimparBtn) disparoLimparBtn.addEventListener('click', ()=>{ disparoSelecionados.clear(); renderApp(); });
-  const enviarDisparoBtn = app.querySelector('[data-action="enviar-disparo"]');
-  if(enviarDisparoBtn) enviarDisparoBtn.addEventListener('click', enviarDisparo);
-
   /* -- Automações -- */
   const openNewAutomacaoBtn = app.querySelector('[data-action="open-new-automacao"]');
   if(openNewAutomacaoBtn) openNewAutomacaoBtn.addEventListener('click', ()=> openNewAutomacao());
@@ -333,8 +297,8 @@ function bindAppEvents(){
   app.querySelectorAll('[data-action="delete-automacao"]').forEach(btn=>{
     btn.addEventListener('click', ()=>{
       const id = btn.dataset.automacaoId;
-      showConfirm({
-        message: 'Excluir esta automação? Ela para de rodar imediatamente.',
+      showConfirm({ chave:'acao-automatica',
+        message: 'Excluir esta ação automática? Ela para de rodar imediatamente.',
         onConfirm: ()=>{ excluirAutomacao(id); closeConfirm(); },
       });
     });
@@ -350,36 +314,27 @@ function bindAppEvents(){
     el.addEventListener('click', ()=>{
       const id = el.dataset.fluxoId;
       const f = fluxos.find(x=>x.id===id);
-      const temMensagem = f && (f.etapas||[]).some(e=>e.tipo==='mensagem');
-      if(f && !f.ativo && temMensagem){
-        showConfirm({
-          message: `Ativar o fluxo "${f.nome}"? Ele tem etapa(s) de envio de WhatsApp automático, sem revisão sua antes de mandar.`,
-          confirmLabel: 'Ativar mesmo assim',
-          onConfirm: ()=>{ toggleFluxoAtivo(id); closeConfirm(); },
-        });
-      } else {
-        toggleFluxoAtivo(id);
-      }
+      if(f) toggleFluxoAtivo(id);
     });
   });
   app.querySelectorAll('[data-action="delete-fluxo"]').forEach(btn=>{
     btn.addEventListener('click', ()=>{
       const id = btn.dataset.fluxoId;
-      showConfirm({
-        message: 'Excluir este fluxo? As execuções em andamento pra clientes atuais são interrompidas.',
+      showConfirm({ chave:'sequencia',
+        message: 'Excluir esta sequência? As que estão em andamento para clientes atuais são interrompidas.',
         onConfirm: ()=>{ excluirFluxo(id); closeConfirm(); },
       });
     });
   });
 
   /* -- Importar/Exportar -- */
-  const escolherPlanilhaBtn = app.querySelector('[data-action="escolher-planilha"]');
-  if(escolherPlanilhaBtn) escolherPlanilhaBtn.addEventListener('click', ()=>{ const i = document.getElementById('planilha-input'); if(i) i.click(); });
-  const fecharPlanilhaBtn = app.querySelector('[data-action="fechar-planilha"]');
-  if(fecharPlanilhaBtn) fecharPlanilhaBtn.addEventListener('click', ()=> fecharPlanilhaImport(false));
-  const modeloPlanilhaBtn = app.querySelector('[data-action="baixar-modelo-planilha"]');
-  if(modeloPlanilhaBtn) modeloPlanilhaBtn.addEventListener('click', baixarPlanilhaModelo);
-  if(importPainelAbrindo) animarAberturaPainelImport();
+  const importArquivoInput = document.getElementById('import-arquivo');
+  if(importArquivoInput) importArquivoInput.addEventListener('change', ()=>{ const n = document.getElementById('import-arquivo-nome'); if(n) n.textContent = importArquivoInput.files[0] ? importArquivoInput.files[0].name : 'Nenhum arquivo escolhido'; });
+  const modeloLeadsBtn = app.querySelector('[data-action="modelo-planilha-leads"]');
+  if(modeloLeadsBtn) modeloLeadsBtn.addEventListener('click', baixarModeloLeads);
+  const tirarPlanilhaBtn = app.querySelector('[data-action="tirar-planilha"]');
+  if(tirarPlanilhaBtn) tirarPlanilhaBtn.addEventListener('click', tirarPlanilha);
+  if(importAnimarEntrada) animarEntradaPlanilha();
   const planilhaInput = document.getElementById('planilha-input');
   if(planilhaInput) planilhaInput.addEventListener('change', (e)=>{
     const file = e.target.files && e.target.files[0];
@@ -393,62 +348,16 @@ function bindAppEvents(){
   if(mapServicoEl) mapServicoEl.addEventListener('change', (e)=> importMapServico = e.target.value);
   const confirmarImportBtn = document.getElementById('confirmar-import-planilha');
   if(confirmarImportBtn) confirmarImportBtn.addEventListener('click', confirmarImportPlanilha);
-  const possiveisDestinoSel = document.getElementById('possiveis-destino');
-  if(possiveisDestinoSel) possiveisDestinoSel.addEventListener('change', (e)=>{ possiveisDestinoId = e.target.value; });
-  const passarTodosBtn = app.querySelector('[data-action="possiveis-passar-todos"]');
-  if(passarTodosBtn) passarTodosBtn.addEventListener('click', ()=>{
-    const qtd = possiveisLeads.length;
-    const destino = possiveisDestinoId ? ((equipe.membros||[]).find(m=>m.id===possiveisDestinoId)||{}).nome || 'a pessoa escolhida' : 'os seus Leads';
-    showConfirm({
-      message: `Passar ${qtd} possível${qtd===1?'':'is'} lead${qtd===1?'':'s'} para ${destino}?`,
-      confirmLabel: 'Passar todos',
-      onConfirm: ()=>{ closeConfirm(); passarPossiveisParaLeads(true); },
-    });
-  });
-  const passarSelBtn = app.querySelector('[data-action="possiveis-passar-selecionados"]');
-  if(passarSelBtn) passarSelBtn.addEventListener('click', ()=> passarPossiveisParaLeads(false));
-  const possiveisSelectAll = app.querySelector('[data-action="possiveis-select-all"]');
-  if(possiveisSelectAll) possiveisSelectAll.addEventListener('change', ()=>{
-    const todos = possiveisLeads.length && possiveisLeads.every(l=>possiveisSelecionados.has(l.id));
-    possiveisSelecionados = new Set(todos ? [] : possiveisLeads.map(l=>l.id));
-    renderApp();
-  });
-  app.querySelectorAll('[data-action="possiveis-select-um"]').forEach(el=>{
-    el.addEventListener('change', ()=>{ if(el.checked) possiveisSelecionados.add(el.dataset.leadId); else possiveisSelecionados.delete(el.dataset.leadId); renderApp(); });
-  });
   app.querySelectorAll('[data-action="completar-possivel-lead"]').forEach(btn=>{
     btn.addEventListener('click', ()=> abrirCompletarLead(btn.dataset.leadId));
   });
   app.querySelectorAll('[data-action="descartar-possivel-lead"]').forEach(btn=>{
     btn.addEventListener('click', ()=>{
       const id = btn.dataset.leadId;
-      showConfirm({
-        message: 'Descartar esse possível lead? Ele não vira cliente.',
+      showConfirm({ chave:'possivel-contato',
+        message: 'Descartar esse possível contato? Ele não vira cliente.',
         confirmLabel: 'Descartar',
         onConfirm: ()=>{ descartarPossivelLead(id); closeConfirm(); },
-      });
-    });
-  });
-
-  /* -- Agendamentos -- */
-  const openNewAgendamentoBtn = app.querySelector('[data-action="open-new-agendamento"]');
-  if(openNewAgendamentoBtn) openNewAgendamentoBtn.addEventListener('click', openNewAgendamento);
-  app.querySelectorAll('[data-action="cancelar-agendamento"]').forEach(btn=>{
-    btn.addEventListener('click', ()=>{
-      const id = btn.dataset.agendamentoId;
-      showConfirm({
-        message: 'Cancelar essa mensagem agendada?',
-        confirmLabel: 'Cancelar mensagem',
-        onConfirm: ()=>{ cancelarAgendamento(id); closeConfirm(); },
-      });
-    });
-  });
-  app.querySelectorAll('[data-action="excluir-agendamento"]').forEach(btn=>{
-    btn.addEventListener('click', ()=>{
-      const id = btn.dataset.agendamentoId;
-      showConfirm({
-        message: 'Excluir esse agendamento permanentemente? Não dá pra desfazer.',
-        onConfirm: ()=>{ excluirAgendamento(id); closeConfirm(); },
       });
     });
   });
@@ -456,10 +365,7 @@ function bindAppEvents(){
   /* -- Relatórios -- */
   const relatorioFunilSelect = document.getElementById('relatorio-funil-select');
   if(relatorioFunilSelect) relatorioFunilSelect.addEventListener('change', (e)=>{ relatorioFunilId = e.target.value; renderApp(); });
-  const exportarXlsxBtn = app.querySelector('[data-action="exportar-xlsx"]');
-  if(exportarXlsxBtn) exportarXlsxBtn.addEventListener('click', exportarXlsx);
-  const exportarCsvBtn = app.querySelector('[data-action="exportar-csv"]');
-  if(exportarCsvBtn) exportarCsvBtn.addEventListener('click', exportarCsv);
+  app.querySelectorAll('[data-action="exportar-csv"]').forEach(b=> b.addEventListener('click', ()=> exportarCsv(b.dataset.formato)));
   const exportarPdfBtn = app.querySelector('[data-action="exportar-relatorio-pdf"]');
   if(exportarPdfBtn) exportarPdfBtn.addEventListener('click', exportarRelatorioPdf);
 
@@ -480,27 +386,6 @@ function bindAppEvents(){
       onConfirm: ()=>{ sairDaEquipe(); closeConfirm(); },
     });
   });
-  const conviteEmailInput = document.getElementById('convite-email-novo');
-  if(conviteEmailInput){
-    conviteEmailInput.addEventListener('input', (e)=> conviteEmailNovo = e.target.value);
-    conviteEmailInput.addEventListener('keydown', (e)=>{ if(e.key==='Enter') enviarConviteEquipe(); });
-  }
-  app.querySelectorAll('[data-action="definir-meta-membro"]').forEach(btn=>{
-    btn.addEventListener('click', ()=> abrirMetaMembroModal(btn.dataset.userId, btn.dataset.nome, parseFloat(btn.dataset.meta)||0));
-  });
-  const salvarRodizioBtn = app.querySelector('[data-action="salvar-rodizio"]');
-  if(salvarRodizioBtn) salvarRodizioBtn.addEventListener('click', ()=>{ const f = rodizioDoFormulario(); salvarRodizio(f.ativo, f.membros); });
-  const enviarConviteBtn = app.querySelector('[data-action="enviar-convite-equipe"]');
-  if(enviarConviteBtn) enviarConviteBtn.addEventListener('click', enviarConviteEquipe);
-  app.querySelectorAll('[data-action="cancelar-convite-equipe"]').forEach(btn=>{
-    btn.addEventListener('click', ()=> cancelarConviteEquipe(btn.dataset.conviteId));
-  });
-  app.querySelectorAll('[data-action="aceitar-convite-equipe"]').forEach(btn=>{
-    btn.addEventListener('click', ()=> responderConviteEquipe(btn.dataset.conviteId, true));
-  });
-  app.querySelectorAll('[data-action="recusar-convite-equipe"]').forEach(btn=>{
-    btn.addEventListener('click', ()=> responderConviteEquipe(btn.dataset.conviteId, false));
-  });
   const regenerarCodigoBtn = app.querySelector('[data-action="regenerar-codigo-equipe"]');
   if(regenerarCodigoBtn) regenerarCodigoBtn.addEventListener('click', regenerarCodigoEquipe);
   app.querySelectorAll('[data-action="alterar-papel-membro"]').forEach(btn=>{
@@ -510,7 +395,12 @@ function bindAppEvents(){
     btn.addEventListener('click', ()=> alterarSupervisorDeDados(btn.dataset.userId, btn.dataset.ativo==='1'));
   });
   app.querySelectorAll('[data-action="remover-membro"]').forEach(btn=>{
-    btn.addEventListener('click', ()=> abrirRemoverMembroModal(btn.dataset.userId));
+    btn.addEventListener('click', ()=>{
+      showConfirm({
+        message: 'Remover esse membro da equipe? O funil dele continua intocado, só perde acesso ao chat e à supervisão.',
+        onConfirm: ()=>{ removerMembro(btn.dataset.userId); closeConfirm(); },
+      });
+    });
   });
   const chatInternoInput = document.getElementById('chat-interno-input');
   if(chatInternoInput){
@@ -527,7 +417,6 @@ function bindAppEvents(){
       equipeSubTab = btn.dataset.subtab;
       if(equipeSubTab==='chat' && !chatLoaded) loadChat();
       if(equipeSubTab==='supervisao' && equipe && equipe.souSupervisor && !supervisaoLoaded) loadSupervisao();
-      if(equipeSubTab==='monitoramento' && equipe && equipe.souSupervisorDeDados && !monitoramentoLoaded) loadMonitoramento();
       renderApp();
     });
   });
@@ -584,7 +473,10 @@ function bindAppEvents(){
   app.querySelectorAll('[data-action="set-config-categoria"]').forEach(btn=>{
     btn.addEventListener('click', ()=>{
       configCategoriaAtiva = btn.dataset.categoria;
+      configMobileConteudo = true;
       renderApp();
+      if(configCategoriaAtiva === 'monitoramento' && !monitoramentoLoaded) loadMonitoramento();
+      if(ehCelular()) window.scrollTo(0, 0);
     });
   });
   const avatarInput = document.getElementById('avatar-input');
@@ -676,67 +568,6 @@ function bindAppEvents(){
     });
   });
 
-  const salvarWaBtn = app.querySelector('[data-action="salvar-whatsapp-config"]');
-  if(salvarWaBtn) salvarWaBtn.addEventListener('click', salvarWhatsappConfig);
-  const waProvEl = document.getElementById('wa-provedor');
-  if(waProvEl) waProvEl.addEventListener('change', ()=>{ whatsappProvedorEscolhido = waProvEl.value==='ycloud' ? 'ycloud' : 'meta'; whatsappConfigMsg = null; renderApp(); });
-  const abrirYcSecretBtn = app.querySelector('[data-action="abrir-ycloud-secret"]');
-  if(abrirYcSecretBtn) abrirYcSecretBtn.addEventListener('click', abrirYcloudSecretModal);
-  const desconectarWaBtn = app.querySelector('[data-action="desconectar-whatsapp"]');
-  if(desconectarWaBtn) desconectarWaBtn.addEventListener('click', desconectarWhatsapp);
-
-  const toggleAgenteIaEl = app.querySelector('[data-action="toggle-agente-ia"]');
-  if(toggleAgenteIaEl) toggleAgenteIaEl.addEventListener('click', ()=>{
-    if(!agenteIaAtivo){
-      showConfirm({
-        message: 'Ativar o agente de IA? Ele vai responder mensagens de WhatsApp automaticamente, sem você revisar antes de enviar. Sempre que você responder um cliente manualmente, o agente fica em silêncio por 30 minutos naquela conversa. Pode desativar a qualquer momento.',
-        confirmLabel: 'Ativar mesmo assim',
-        onConfirm: ()=>{ definirAgenteIa(true); closeConfirm(); },
-      });
-    } else {
-      definirAgenteIa(false);
-    }
-  });
-  const toggleIaProativaEl = app.querySelector('[data-action="toggle-ia-proativa"]');
-  if(toggleIaProativaEl) toggleIaProativaEl.addEventListener('click', ()=> definirIaProativa(!iaProativaAtiva));
-
-  const mtMensagemEl = document.getElementById('mt-mensagem');
-  if(mtMensagemEl) mtMensagemEl.addEventListener('input', (e)=> menuTriagem.mensagemInicial = e.target.value);
-  const mtAddOpcaoBtn = document.getElementById('mt-add-opcao');
-  if(mtAddOpcaoBtn) mtAddOpcaoBtn.addEventListener('click', ()=>{
-    menuTriagem.opcoes.push({ numero: String(menuTriagem.opcoes.length+1), colunaDestinoId: (board.columns[0]||{}).id || '', respostaConfirmacao:'' });
-    renderApp();
-  });
-  document.querySelectorAll('.mt-opcao-remover').forEach(btn=>{
-    btn.addEventListener('click', ()=>{
-      menuTriagem.opcoes.splice(parseInt(btn.dataset.idx,10),1);
-      renderApp();
-    });
-  });
-  document.querySelectorAll('.mt-opcao-numero').forEach(el=>{
-    el.addEventListener('input', (e)=>{ menuTriagem.opcoes[parseInt(el.dataset.idx,10)].numero = e.target.value; });
-  });
-  document.querySelectorAll('.mt-opcao-coluna').forEach(el=>{
-    el.addEventListener('change', (e)=>{ menuTriagem.opcoes[parseInt(el.dataset.idx,10)].colunaDestinoId = e.target.value; });
-  });
-  document.querySelectorAll('.mt-opcao-confirmacao').forEach(el=>{
-    el.addEventListener('input', (e)=>{ menuTriagem.opcoes[parseInt(el.dataset.idx,10)].respostaConfirmacao = e.target.value; });
-  });
-  const toggleMenuTriagemEl = app.querySelector('[data-action="toggle-menu-triagem"]');
-  if(toggleMenuTriagemEl) toggleMenuTriagemEl.addEventListener('click', ()=>{ menuTriagem.ativo = !menuTriagem.ativo; renderApp(); });
-  const salvarMenuTriagemBtn = document.getElementById('mt-salvar');
-  if(salvarMenuTriagemBtn) salvarMenuTriagemBtn.addEventListener('click', ()=>{
-    if(menuTriagem.ativo){
-      showConfirm({
-        message: 'Salvar e manter o menu de triagem ativo? Ele vai responder automaticamente qualquer contato novo no WhatsApp, sem revisão sua.',
-        confirmLabel: 'Manter ativo',
-        onConfirm: ()=>{ salvarMenuTriagem(); closeConfirm(); },
-      });
-    } else {
-      salvarMenuTriagem();
-    }
-  });
-
   const twofaIniciarBtn = document.getElementById('twofa-iniciar');
   if(twofaIniciarBtn) twofaIniciarBtn.addEventListener('click', iniciar2FA);
   const twofaCancelarSetupBtn = document.getElementById('twofa-cancelar-setup');
@@ -751,22 +582,11 @@ function bindAppEvents(){
   if(twofaConfirmarDesativarBtn) twofaConfirmarDesativarBtn.addEventListener('click', desativar2FA);
   if(twoFactorSetup) renderizarQrCode2FA();
 
-  const salvarIgBtn = app.querySelector('[data-action="salvar-instagram-config"]');
-  if(salvarIgBtn) salvarIgBtn.addEventListener('click', salvarInstagramConfig);
-  const desconectarIgBtn = app.querySelector('[data-action="desconectar-instagram"]');
-  if(desconectarIgBtn) desconectarIgBtn.addEventListener('click', desconectarInstagram);
-  const sincronizarTemplatesBtn = app.querySelector('[data-action="sincronizar-templates"]');
-  if(sincronizarTemplatesBtn) sincronizarTemplatesBtn.addEventListener('click', sincronizarTemplates);
-  const openNewTemplateBtn = app.querySelector('[data-action="open-new-template"]');
-  if(openNewTemplateBtn) openNewTemplateBtn.addEventListener('click', openNewTemplateModal);
-
   /* -- Leads -- */
-  const openNewLeadBtn = app.querySelector('[data-action="open-new-lead"]');
-  if(openNewLeadBtn) openNewLeadBtn.addEventListener('click', ()=> openNewCard());
-  const exportarLeadsXlsxBtn = app.querySelector('[data-action="exportar-leads-xlsx"]');
-  if(exportarLeadsXlsxBtn) exportarLeadsXlsxBtn.addEventListener('click', exportarLeadsXlsx);
-  const exportarLeadsBtn = app.querySelector('[data-action="exportar-leads"]');
-  if(exportarLeadsBtn) exportarLeadsBtn.addEventListener('click', exportarLeads);
+  app.querySelectorAll('[data-action="open-new-lead"]').forEach(b=> b.addEventListener('click', ()=> openNewCard()));
+  const dupBtn = app.querySelector('[data-action="abrir-duplicados"]');
+  if(dupBtn) dupBtn.addEventListener('click', abrirDuplicadosModal);
+  app.querySelectorAll('[data-action="exportar-leads"]').forEach(b=> b.addEventListener('click', ()=> exportarLeads(b.dataset.formato)));
   const toggleArquivadosBtn = app.querySelector('[data-action="toggle-mostrar-arquivados"]');
   if(toggleArquivadosBtn) toggleArquivadosBtn.addEventListener('click', ()=>{ mostrarArquivados = !mostrarArquivados; renderApp(); });
 
@@ -783,19 +603,6 @@ function bindAppEvents(){
   });
   const bulkColunaSelect = document.getElementById('leads-bulk-coluna');
   if(bulkColunaSelect) bulkColunaSelect.addEventListener('change', (e)=> bulkMoverLeads(e.target.value));
-  const bulkGestorSel = document.getElementById('leads-bulk-gestor-destino');
-  if(bulkGestorSel) bulkGestorSel.addEventListener('change', (e)=>{
-    const destinoId = e.target.value;
-    if(!destinoId) return;
-    const nome = ((equipe.membros||[]).find(m=>m.id===destinoId)||{}).nome || 'a pessoa escolhida';
-    const qtd = leadsSelecionados.size;
-    showConfirm({
-      message: `Passar ${qtd} lead${qtd===1?'':'s'} para ${nome}? Eles levam conversas, anexos, tarefas e histórico.`,
-      confirmLabel: 'Passar leads',
-      onConfirm: ()=>{ closeConfirm(); bulkTransferirLeads(destinoId); },
-    });
-    e.target.value = '';
-  });
   const bulkArquivarBtn = app.querySelector('[data-action="leads-bulk-arquivar"]');
   if(bulkArquivarBtn) bulkArquivarBtn.addEventListener('click', bulkArquivarLeads);
   const bulkExcluirBtn = app.querySelector('[data-action="leads-bulk-excluir"]');
@@ -939,10 +746,6 @@ function bindAppEvents(){
   app.querySelectorAll('[data-action="set-col-tipo"]').forEach(btn=>{
     btn.addEventListener('click', ()=> changeTipo(btn.dataset.colId, btn.dataset.tipo));
   });
-  document.querySelectorAll('.col-menu-prob-input').forEach(input=>{
-    input.addEventListener('blur', (e)=> salvarProbabilidadeColuna(input.dataset.colId, e.target.value));
-    input.addEventListener('keydown', (e)=>{ if(e.key==='Enter') e.target.blur(); });
-  });
   app.querySelectorAll('[data-action="delete-col"]').forEach(btn=>{
     btn.addEventListener('click', ()=>{
       const id = btn.dataset.colId;
@@ -950,7 +753,7 @@ function bindAppEvents(){
       const n = cardsOf(id).length;
       openMenuColId = null;
       renderApp();
-      showConfirm({
+      showConfirm({ chave: n ? null : 'coluna-vazia',
         message: n ? `Excluir a coluna "${col.nome}"? Os ${n} cliente(s) dela também serão removidos.` : `Excluir a coluna "${col.nome}"?`,
         onConfirm: ()=>{ deleteColumnById(id); closeConfirm(); },
       });
@@ -966,6 +769,16 @@ function bindAppEvents(){
   });
   app.querySelectorAll('[data-action="open-edit-card"]').forEach(el=>{
     el.addEventListener('click', ()=> openEditCard(el.dataset.cardId));
+  });
+  app.querySelectorAll('[data-action="fechar-faixa-teste"]').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      try{ localStorage.setItem('faixaTesteFechadaEm', hojeLocalISO()); }catch(err){}
+      const el = btn.closest('.faixa-teste');
+      if(el) el.remove();
+    });
+  });
+  app.querySelectorAll('[data-action="abrir-fechamento"]').forEach(btn=>{
+    btn.addEventListener('click', (e)=>{ e.stopPropagation(); abrirFechamento(btn.dataset.cardId); });
   });
   app.querySelectorAll('[data-action="open-whatsapp"]').forEach(btn=>{
     btn.addEventListener('click', (e)=>{
@@ -1010,7 +823,7 @@ function bindAppEvents(){
       cardTouchDrag = {
         cardId: cardEl.dataset.cardId, cardEl, arrastando:false, modoRolagem:false,
         startX:e.clientX, startY:e.clientY, ultimoX:e.clientX, ultimoY:e.clientY,
-        pointerId:e.pointerId, cardsContainer, scrollInicial: cardsContainer ? cardsContainer.scrollTop : 0,
+        pointerId:e.pointerId, cardsContainer, scrollInicial: cardsContainer ? cardsContainer.scrollTop : 0, scrollJanelaInicial: window.scrollY,
       };
       cardTouchLongPressTimer = setTimeout(()=>{
         if(!cardTouchDrag || cardTouchDrag.modoRolagem) return; // já virou rolagem, não inicia arrastar
@@ -1038,7 +851,9 @@ function bindAppEvents(){
 
       if(cardTouchDrag.modoRolagem){
         e.preventDefault();
-        if(cardTouchDrag.cardsContainer) cardTouchDrag.cardsContainer.scrollTop = cardTouchDrag.scrollInicial - dyTotal;
+        // no celular a lista de uma etapa rola junto com a página
+        if(ehCelular()) window.scrollTo(0, cardTouchDrag.scrollJanelaInicial - dyTotal);
+        else if(cardTouchDrag.cardsContainer) cardTouchDrag.cardsContainer.scrollTop = cardTouchDrag.scrollInicial - dyTotal;
         return;
       }
 
@@ -1130,9 +945,10 @@ function iniciarArrastoDeCard(x, y){
   const fantasma = document.createElement('div');
   fantasma.id = 'card-touch-fantasma';
   fantasma.className = 'card-touch-fantasma';
-  fantasma.style.width = rect.width + 'px';
-  fantasma.style.left = (x - rect.width/2) + 'px';
-  fantasma.style.top = (y - 24) + 'px';
+  const z = (window.zoomDaTela ? window.zoomDaTela() : 1);
+  fantasma.style.width = rect.width / z + 'px';
+  fantasma.style.left = (x - rect.width/2) / z + 'px';
+  fantasma.style.top = (y - 24) / z + 'px';
   fantasma.innerHTML = cardTouchDrag.cardEl.querySelector('.card-body') ? cardTouchDrag.cardEl.querySelector('.card-body').innerHTML : cardTouchDrag.cardEl.innerHTML;
   document.body.appendChild(fantasma);
   cardTouchDrag.fantasmaEl = fantasma;
@@ -1142,8 +958,9 @@ function iniciarArrastoDeCard(x, y){
 function atualizarArrastoDeCard(x, y){
   if(!cardTouchDrag || !cardTouchDrag.fantasmaEl) return;
   // isso aqui é barato — atualiza sempre na hora, o fantasma nunca fica atrasado atrás do dedo
-  cardTouchDrag.fantasmaEl.style.left = (x - cardTouchDrag.fantasmaEl.offsetWidth/2) + 'px';
-  cardTouchDrag.fantasmaEl.style.top = (y - 24) + 'px';
+  const z = (window.zoomDaTela ? window.zoomDaTela() : 1);
+  cardTouchDrag.fantasmaEl.style.left = (x / z - cardTouchDrag.fantasmaEl.offsetWidth/2) + 'px';
+  cardTouchDrag.fantasmaEl.style.top = (y - 24) / z + 'px';
   cardTouchDrag.ultimoXCalculo = x;
   cardTouchDrag.ultimoYCalculo = y;
   // isso aqui é caro (olha a posição de TODOS os cards da coluna, toda vez) — segurando
@@ -1157,6 +974,7 @@ function atualizarArrastoDeCard(x, y){
     arrastoRafPendente = false;
     if(!cardTouchDrag) return;
     const xAtual = cardTouchDrag.ultimoXCalculo, yAtual = cardTouchDrag.ultimoYCalculo;
+    verificarChipDeEtapaSobDedo(xAtual, yAtual);
     const colAlvo = encontrarColunaMaisProxima(xAtual);
     document.querySelectorAll('.column.coluna-drag-alvo').forEach(c=> c.classList.remove('coluna-drag-alvo'));
     if(colAlvo){
@@ -1171,7 +989,8 @@ function atualizarArrastoDeCard(x, y){
 // pela posição horizontal, em vez de simplesmente desistir. É bem mais tolerante que
 // depender de acertar o pixel exato num aparelho de toque.
 function encontrarColunaMaisProxima(x){
-  const colunas = [...document.querySelectorAll('.column')];
+  // só as colunas à vista (no celular, a etapa aberta)
+  const colunas = [...document.querySelectorAll('.column')].filter(c=> c.offsetParent !== null);
   if(!colunas.length) return null;
   const dentro = colunas.find(c=>{
     const r = c.getBoundingClientRect();
@@ -1205,6 +1024,14 @@ function permitirDropForaDasColunas(e){
 }
 function atualizarAutoScrollDoArrasto(x, y, colAlvo){
   clearInterval(autoScrollDoArrastoInterval);
+  // celular: a página rola para cima (rumo aos chips de etapa) ou para baixo
+  if(ehCelular() && cardTouchDrag){
+    let dy = 0;
+    if(!cardTouchDrag.chipHover && y < 130) dy = -12;
+    else if(y > window.innerHeight - 150) dy = 12;
+    if(dy) autoScrollDoArrastoInterval = setInterval(()=> window.scrollBy(0, dy), 16);
+    return;
+  }
   const margemHorizontal = 260; // cobre a largura da barra lateral — passar por cima dela já conta como "quero rolar pra lá"
   const margemVertical = 110;
   const mainEl = document.querySelector('main.pipeline-main');
@@ -1241,6 +1068,8 @@ function cancelarArrastoDeCard(){
 function limparVisualDoArrasto(){
   if(!cardTouchDrag) return;
   clearInterval(autoScrollDoArrastoInterval);
+  clearTimeout(chipHoverTimer);
+  document.querySelectorAll('.etapa-chip-mobile.etapa-chip-alvo').forEach(c=> c.classList.remove('etapa-chip-alvo'));
   cardTouchDrag.cardEl.classList.remove('card-touch-arrastando');
   if(cardTouchDrag.fantasmaEl) cardTouchDrag.fantasmaEl.remove();
   document.querySelectorAll('.column.coluna-drag-alvo').forEach(c=> c.classList.remove('coluna-drag-alvo'));
@@ -1266,7 +1095,7 @@ function renderFloatingMoveMenu(){
   const left = Math.min(rect.left, window.innerWidth - 200); // não deixa vazar pela direita da tela
 
   root.innerHTML = `
-    <div class="col-menu card-move-menu" style="position:fixed; top:${Math.max(4,top)}px; left:${Math.max(4,left)}px;">
+    <div class="col-menu card-move-menu" style="position:fixed; top:${Math.max(4,top) / (window.zoomDaTela ? window.zoomDaTela() : 1)}px; left:${Math.max(4,left) / (window.zoomDaTela ? window.zoomDaTela() : 1)}px;">
       <div class="col-menu-title">Mover para</div>
       ${colunasDoMesmoFunil.map(c=>`
         <button class="col-menu-item" data-action="mover-para-coluna" data-card-id="${card.id}" data-col-id="${c.id}" ${c.id===card.columnId?'disabled':''}>
@@ -1305,3 +1134,9 @@ function closeMenusOnOutsideClick(e){
   }
 }
 
+// Faixa do resumo do funil no celular: esconde o sinal "continua" quando já chegou ao fim
+document.addEventListener('scroll', (e)=>{
+  const faixa = e.target && e.target.classList && e.target.classList.contains('stats') ? e.target : null;
+  if(!faixa || !faixa.parentElement) return;
+  faixa.parentElement.classList.toggle('no-fim', faixa.scrollLeft + faixa.clientWidth >= faixa.scrollWidth - 4);
+}, true);

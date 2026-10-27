@@ -111,6 +111,8 @@ router.post('/login', limiteLogin, async (req, res) => {
       return res.status(401).json({ error: 'E-mail ou senha inválidos.' });
     }
     if (!user.senhaHash) {
+      // conta criada pelo gestor da equipe (link de criar senha pendente): a senha vem pelo e-mail de boas-vindas
+      if (!user.googleId && user.resetSenhaHash) return res.status(401).json({ error: 'Esta conta ainda não tem senha. Crie a sua pelo link do e-mail de boas-vindas ou use "Esqueci minha senha".' });
       return res.status(401).json({ error: 'Esta conta usa login com Google. Use o botão "Continuar com Google".' });
     }
 

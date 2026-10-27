@@ -290,7 +290,7 @@ async function executarFerramenta(nome, input, userId) {
 
   if (nome === 'resumo_comissoes') {
     const contratos = await Contrato.find({ userId });
-    const mesAtual = new Date().toISOString().slice(0, 7);
+    const mesAtual = require('../utils/fechamento').hojeBR().slice(0, 7); // mês de Brasília (não o UTC)
     const resumo = resumoComissoesDoMes(contratos, mesAtual);
     return { mes: mesAtual, ...resumo };
   }
@@ -298,7 +298,7 @@ async function executarFerramenta(nome, input, userId) {
   if (nome === 'resumo_financeiro' || nome === 'lancamentos_financeiros' || nome === 'cartoes_objetivos_investimentos') {
     const dados = await carregarFinanceiro(userId);
     if (nome === 'cartoes_objetivos_investimentos') return cartoesObjetivosInvestimentos(dados);
-    const mes = /^\d{4}-\d{2}$/.test(String(input && input.mes || '')) ? input.mes : new Date().toISOString().slice(0, 7);
+    const mes = /^\d{4}-\d{2}$/.test(String(input && input.mes || '')) ? input.mes : require('../utils/fechamento').hojeBR().slice(0, 7);
     const crm = await dadosDoCrm(userId); // mesmos dados e regra das abas Painel e Lucro
     if (nome === 'resumo_financeiro') return resumoDoMes(dados, crm, mes);
     return lancamentosDoMes(dados, crm, mes, { tipo: input && input.tipo, categoria: input && input.categoria });

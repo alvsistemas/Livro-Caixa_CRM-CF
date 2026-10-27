@@ -75,6 +75,19 @@ function montarEmailRecuperacao({ nome, link, validadeMinutos }) {
   return { assunto: 'Redefinir sua senha — Livro-Caixa', html, texto };
 }
 
+// Conta criada pelo gestor da equipe: a pessoa cria a própria senha pelo link (vale 7 dias, uso único)
+function montarEmailBoasVindasEquipe({ nome, gestorNome, equipeNome, link, dias }) {
+  const saudacao = nome ? `Olá, ${escaparHtml(nome)}!` : 'Olá!';
+  const quem = gestorNome ? escaparHtml(gestorNome) : 'O gestor da sua equipe';
+  const html = moldeEmail('Sua conta no Livro-Caixa', `
+<p style="line-height:1.55;">${saudacao} ${quem} criou uma conta para você no Livro-Caixa${equipeNome ? `, na equipe <b>${escaparHtml(equipeNome)}</b>` : ''}.</p>
+<p style="line-height:1.55;">Você tem o seu próprio CRM (contatos, negociações e agenda só seus) e participa do chat da equipe.</p>
+<p style="margin:24px 0;"><a href="${escaparHtml(link)}" style="background:#141414;color:#ffffff;text-decoration:none;padding:12px 20px;border-radius:8px;display:inline-block;">Criar minha senha</a></p>
+<p style="line-height:1.55;font-size:14px;color:#555;">O link vale por ${dias} dias e só pode ser usado uma vez. Depois disso, use "Esqueci minha senha" na tela de entrada. Se o botão não funcionar, copie e cole este endereço no navegador:<br><span style="word-break:break-all;">${escaparHtml(link)}</span></p>`);
+  const texto = `${nome ? `Olá, ${nome}!` : 'Olá!'} ${gestorNome || 'O gestor da sua equipe'} criou uma conta para você no Livro-Caixa${equipeNome ? `, na equipe ${equipeNome}` : ''}.\n\nCrie a sua senha neste link (vale por ${dias} dias, uso único):\n${link}\n\nDepois disso, use "Esqueci minha senha" na tela de entrada.`;
+  return { assunto: 'Sua conta no Livro-Caixa', html, texto };
+}
+
 function montarEmailSenhaAlterada({ nome }) {
   const html = moldeEmail('Sua senha foi alterada', `
 <p style="line-height:1.55;">${nome ? `Olá, ${escaparHtml(nome)}! ` : ''}A senha da sua conta no Livro-Caixa acabou de ser alterada e todos os aparelhos foram desconectados.</p>
@@ -126,6 +139,7 @@ module.exports = {
   urlBaseDoApp,
   enviarEmail,
   montarEmailRecuperacao,
+  montarEmailBoasVindasEquipe,
   montarEmailSenhaAlterada,
   montarEmailBackup,
   escaparHtml,

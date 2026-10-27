@@ -98,12 +98,12 @@ banco de dados) também disparam um **alerta no Telegram**, se configurado (veja
 completo de como criar o bot está em `server/utils/telegramAlerta.js`). Não
 depende da API do WhatsApp Business nem de verificação de empresa na Meta.
 
-⚠️ **Cache do navegador:** `style.css`, `script.js` e `login.js` são
+⚠️ **Cache do navegador:** `style.css`, os arquivos de `js/` e `login.js` são
 carregados com `?v=AAAAMMDD` no final da URL (ex: `style.css?v=20261082`).
 Isso existe só pra forçar o navegador a buscar a versão nova depois de um
 deploy — sem isso, quem já tinha o site aberto continua vendo o CSS/JS
-antigo em cache, às vezes por dias. **Toda vez que `style.css`, `script.js`
-ou `login.js` for alterado, atualize esse número** (nos três arquivos:
+antigo em cache, às vezes por dias. **O `scripts/gerar-pacote.sh` atualiza esse número
+em todos os HTML** (nos três arquivos:
 `index.html` e `login.html`) pra data do dia, senão a mudança não aparece
 pra quem já visitou o site antes.
 
@@ -123,7 +123,8 @@ livro-caixa/
     index.html            (painel — exige login)
     login.html             (tela de entrar / criar conta)
     css/style.css
-    js/script.js           (lógica do painel)
+    js/comum.js            (funções comuns aos 3 apps: dinheiro, datas, telefone, proteção de texto)
+    js/crm/01-base.js … 19-iniciar.js  (lógica do painel, em ordem; ver js/crm/LEIA.md)
     js/login.js             (lógica do login/cadastro)
   server/                 <- back-end
     server.js
@@ -281,8 +282,8 @@ dia migrar pra uma hospedagem com proxy configurado de um jeito diferente.
 
 ## Estrutura de páginas (front-end)
 
-O painel agora tem uma barra lateral com 5 páginas (tudo dentro do mesmo
-`script.js`, sem recarregar a página):
+O painel agora tem uma barra lateral com 5 páginas (tudo nos arquivos de
+`js/crm/`, sem recarregar a página):
 - **Dashboard** — métricas do período (leads, em negociação, ganho,
   conversão), gráfico de leads captados, pipeline por etapa, últimos
   leads e tarefas abertas

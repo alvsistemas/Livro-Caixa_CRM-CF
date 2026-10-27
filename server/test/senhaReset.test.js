@@ -36,3 +36,10 @@ test('recuperação de senha: token', async (t) => {
     assert.strictEqual(tokenResetValido({ resetSenhaHash: null, resetSenhaExpira: null }, token, agora), false);
   });
 });
+
+test('link da conta criada pelo gestor vale 7 dias', () => {
+  const { gerarTokenReset, DIAS_CONTA_NOVA } = require('../utils/senhaReset');
+  const agora = Date.UTC(2026, 9, 26, 12);
+  const r = gerarTokenReset(agora, DIAS_CONTA_NOVA * 24 * 60);
+  assert.equal(r.expira.getTime() - agora, 7 * 24 * 3600 * 1000);
+});

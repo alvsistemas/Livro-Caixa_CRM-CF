@@ -1,3 +1,5 @@
+// CRM · 03-funis-agenda.js — funis, Google Agenda, agenda por link e proposta em PDF. Os arquivos js/crm/ são carregados em ordem pelo index.html e
+// compartilham as mesmas variáveis globais (é o antigo script.js dividido, como no CRM de consórcio).
 /* ---------- funis (múltiplos pipelines) ---------- */
 async function loadFunis(){
   try{
@@ -130,8 +132,9 @@ function mostrarPopupRapido(elemento, texto){
   const el = document.createElement('div');
   el.className = 'popup-rapido';
   el.textContent = texto;
-  el.style.top = `${rect.top + rect.height/2}px`;
-  el.style.left = `${rect.left + rect.width/2}px`;
+  const z = (window.zoomDaTela ? window.zoomDaTela() : 1); // letra maior (acessibilidade): as medidas da tela são divididas pelo zoom
+  el.style.top = `${(rect.top + rect.height/2) / z}px`;
+  el.style.left = `${(rect.left + rect.width/2) / z}px`;
   root.appendChild(el);
   requestAnimationFrame(()=> el.classList.add('popup-rapido-visivel'));
   setTimeout(()=>{
@@ -457,6 +460,7 @@ async function salvarGerotEditor(){
 async function apagarGerotEditorAtual(){
   if(!gerotEditor || !gerotEditor.blocoId) return;
   const blocoId = gerotEditor.blocoId;
+  if(!(await confirmarAcao({ mensagem:'Apagar este bloco da rotina?', botao:'Apagar', chave:'bloco-rotina' }))) return;
   try{
     await apiRequest('DELETE', `/gerot/${blocoId}`);
     gerotBlocos = gerotBlocos.filter(b=>b.id!==blocoId);
@@ -488,7 +492,31 @@ function renderGerotEditorHtml(){
     </div>
   `;
 }
-function exportarGerotParaPlanilha(){
+/* Bibliotecas grandes (planilha, PDF, QR code): só são baixadas quando a pessoa usa a função,
+   em vez de toda vez que o CRM abre (mais de 1 MB a menos na abertura, no celular faz diferença). */
+const BIBLIOTECAS = {
+  xlsx: { url: 'https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js', pronta: () => !!window.XLSX },
+  jspdf: { url: 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js', pronta: () => !!window.jspdf },
+  qrcode: { url: 'https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js', pronta: () => !!window.QRCode },
+};
+const bibliotecasCarregando = {};
+function carregarBiblioteca(nome){
+  const b = BIBLIOTECAS[nome];
+  if(b.pronta()) return Promise.resolve();
+  if(!bibliotecasCarregando[nome]){
+    bibliotecasCarregando[nome] = new Promise((ok, falhou)=>{
+      const tag = document.createElement('script');
+      tag.src = b.url; tag.async = true;
+      tag.onload = ()=> ok();
+      tag.onerror = ()=>{ delete bibliotecasCarregando[nome]; tag.remove(); falhou(new Error('Não foi possível carregar o recurso agora. Confira sua internet e tente de novo.')); };
+      document.head.appendChild(tag);
+    });
+  }
+  return bibliotecasCarregando[nome];
+}
+
+async function exportarGerotParaPlanilha(){
+  try{ await carregarBiblioteca('xlsx'); }catch(e){ errorMsg = e.message; renderApp(); return; }
   const [ano,mes,dia] = gerotSemanaAtual.split('-').map(Number);
   const segunda = new Date(ano, mes-1, dia);
   const datasDaSemana = GEROT_DIAS.map((_,i)=>{ const d = new Date(segunda); d.setDate(d.getDate()+i); return d; });
@@ -515,11 +543,13 @@ function exportarGerotParaPlanilha(){
   ws['!merges'] = merges;
   ws['!cols'] = [{wch:8}, {wch:24}, {wch:24}, {wch:24}, {wch:24}, {wch:24}];
   const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, 'GEROT');
-  XLSX.writeFile(wb, `gerot-semana-${gerotSemanaAtual}.xlsx`);
+  XLSX.utils.book_append_sheet(wb, ws, 'Rotina');
+  XLSX.writeFile(wb, `rotina-semana-${gerotSemanaAtual}.xlsx`);
 }
 async function importarGerotDePlanilha(file){
   if(!file) return;
+  if(gerotBlocos.length && !(await confirmarAcao({ mensagem:`A planilha substitui a rotina desta semana: os ${gerotBlocos.length} bloco(s) de agora são apagados.`, botao:'Substituir', sempre:true }))) return;
+  try{ await carregarBiblioteca('xlsx'); }catch(e){ errorMsg = e.message; renderApp(); return; }
   gerotImportando = true;
   gerotImportMsg = null;
   renderApp();
@@ -640,9 +670,8 @@ async function loadContratos(){
   contratosLoaded = true;
   renderApp();
 }
-// Regras de comissão (engrenagem em Comissões) — na 1ª vez, o servidor já cria as
-// regras padrão (Imóvel, Veículo, Investimento, Serviços, Home Equity, Car Equity)
-// com a mesma matemática que sempre existiu, então nada muda pra quem nunca mexer nisso.
+// Regras de comissão (engrenagem em Comissões) — na 1ª vez, o servidor já cria uma
+// regra "Padrão" (5% numa parcela só), que o usuário pode editar ou trocar por outras.
 async function loadRegrasComissao(){
   try{
     const data = await apiRequest('GET', '/regras-comissao');
@@ -654,3 +683,208 @@ async function loadRegrasComissao(){
   renderApp();
 }
 
+/* ---------- Google Agenda ---------- */
+async function loadCalendarStatus(){
+  try{
+    const data = await apiRequest('GET', '/calendar/status');
+    calendarConnected = !!data.connected;
+  }catch(e){
+    calendarConnected = false;
+  }
+  renderApp();
+}
+// Quais integrações que dependem do servidor (não do usuário) estão configuradas nesse
+// ambiente — chamada 1x no início, pra decidir o que mostrar em Configurações. Pública,
+// não exige estar logado (mas não tem problema mandar o token também).
+async function loadIntegracoesConfig(){
+  try{
+    const data = await apiRequest('GET', '/config/integracoes');
+    integracoesConfig = { ...integracoesConfig, ...data };
+  }catch(e){
+    // se não conseguir checar, mantém tudo visível (otimista)
+  }
+  try{
+    assinaturaInfo = await apiRequest('GET', '/assinatura');
+    const r = (assinaturaInfo && assinaturaInfo.recursos) || {};
+    // recurso fora do plano some da tela (o servidor também recusa, por segurança)
+    if(r.ia === false) integracoesConfig.assistenteIA = false;
+    if(r.googleAgenda === false) integracoesConfig.planoSemGoogleAgenda = true;
+  }catch(e){
+    // se não conseguir checar, mantém tudo visível (otimista) — melhor mostrar um botão
+    // que às vezes falha do que esconder uma integração que na verdade está configurada
+  }
+  renderApp();
+  if(window.AssistenteIA) AssistenteIA.definirHabilitado(integracoesConfig.assistenteIA); // some se o servidor não tiver chave de IA
+}
+/* ---------- Agenda por link (.ics) — alternativa ao Google Agenda ---------- */
+async function loadIcsStatus(){
+  icsCarregando = true;
+  try{
+    icsStatus = await apiRequest('GET', '/calendar/ics-status');
+  }catch(e){
+    icsStatus = null;
+  }
+  icsCarregando = false;
+  renderApp();
+}
+async function gerarLinkIcs(){
+  icsGerando = true;
+  renderApp();
+  try{
+    icsStatus = await apiRequest('POST', '/calendar/ics/gerar');
+  }catch(e){
+    errorMsg = e.message || 'Não foi possível gerar o link de agenda.';
+  }
+  icsGerando = false;
+  renderApp();
+}
+function revogarLinkIcs(){
+  showConfirm({
+    message: 'Revogar o link de agenda atual? Quem já assinou esse link (Google, Apple, Outlook…) para de receber atualizações. Você pode gerar um link novo a qualquer momento.',
+    confirmLabel: 'Revogar',
+    onConfirm: async ()=>{
+      closeConfirm();
+      try{
+        await apiRequest('POST', '/calendar/ics/revogar');
+        icsStatus = { ativo:false, url:null };
+      }catch(e){
+        errorMsg = e.message || 'Não foi possível revogar o link de agenda.';
+      }
+      renderApp();
+    },
+  });
+}
+
+
+
+
+async function abrirHistoricoCard(){
+  const box = document.getElementById('f-historico');
+  if(!box || !modalForm || modalForm.__isNew) return;
+  box.style.display = 'block';
+  box.innerHTML = '<p class="settings-page-note">Carregando histórico…</p>';
+
+  const tarefasDoLead = tasks.filter(t=>t.leadId===modalForm.id);
+
+  const eventos = [];
+  if(modalForm.createdAt){
+    eventos.push({ texto:'Cliente criado', data: modalForm.createdAt, icone:'✦' });
+  }
+  tarefasDoLead.forEach(t=>{
+    eventos.push({ texto:`Tarefa criada: ${t.titulo}${t.concluida?' (concluída)':''}`, data: t.createdAt || t.vencimento, icone:'✓' });
+  });
+  eventos.sort((a,b)=> new Date(b.data) - new Date(a.data));
+
+  box.innerHTML = eventos.length ? `
+    <div class="historico-lista">
+      ${eventos.map(ev=>`
+        <div class="historico-item">
+          <span class="historico-item-icone">${ev.icone}</span>
+          <span class="historico-item-texto">${esc(ev.texto)}</span>
+          <span class="historico-item-data">${formatDateHora(ev.data)}</span>
+        </div>
+      `).join('')}
+    </div>
+  ` : '<p class="settings-page-note">Nenhum evento registrado ainda.</p>';
+}
+
+/* ---------- proposta em PDF (dentro do card do cliente) ---------- */
+function abrirPropostaModal(){
+  if(!modalForm || modalForm.__isNew) return;
+  const daqui7dias = new Date();
+  daqui7dias.setDate(daqui7dias.getDate()+7);
+  propostaModalForm = {
+    cliente: modalForm.cliente || '',
+    descricao: '',
+    valor: Number(modalForm.valor) || 0,
+    parcelas: 1,
+    validade: hojeLocalISO(daqui7dias),
+  };
+  renderPropostaModal();
+}
+function closePropostaModal(){ propostaModalForm = null; document.getElementById('modal-root').innerHTML=''; }
+function renderPropostaModal(){
+  const root = document.getElementById('modal-root');
+  if(!propostaModalForm){ root.innerHTML=''; return; }
+  const f = propostaModalForm;
+  root.innerHTML = `
+    <div class="overlay" id="proposta-modal-overlay">
+      <div class="modal">
+        <div class="modal-head">
+          <h3>Gerar proposta</h3>
+          <button id="proposta-modal-close">✕</button>
+        </div>
+        <div class="modal-body">
+          <div class="field"><label>Cliente</label><input type="text" id="proposta-cliente" value="${esc(f.cliente)}" /></div>
+          <div class="field"><label>Produto ou serviço</label><textarea id="proposta-descricao" rows="3" placeholder="Descreva o que está sendo oferecido">${esc(f.descricao||'')}</textarea></div>
+          <div class="field-row">
+            <div class="field"><label>Valor total (R$)</label><input type="number" id="proposta-valor" value="${f.valor}" min="0" step="0.01" /></div>
+            <div class="field"><label>Nº de parcelas</label><input type="number" id="proposta-parcelas" value="${f.parcelas}" min="1" /></div>
+          </div>
+          <div class="field"><label>Válida até</label><input type="date" id="proposta-validade" value="${f.validade}" /></div>
+          <p class="settings-page-note">Parcela estimada: ${fmtBRL((f.valor||0)/(f.parcelas||1))}</p>
+        </div>
+        <div class="modal-foot">
+          <span></span>
+          <div class="modal-foot-actions">
+            <button class="btn-outline" id="proposta-cancel">Cancelar</button>
+            <button class="btn-save" id="proposta-gerar">Gerar PDF</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+  document.getElementById('proposta-modal-close').addEventListener('click', closePropostaModal);
+  document.getElementById('proposta-cancel').addEventListener('click', closePropostaModal);
+  document.getElementById('proposta-modal-overlay').addEventListener('click', (e)=>{ if(e.target.id==='proposta-modal-overlay') closePropostaModal(); });
+  document.getElementById('proposta-cliente').addEventListener('input', (e)=> propostaModalForm.cliente = e.target.value);
+  document.getElementById('proposta-descricao').addEventListener('input', (e)=> propostaModalForm.descricao = e.target.value);
+  document.getElementById('proposta-valor').addEventListener('input', (e)=>{ propostaModalForm.valor = parseFloat(e.target.value)||0; renderPropostaModal(); });
+  document.getElementById('proposta-parcelas').addEventListener('input', (e)=>{ propostaModalForm.parcelas = parseInt(e.target.value,10)||1; renderPropostaModal(); });
+  document.getElementById('proposta-validade').addEventListener('input', (e)=> propostaModalForm.validade = e.target.value);
+  document.getElementById('proposta-gerar').addEventListener('click', gerarPropostaPdf);
+}
+async function gerarPropostaPdf(){
+  try{ await carregarBiblioteca('jspdf'); }catch(e){ errorMsg = e.message; renderApp(); return; }
+  const f = propostaModalForm;
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF();
+  let y = 25;
+  doc.setFontSize(20);
+  doc.text('Proposta Comercial', 14, y); y += 10;
+  doc.setFontSize(11);
+  doc.setTextColor(120);
+  doc.text(`Responsável: ${(currentUser&&currentUser.nome)||''}`, 14, y); y += 14;
+  doc.setTextColor(20);
+
+  doc.setFontSize(12);
+  doc.text(`Cliente: ${f.cliente}`, 14, y); y += 8;
+  if((f.descricao||'').trim()){
+    const linhasDescricao = doc.splitTextToSize(`Produto ou serviço: ${f.descricao.trim()}`, 180);
+    doc.text(linhasDescricao, 14, y); y += 6 * linhasDescricao.length + 2;
+  }
+  doc.text(`Valor total: ${fmtBRL(f.valor)}`, 14, y); y += 8;
+  doc.text(`Número de parcelas: ${f.parcelas}`, 14, y); y += 8;
+  doc.text(`Parcela estimada: ${fmtBRL(f.valor/(f.parcelas||1))}`, 14, y); y += 8;
+  doc.text(`Proposta válida até: ${formatDate(f.validade)}`, 14, y); y += 16;
+
+  doc.setFontSize(9);
+  doc.setTextColor(140);
+  doc.text('Valores e condições sujeitos a alteração até a confirmação do pedido.', 14, y, { maxWidth: 180 });
+
+  doc.save(`proposta_${(f.cliente||'cliente').replace(/\s+/g,'_')}.pdf`);
+  closePropostaModal();
+}
+
+function formatDateHora(iso){
+  if(!iso) return '';
+  const d = new Date(iso);
+  if(isNaN(d.getTime())) return '';
+  return d.toLocaleString('pt-BR', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' });
+}
+function formatHora(iso){
+  if(!iso) return '';
+  const d = new Date(iso);
+  if(isNaN(d.getTime())) return '';
+  return d.toLocaleTimeString('pt-BR', { hour:'2-digit', minute:'2-digit' });
+}

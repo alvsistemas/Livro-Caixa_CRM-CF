@@ -70,7 +70,7 @@
   // Equipe: aparelho da loja pede quem vai usar; funcionário vê só os aplicativos da função dele
   if(window.Acesso){
     const aplicar = (i)=>{
-      const esc = (t)=> String(t == null ? '' : t).replace(/[&<>"']/g, (c)=>({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
+      const esc = (s) => Comum.esc(s); // js/comum.js
       const cartoes = { crm:'.inicio-app-crm', financeiro:'.inicio-app-fin', pdv:'.inicio-app-est' };
       Object.entries(cartoes).forEach(([app, sel])=>{ if(i.apps && i.apps[app] === false){ const el = document.querySelector(sel); if(el) el.remove(); } });
       if(i.gestor) document.getElementById('inicio-painel').hidden = false;

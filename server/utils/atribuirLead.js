@@ -30,15 +30,24 @@ async function validarAtribuicao(gestorId, alvoId) {
   return { gestor, alvo };
 }
 
-// Acha a coluna equivalente na conta da outra pessoa: mesmo nome (e tipo); se não tiver, a primeira coluna "em aberto".
+// Acha a coluna equivalente na conta da outra pessoa. A pessoa pode ter vários funis:
+// 1) o funil dela com o mesmo nome do funil de origem (sem diferenciar maiúsculas); senão o primeiro funil;
+// 2) dentro dele, a coluna de mesmo nome e tipo; senão a primeira "em aberto";
+// 3) só se esse funil não tiver coluna em aberto, procura nos outros funis.
 async function colunaEquivalente(colunaOrigemId, alvoId) {
   return comoSistema(async () => {
-  const origem = colunaOrigemId ? await Column.findById(colunaOrigemId) : null;
-  const colunasAlvo = await Column.find({ userId: alvoId }).sort({ ordem: 1 });
-  const norm = (t) => String(t || '').trim().toLowerCase();
-  let destino = origem ? colunasAlvo.find((c) => norm(c.nome) === norm(origem.nome) && c.tipo === origem.tipo) : null;
-  if (!destino) destino = colunasAlvo.find((c) => c.tipo === 'aberto');
-  return destino || null;
+    const Funil = require('../models/Funil');
+    const norm = (t) => String(t || '').trim().toLowerCase();
+    const origem = colunaOrigemId ? await Column.findById(colunaOrigemId) : null;
+    const colunasAlvo = await Column.find({ userId: alvoId }).sort({ ordem: 1 });
+    const funisAlvo = await Funil.find({ userId: alvoId }).sort({ ordem: 1 });
+    const funilOrigem = origem && origem.funilId ? await Funil.findById(origem.funilId) : null;
+    const funil = (funilOrigem && funisAlvo.find((f) => norm(f.nome) === norm(funilOrigem.nome))) || funisAlvo[0] || null;
+    // colunas sem funil (contas antigas) contam como do primeiro funil
+    const doFunil = funil ? colunasAlvo.filter((c) => (c.funilId ? String(c.funilId) === String(funil._id) : funisAlvo[0] && String(funisAlvo[0]._id) === String(funil._id))) : colunasAlvo;
+    const mesmoNome = (lista) => (origem ? lista.find((c) => norm(c.nome) === norm(origem.nome) && c.tipo === origem.tipo) : null);
+    return mesmoNome(doFunil) || doFunil.find((c) => c.tipo === 'aberto')
+      || mesmoNome(colunasAlvo) || colunasAlvo.find((c) => c.tipo === 'aberto') || null;
   });
 }
 

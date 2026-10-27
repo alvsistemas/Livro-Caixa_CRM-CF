@@ -3,7 +3,7 @@
    (com desconto) e como o cliente vai pagar. Ao confirmar, o servidor cria uma Receita
    por parcela no financeiro, ligada ao card. "Agora não" deixa o selo
    "falta o fechamento" no card, que reabre a janela.
-   Usa as funções e variáveis globais do script.js (board, apiRequest, esc, fmtBRL, renderApp). */
+   Usa as funções e variáveis globais do CRM (js/crm/) (board, apiRequest, esc, fmtBRL, renderApp). */
 
 const FECH_MEIOS = [
   ['pix', 'Pix'], ['dinheiro', 'Dinheiro'], ['credito', 'Cartão de crédito'], ['debito', 'Cartão de débito'],

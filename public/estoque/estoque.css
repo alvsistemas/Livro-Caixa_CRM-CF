@@ -687,3 +687,6 @@ body.com-faixa-offline .main { padding-top: 64px; }
 .aviso.alerta { background: var(--vermelho-soft, #fbe9e7); color: var(--vermelho, #a1260d); font-weight: 600; }
 .mesa.esquecida { box-shadow: inset 0 0 0 2px var(--vermelho, #a1260d); }
 .mesa.esquecida .mesa-info { color: var(--vermelho, #a1260d); font-weight: 700; }
+/* lista de produtos no celular: o estoque vai embaixo do nome, sem rolar para o lado */
+.prod-est-cel { margin-top: 6px; align-items: center; gap: 6px; flex-wrap: wrap; font-size: 12.5px; }
+@media (max-width: 760px) { .prod-est-cel.so-cel { display: flex !important; } }

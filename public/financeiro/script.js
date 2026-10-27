@@ -80,19 +80,19 @@ const CONTAS = ["Cartão de Crédito","Conta Corrente","Dinheiro","Pix","Boleto"
 const TIPOS_INVEST = ["Renda Fixa","Renda Variável","Fundos","Cripto","Previdência","Outros"];
 
 const uid = () => Math.random().toString(36).slice(2, 10);
-const fmtBRL = (n) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(n || 0);
+const fmtBRL = (n) => Comum.dinheiro(n); // ../js/comum.js (o mesmo nos três aplicativos)
 const fmtPct = (n) => `${((n || 0) * 100).toFixed(1).replace(".", ",")}%`;
 
 const monthKey = (d) => (d || "").slice(0, 7);
-const brDate = (d) => (d || "").split("-").reverse().join("/");
+const brDate = (d) => Comum.dataBR(d);
 const monthLabel = (ym) => {
   if (!ym) return "";
   const [y, m] = ym.split("-");
   const meses = ["jan","fev","mar","abr","mai","jun","jul","ago","set","out","nov","dez"];
   return `${meses[parseInt(m, 10) - 1]}/${y}`;
 };
-const todayISO = () => new Date().toISOString().slice(0, 10);
-const escapeHtml = (s) => (s || "").replace(/[&<>"']/g, (c) => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
+const todayISO = () => Comum.hojeISO();
+const escapeHtml = (s) => Comum.esc(s);
 const addMonths = (ym, n) => {
   const [y, m] = ym.split("-").map(Number);
   const total = (y * 12 + (m - 1)) + n;
@@ -141,7 +141,7 @@ async function api(method, path, body, tentativa = 0) {
   return data;
 }
 
-const mesAtual = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`; };
+const mesAtual = () => Comum.mesISO();
 
 const state = {
   tab: "dashboard",
@@ -410,9 +410,32 @@ document.getElementById("nav-mais-btn").addEventListener("click", () => {
 });
 
 // No celular a barra lateral vira uma gaveta aberta pelo botão de menu (igual ao CRM)
-function fecharMenu() { document.getElementById("app-root").classList.remove("sidebar-open"); }
+function fecharMenu() { document.getElementById("app-root").classList.remove("sidebar-open"); if (typeof marcarNavCelular === "function") marcarNavCelular(); }
 document.getElementById("abrir-menu").addEventListener("click", () => document.getElementById("app-root").classList.add("sidebar-open"));
 document.getElementById("menu-fundo").addEventListener("click", fecharMenu);
+/* Celular: barra de baixo (Painel, Lançamentos, A pagar, Lucro, Mais) e o "+ Lançamento" */
+var ABAS_CEL = ["dashboard", "lancamentos", "apagar", "lucro"];
+var ABAS_COM_FAB = ["dashboard", "lancamentos", "apagar", "lucro", "empresa"];
+function marcarNavCelular() {
+  const menuAberto = document.getElementById("app-root").classList.contains("sidebar-open");
+  document.body.classList.toggle("menu-cel-aberto", menuAberto);
+  document.querySelectorAll("[data-tab-cel]").forEach((b) => { const on = b.dataset.tabCel === state.tab && !menuAberto; b.classList.toggle("active", on); if (on) b.setAttribute("aria-current", "page"); else b.removeAttribute("aria-current"); });
+  const mais = document.getElementById("nav-cel-mais");
+  if (mais) { mais.classList.toggle("active", menuAberto || !ABAS_CEL.includes(state.tab)); mais.setAttribute("aria-expanded", String(menuAberto)); }
+  const fab = document.getElementById("fab-lanc");
+  if (fab) fab.hidden = !ABAS_COM_FAB.includes(state.tab);
+  const b = document.getElementById("badge-apagar"); const bc = document.getElementById("badge-apagar-cel");
+  if (b && bc) { bc.hidden = b.hidden; bc.textContent = b.textContent; }
+}
+document.querySelectorAll("[data-tab-cel]").forEach((b) => b.addEventListener("click", () => { fecharMenu(); irParaAba(b.dataset.tabCel); }));
+document.getElementById("nav-cel-mais").addEventListener("click", () => {
+  const app = document.getElementById("app-root");
+  app.classList.toggle("sidebar-open");
+  // o "Mais" de baixo já abre o menu com o grupo "Mais" aberto (as abas que não cabem na barra)
+  if (app.classList.contains("sidebar-open")) { const g = document.getElementById("nav-mais"); if (g) { g.classList.add("aberto"); const bt = document.getElementById("nav-mais-btn"); if (bt) bt.setAttribute("aria-expanded", "true"); } }
+  marcarNavCelular();
+});
+document.getElementById("fab-lanc").addEventListener("click", () => openTxModal(null, state.tab === "empresa" ? "Empresa" : undefined));
 // "Olá, Nome" e a foto no topo da barra lateral
 function atualizarCabecalho() {
   const nome = (state.profile && state.profile.name) || primeiroNome() || "";
@@ -442,6 +465,7 @@ function render() {
   else if (state.tab === "cadastro") main.innerHTML = renderCadastro();
   attachMainEvents();
   if (typeof atualizarBadgeAPagar === "function") atualizarBadgeAPagar();
+  if (typeof marcarNavCelular === "function") marcarNavCelular();
   if (window.AssistenteIA) AssistenteIA.atualizarAlertas();
 }
 
@@ -547,7 +571,7 @@ function occTable(rows) {
   const trs = sorted.map((r) => r.tx.origem === "crm" ? crmRowHtml(r) : `
     <tr data-id="${r.tx.id}" data-mes="${r.mes || ""}">
       <td class="mono" style="color:var(--ink-muted);white-space:nowrap;font-size:12px">${brDate(r.data || r.tx.date)}</td>
-      <td>${escapeHtml(r.tx.desc)} ${recurBadge(r.badge)}${r.ajustada ? ` <span class="tag ajuste" title="Valor ou status mudado só neste mês">ajustado</span>` : ""}${(r.tx.comprovantes || []).length ? ` <button class="icon-btn tx-comprovantes" title="Ver comprovante">📎</button>` : ""}</td>
+      <td>${escapeHtml(r.tx.desc)} ${recurBadge(r.badge)}${r.ajustada ? ` <span class="tag ajuste" title="Valor ou status mudado só neste mês">ajustado</span>` : ""}${(r.tx.comprovantes || []).length ? ` <button class="icon-btn tx-comprovantes" title="Ver comprovante">📎</button>` : ""}<div class="tx-mini">${escapeHtml(r.tx.category || "")} · ${escapeHtml(r.tx.scope || "Pessoal")}${r.tx.account ? ` · ${escapeHtml(r.tx.account)}` : ""}</div></td>
       <td>${categorySelect(r.tx)}</td>
       <td>${scopeSelectInline(r.tx)}</td>
       <td>${accountSelectInline(r.tx)}<div class="origem-mini">${origemDoLancamento(r.tx)}</div></td>
@@ -741,8 +765,13 @@ function renderInvestimentos() {
     </tr>`;
   }).join("");
   return `<div class="row-between"><h1 class="page-title">Investimentos</h1><button class="btn pessoal" id="new-inv-btn">+ Novo</button></div>
-    <div class="table-wrap"><table><thead><tr><th>Ativo</th><th>Tipo</th><th>Escopo</th><th>Aplicado</th><th>Atual</th><th>Rentab.</th><th></th></tr></thead>
-    <tbody>${rows || `<tr><td colspan="7"><p class="empty-msg">Nenhum investimento cadastrado.</p></td></tr>`}</tbody></table></div>`;
+    ${rows ? `<div class="table-wrap"><table><thead><tr><th>Ativo</th><th>Tipo</th><th>Escopo</th><th>Aplicado</th><th>Atual</th><th>Rentab.</th><th></th></tr></thead>
+    <tbody>${rows}</tbody></table></div>` : vazioGrande("📈", "Acompanhe seus investimentos", "Tesouro, CDB, ações, fundos… Anote quanto aplicou e quanto vale hoje. O app calcula a rentabilidade de cada um.", "new-inv-btn-2", "+ Cadastrar investimento", "pessoal")}`;
+}
+
+// Cartão de "vazio" padrão (o mesmo de Dívidas): ícone, título, explicação e botão
+function vazioGrande(icone, titulo, texto, idBotao, rotulo, cor) {
+  return `<div class="vazio-grande"><div class="vazio-icone">${icone}</div><h2>${titulo}</h2><p>${texto}</p><button class="btn ${cor}" id="${idBotao}">${rotulo}</button></div>`;
 }
 
 /* ----------------------------------------------------------------------- */
@@ -787,7 +816,7 @@ function renderObjetivos() {
     </div>`;
   }).join("");
   return `<div class="row-between"><h1 class="page-title">Objetivos futuros</h1><button class="btn gold" id="new-goal-btn">+ Novo objetivo</button></div>
-    <div class="grid grid-2">${items || `<p class="empty-msg">Nenhum objetivo cadastrado.</p>`}</div>`;
+    ${items ? `<div class="grid grid-2">${items}</div>` : vazioGrande("🎯", "Defina um objetivo", "Reserva de emergência, viagem, troca do carro… Diga quanto quer juntar e até quando. O app mostra quanto falta e se você está dentro do prazo.", "new-goal-btn-2", "+ Criar objetivo", "gold")}`;
 }
 
 /* ----------------------------------------------------------------------- */
@@ -1107,6 +1136,11 @@ function attachMainEvents() {
   const newTxBtn = document.getElementById("new-tx-btn") || document.getElementById("new-tx-emp-btn");
   if (newTxBtn) newTxBtn.addEventListener("click", () => openTxModal(null, state.tab === "empresa" ? "Empresa" : undefined));
   document.querySelectorAll(".tx-edit").forEach((b) => b.addEventListener("click", (e) => { const id = e.target.closest("tr").dataset.id; openTxModal(state.txs.find((t) => t.id === id)); }));
+  // no celular a linha vira cartão: tocar nele (fora dos botões e campos) abre a edição
+  if (window.matchMedia("(max-width: 768px)").matches) document.querySelectorAll(".tabela-lancamentos tbody tr[data-id]").forEach((tr) => tr.addEventListener("click", (e) => {
+    if (e.target.closest("button, select, input, a, label")) return;
+    openTxModal(state.txs.find((t) => t.id === tr.dataset.id));
+  }));
   document.querySelectorAll(".tx-del").forEach((b) => b.addEventListener("click", (e) => {
     const tr = e.target.closest("tr");
     const tx = state.txs.find((t) => t.id === tr.dataset.id);
@@ -1154,13 +1188,11 @@ function attachMainEvents() {
     mudarValorDoLancamento(tx, mes, parseFloat(e.target.value) || 0);
   }));
 
-  const newInvBtn = document.getElementById("new-inv-btn");
-  if (newInvBtn) newInvBtn.addEventListener("click", () => openInvModal(null));
+  ["new-inv-btn", "new-inv-btn-2"].forEach((id) => { const b = document.getElementById(id); if (b) b.addEventListener("click", () => openInvModal(null)); });
   document.querySelectorAll(".inv-edit").forEach((b) => b.addEventListener("click", (e) => { const id = e.target.closest("tr").dataset.id; openInvModal(state.invs.find((i) => i.id === id)); }));
   document.querySelectorAll(".inv-del").forEach((b) => b.addEventListener("click", async (e) => { const id = e.target.closest("tr").dataset.id; if (await confirmarAcao({ mensagem: "Excluir este investimento?", sempre: true })) { state.invs = state.invs.filter((i) => i.id !== id); saveInvs(); render(); } }));
 
-  const newGoalBtn = document.getElementById("new-goal-btn");
-  if (newGoalBtn) newGoalBtn.addEventListener("click", () => openGoalModal(null));
+  ["new-goal-btn", "new-goal-btn-2"].forEach((id) => { const b = document.getElementById(id); if (b) b.addEventListener("click", () => openGoalModal(null)); });
   document.querySelectorAll(".goal-edit").forEach((b) => b.addEventListener("click", (e) => { const id = e.target.closest(".item-card").dataset.id; openGoalModal(state.goals.find((g) => g.id === id)); }));
   document.querySelectorAll(".goal-del").forEach((b) => b.addEventListener("click", async (e) => { const id = e.target.closest(".item-card").dataset.id; if (await confirmarAcao({ mensagem: "Excluir este objetivo?", chave: "objetivo" })) { state.goals = state.goals.filter((g) => g.id !== id); saveGoals(); render(); } }));
 
@@ -1392,8 +1424,12 @@ function openTxModal(existing, defaultScope, preenchido) {
       ${!noCartao && state.contas.length ? `<div class="field"><label>Conta ${f.type === "Receita" ? "onde entra" : "de onde sai"}</label>${chipGroup("conta", ["Nenhuma", ...state.contas.map((k) => k.name)], (state.contas.find((k) => k.id === f.contaId) || {}).name || "Nenhuma", "var(--char)")}</div>` : ""}
       <div class="field"><label>${recorrente ? "Status padrão (cada mês pode ser marcado à parte)" : "Status"}</label>${chipGroup("status", STATUS_OPTIONS, f.status, COLORS.pessoal)}</div>
       ${window.comprovantesNoFormulario ? comprovantesNoFormulario(f) : ""}
-      <button ${!f.desc || f.value === "" ? "disabled" : ""} class="btn save-btn" id="f-save" style="background:${f.scope === "Empresa" ? COLORS.empresa : COLORS.pessoal}">Salvar lançamento</button>
+      <div class="modal-rodape-lanc">
+        <button type="button" class="btn ghost" id="f-cancelar">Cancelar</button>
+        <button ${!f.desc || f.value === "" ? "disabled" : ""} class="btn save-btn" id="f-save" style="background:${f.scope === "Empresa" ? COLORS.empresa : COLORS.pessoal}">Salvar lançamento</button>
+      </div>
     `);
+    document.getElementById("f-cancelar").addEventListener("click", () => document.getElementById("modal-close").click());
     document.getElementById("f-desc").addEventListener("input", (e) => { f.desc = e.target.value; atualizarBotao(); });
     document.getElementById("f-value").addEventListener("input", (e) => { f.value = e.target.value; atualizarBotao(); });
     document.getElementById("f-date").addEventListener("change", (e) => { f.date = e.target.value; if (noCartao) draw(); });
@@ -1764,6 +1800,7 @@ function primeiroNome() {
 function irParaAba(tab) {
   state.tab = tab;
   document.querySelectorAll(".nav-item[data-tab]").forEach((b) => b.classList.toggle("active", b.dataset.tab === tab));
+  marcarNavCelular();
   render();
   window.scrollTo(0, 0);
 }

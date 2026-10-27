@@ -2187,6 +2187,38 @@ describe('API com PostgreSQL (integração)', { skip: pular }, () => {
     assert.equal(clis2[0].compras, 1);
   });
 
+  test('gestor cria a conta de uma pessoa na equipe (sem senha, link de 7 dias)', async () => {
+    const g = (await api('POST', '/api/auth/register', { nome: 'Gu Gestor', email: 'gu.criar@teste.com', senha: 'senha123' })).dados;
+    const m = (await api('POST', '/api/auth/register', { nome: 'Mo Membro', email: 'mo.criar@teste.com', senha: 'senha123' })).dados;
+    const eq = await api('POST', '/api/equipe', { nome: 'Time Criar' }, g.token);
+    await api('POST', '/api/equipe/entrar', { codigo: eq.dados.codigoConvite }, m.token);
+    assert.equal((await api('POST', '/api/equipe/criar-membro', { nome: 'X', email: 'x.criar@teste.com' }, m.token)).status, 403); // membro não cria
+    assert.equal((await api('POST', '/api/equipe/criar-membro', { nome: 'Sem email', email: 'invalido' }, g.token)).status, 400);
+    assert.equal((await api('POST', '/api/equipe/criar-membro', { nome: 'Já existe', email: 'MO.criar@teste.com' }, g.token)).status, 409);
+    const r = await api('POST', '/api/equipe/criar-membro', { nome: 'Nina Nova', email: 'Nina.Criar@teste.com' }, g.token);
+    assert.equal(r.status, 201, JSON.stringify(r.dados));
+    assert.equal(r.dados.emailEnviado, false); // sem e-mail configurado nos testes: o gestor recebe o link
+    assert.match(r.dados.link, /login\.html\?reset=[0-9a-f]{64}$/);
+    assert.equal(r.dados.validadeDias, 7);
+    const ver = await api('GET', '/api/equipe', undefined, g.token);
+    const nina = ver.dados.equipe.membros.find((x) => x.email === 'nina.criar@teste.com');
+    assert.ok(nina); assert.equal(nina.papel, 'membro');
+    // ainda sem senha: o login explica o que fazer
+    const semSenha = await api('POST', '/api/auth/login', { email: 'nina.criar@teste.com', senha: 'qualquer1' });
+    assert.equal(semSenha.status, 401); assert.match(semSenha.dados.error, /ainda não tem senha/);
+    // cria a senha pelo link e entra: já está na equipe e tem o funil padrão
+    const token = r.dados.link.split('reset=')[1];
+    assert.equal((await api('POST', '/api/auth/redefinir-senha', { token, senhaNova: 'minhasenha' })).status, 200);
+    const login = await api('POST', '/api/auth/login', { email: 'nina.criar@teste.com', senha: 'minhasenha' });
+    assert.equal(login.status, 200);
+    const eqNina = await api('GET', '/api/equipe', undefined, login.dados.token);
+    assert.equal(eqNina.dados.equipe.nome, 'Time Criar');
+    assert.ok((await api('GET', '/api/board', undefined, login.dados.token)).dados.columns.length >= 5);
+    assert.equal((await api('POST', '/api/auth/redefinir-senha', { token, senhaNova: 'outrasenha' })).status, 400); // uso único
+    const aud = await api('GET', '/api/auditoria', undefined, login.dados.token);
+    assert.ok(JSON.stringify(aud.dados).includes('conta_criada_pelo_gestor'));
+  });
+
   test('sair de todos os aparelhos invalida o token antigo', async () => {
     const t = contas.caio.token;
     assert.equal((await api('POST', '/api/auth/logout-all', {}, t)).status, 204);
