@@ -129,6 +129,7 @@
 - `public/js/comum.js` (`window.Comum`): `esc`, `dinheiro`, `hojeISO`, `mesISO`, `dataBR`, `telefone`. Carrega primeiro em todas as páginas; CRM, Controle financeiro e PDV usam daqui (cada app mantém o visual próprio).
 - `scripts/verificar-duplicados.js` (roda no `verificar.sh`): acusa função declarada duas vezes — achou um `hojeLocalISO()` repetido que trocava a data da validade da proposta e da tarefa sugerida pela IA por "hoje".
 - Versão 20261172: Negociações com filtro (ordenar) na linha Geral/Mês/Esfriando e tudo alinhado ao título; cartão do funil com uma faixa só (`.card-faixa`: pontinhos + botão de trocar etapa); financeiro com cartão de vazio (`vazioGrande`) em Objetivos e Investimentos; formulário do lançamento com rodapé fixo Cancelar + Salvar (`.modal-rodape-lanc`).
+- Versão 20261173: CRM no celular voltou a abrir o menu pelas três linhas no topo (a barra de baixo saiu); a bolinha da IA fica embaixo à direita, o "+ Novo contato" embaixo à esquerda, e a bolinha não pode ser arrastada para trás da barra do topo (`topoLivre()` em `js/assistente-ia.js`).
 - Relatórios do CRM: gráfico de barras dos 12 meses + lista só dos meses com valor. Celular: faixa do resumo do funil com seta "continua" que some ao chegar no fim.
 
 ## Pendências

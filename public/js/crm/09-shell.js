@@ -50,7 +50,6 @@ function renderApp(){
     <div class="app-shell ${sidebarOpen ? 'sidebar-open' : ''}">
       ${renderSidebar()}
       <div class="sidebar-backdrop" data-action="close-sidebar"></div>
-      ${renderBarraInferior()}
       <div class="main-area ${currentPage==='pipeline' ? 'main-area-pipeline' : ''}">
         <div class="main-topbar">
           <button class="hamburger-btn" data-action="toggle-sidebar" title="Menu">
@@ -225,28 +224,6 @@ function renderReordenarNavModal(){
 
 // Ícone do botão "Trocar de aplicativo" (CRM ⇄ Controle financeiro)
 const ICON_TROCAR_APP = '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>';
-// Barra fixa embaixo no celular: as 4 telas mais usadas + "Mais" (abre o menu completo)
-function renderBarraInferior(){
-  const ICO = {
-    dashboard: '<rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/>',
-    pipeline: '<rect x="3" y="3" width="5" height="18" rx="1"/><rect x="10" y="3" width="5" height="11" rx="1"/><rect x="17" y="3" width="4" height="14" rx="1"/>',
-    leads: '<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c0-3.6 2.9-6 6.5-6s6.5 2.4 6.5 6"/><path d="M16 4.6a3.5 3.5 0 0 1 0 6.8"/><path d="M18 14.5c2.2.6 3.5 2.4 3.5 5.5"/>',
-    tarefas: '<rect x="3" y="4" width="18" height="17" rx="2"/><path d="M8 2v4M16 2v4M3 10h18"/><path d="M8.5 15l2 2 4-4"/>',
-  };
-  const itens = [['dashboard','Início'],['pipeline','Negociações'],['leads','Contatos'],['tarefas','Agenda']].filter(([k])=> !atuandoComo || PAGINAS_ATUANDO_COMO.includes(k));
-  return `
-    <nav class="bottom-nav" aria-label="Navegação principal">
-      ${itens.map(([k,l])=>`
-        <button type="button" class="bottom-nav-item ${currentPage===k && !sidebarOpen?'active':''}" data-action="nav" data-page="${k}" ${currentPage===k?'aria-current="page"':''}>
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICO[k]}</svg>
-          <span>${l}</span>
-        </button>`).join('')}
-      <button type="button" class="bottom-nav-item ${sidebarOpen?'active':''}" data-action="toggle-sidebar" aria-label="Mais opções" aria-expanded="${sidebarOpen}">
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg>
-        <span>Mais</span>
-      </button>
-    </nav>`;
-}
 // etapa visível no celular (uma por vez): a escolhida, ou a primeira do funil
 function etapaAtivaMobile(columnsDoFunil){
   if(pipelineEtapaMobileId && columnsDoFunil.some(c=>c.id===pipelineEtapaMobileId)) return pipelineEtapaMobileId;

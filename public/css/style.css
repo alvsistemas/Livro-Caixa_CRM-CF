@@ -1036,28 +1036,12 @@ tr.membro-supervisor-destaque td:last-child{ border-right:1px solid var(--gold);
    Configurações em lista e janelas em tela cheia. "Ver como no computador"
    (Acessibilidade) troca a largura da tela e desliga tudo isto.
 ================================================================ */
-.bottom-nav, .etapas-chips-mobile, .etapas-dica-mobile, .leads-chips-mobile, .leads-cards-mobile, .fab-novo-lead, .config-voltar-mobile{ display:none; }
+.etapas-chips-mobile, .etapas-dica-mobile, .leads-chips-mobile, .leads-cards-mobile, .fab-novo-lead, .config-voltar-mobile{ display:none; }
 @media (max-width: 768px){
-  .hamburger-btn{ display:none; }
-  .main-topbar{ justify-content:flex-end; }
-  .main-area{ padding-bottom:calc(96px + env(safe-area-inset-bottom)); }
-
-  /* barra fixa de baixo */
-  .bottom-nav{
-    display:grid; grid-template-columns:repeat(5,1fr); position:fixed; left:0; right:0; bottom:0; z-index:130;
-    height:calc(66px + env(safe-area-inset-bottom)); padding-bottom:env(safe-area-inset-bottom);
-    background:var(--paper); border-top:1px solid var(--line);
-  }
-  .bottom-nav-item{
-    position:relative; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:4px;
-    border:none; background:none; color:var(--ink-soft); font-family:inherit; font-size:11px; font-weight:600;
-    min-height:48px; padding:0 2px; cursor:pointer; -webkit-tap-highlight-color:transparent;
-  }
-  .bottom-nav-item span{ max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-  .bottom-nav-item.active{ color:var(--ink); font-weight:700; }
-  .bottom-nav-item.active::before{ content:''; position:absolute; top:0; width:28px; height:3px; border-radius:0 0 3px 3px; background:var(--ink); }
-  .bottom-nav-item:focus-visible{ outline:2px solid var(--ink); outline-offset:-4px; border-radius:10px; }
-  .assistente-bolha{ right:14px !important; bottom:calc(150px + env(safe-area-inset-bottom)) !important; width:48px; height:48px; }
+  /* menu pelas três linhas no topo (sem barra embaixo); a bolinha da IA fica sozinha embaixo */
+  .main-topbar .hamburger-btn{ margin-bottom:0; }
+  .main-area{ padding-bottom:calc(88px + env(safe-area-inset-bottom)); }
+  .assistente-bolha{ right:16px; bottom:calc(20px + env(safe-area-inset-bottom)); width:52px; height:52px; }
 
   /* chips de etapa (Negociações) e de filtro (Contatos) */
   .etapas-chips-mobile, .leads-chips-mobile{
@@ -1116,7 +1100,7 @@ tr.membro-supervisor-destaque td:last-child{ border-right:1px solid var(--gold);
   .lead-card-valor{ font-family:'IBM Plex Mono',monospace; font-size:13px; font-weight:600; color:var(--ink); flex-shrink:0; }
   .lead-card-wa{ width:44px; height:44px; border-radius:50%; border:1px solid var(--line); background:var(--paper); color:var(--ink); display:flex; align-items:center; justify-content:center; flex-shrink:0; cursor:pointer; padding:0; }
   .fab-novo-lead{
-    display:flex; align-items:center; gap:8px; position:fixed; right:16px; bottom:calc(82px + env(safe-area-inset-bottom)); z-index:125;
+    display:flex; align-items:center; gap:8px; position:fixed; left:16px; bottom:calc(20px + env(safe-area-inset-bottom)); z-index:125;
     height:52px; padding:0 20px; border-radius:999px; border:none; background:var(--ink); color:var(--bg);
     font-family:inherit; font-size:14px; font-weight:600; box-shadow:0 8px 20px rgba(0,0,0,.28); cursor:pointer;
   }

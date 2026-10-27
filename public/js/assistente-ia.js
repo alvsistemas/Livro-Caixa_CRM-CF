@@ -113,6 +113,7 @@
     const alertas = listaDeAlertas();
     const novos = typeof st.alertas === 'function' && assinatura(alertas) !== st.alertasVistos ? alertas.filter((a) => a.tipo !== 'ok').length : 0;
     if (st.vendoAlertas) st.alertasVistos = assinatura(alertas);
+    if (st.bolhaY != null) st.bolhaY = Math.max(st.bolhaY, topoLivre() / (window.zoomDaTela ? window.zoomDaTela() : 1)); // posição antiga atrás da barra do topo
     const posBolha = st.bolhaX != null ? `left:${st.bolhaX}px; top:${st.bolhaY}px; right:auto; bottom:auto;` : '';
     el.innerHTML = `
       <button id="assistente-bolha" class="assistente-bolha ${st.aberto ? 'aberta' : ''}" style="${posBolha}" title="${st.aberto ? 'Fechar' : esc(st.nome)}" aria-label="${st.aberto ? 'Fechar' : 'Abrir'} ${esc(st.nome)}">${st.aberto ? ICONE_FECHAR : '💬'}${!st.aberto && novos ? `<span class="assistente-bolha-badge">${novos}</span>` : ''}</button>
@@ -242,6 +243,15 @@
     render();
   }
 
+  // Primeira altura livre da tela: abaixo da barra fixa do topo (no celular), para a bolinha não ficar escondida atrás dela
+  function topoLivre() {
+    const barra = document.querySelector('.main-topbar');
+    if (!barra) return 4;
+    const pos = getComputedStyle(barra).position;
+    if (pos !== 'sticky' && pos !== 'fixed') return 4;
+    return Math.max(4, Math.round(barra.getBoundingClientRect().bottom) + 4);
+  }
+
   function ligarEventos() {
     const bolha = document.getElementById('assistente-bolha');
     if (bolha) {
@@ -258,7 +268,7 @@
         d.moveu = true;
         const z = (window.zoomDaTela ? window.zoomDaTela() : 1);
         const x = Math.min(Math.max(4, d.bx + dx), window.innerWidth - bolha.offsetWidth * z - 4);
-        const y = Math.min(Math.max(4, d.by + dy), window.innerHeight - bolha.offsetHeight * z - 4);
+        const y = Math.min(Math.max(topoLivre(), d.by + dy), window.innerHeight - bolha.offsetHeight * z - 4);
         Object.assign(bolha.style, { left: x / z + 'px', top: y / z + 'px', right: 'auto', bottom: 'auto' });
         if (document.getElementById('assistente-painel')) posicionarPainel();
       });
