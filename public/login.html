@@ -8,7 +8,7 @@
 <meta name="theme-color" content="#141414" />
 <link rel="icon" href="icons/icon-192.png" />
 <link rel="apple-touch-icon" href="icons/icon-192.png" />
-<link rel="stylesheet" href="css/style.css?v=20261173" />
+<link rel="stylesheet" href="css/style.css?v=20261175" />
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 </head>
 <body>
@@ -18,7 +18,9 @@
       <p class="auth-subtitle">suas vendas e o seu dinheiro, num só lugar</p>
       <div class="auth-oferta" id="auth-oferta" hidden></div>
 
-      <div class="auth-tabs">
+      <div id="auth-main">
+      <div class="auth-tabs" data-modo="login">
+        <span class="auth-tab-pill" aria-hidden="true"></span>
         <button type="button" class="auth-tab active" data-mode="login">Entrar</button>
         <button type="button" class="auth-tab" data-mode="register">Criar conta</button>
       </div>
@@ -26,20 +28,35 @@
       <div id="auth-error" class="error-banner" style="display:none"></div>
 
       <form id="auth-form" class="auth-form">
-        <div class="field" id="field-nome" style="display:none">
-          <label>Nome</label>
-          <input type="text" id="a-nome" placeholder="Seu nome" />
+        <div class="auth-slide" id="auth-slide">
+          <div class="field">
+            <label>E-mail</label>
+            <input type="email" id="a-email" placeholder="voce@email.com" required autocomplete="email" />
+          </div>
+          <div class="field">
+            <label>Senha</label>
+            <input type="password" id="a-senha" placeholder="Senha" required minlength="6" autocomplete="current-password" />
+          </div>
+          <button type="submit" class="btn-save auth-submit" id="auth-submit">Entrar</button>
+          <p id="esqueci-wrap" style="display:none;text-align:center;font-size:13px;margin:12px 0 0;"><a href="#" id="esqueci-link" style="color:inherit;opacity:.8;">Esqueci minha senha</a></p>
         </div>
+      </form>
+
+      <div class="auth-divider" id="auth-divider"><span>ou</span></div>
+      <div id="google-btn-container" class="google-btn-wrap"></div>
+      <p id="google-btn-fallback" class="google-btn-fallback" style="display:none">Login com Google ainda não configurado neste servidor.</p>
+      </div>
+
+      <form id="nome-form" class="auth-form" style="display:none">
+        <h2 class="auth-passo-titulo">Quase lá!</h2>
+        <p class="settings-page-note" style="margin:0">Como podemos te chamar?</p>
+        <div id="nome-error" class="error-banner" style="display:none"></div>
         <div class="field">
-          <label>E-mail</label>
-          <input type="email" id="a-email" placeholder="voce@email.com" required />
+          <label>Seu nome</label>
+          <input type="text" id="a-nome" placeholder="Seu nome" required maxlength="80" autocomplete="name" />
         </div>
-        <div class="field">
-          <label>Senha</label>
-          <input type="password" id="a-senha" placeholder="Mínimo 6 caracteres" required minlength="6" />
-        </div>
-        <button type="submit" class="btn-save auth-submit" id="auth-submit">Entrar</button>
-        <p id="esqueci-wrap" style="display:none;text-align:center;font-size:13px;margin:12px 0 0;"><a href="#" id="esqueci-link" style="color:inherit;opacity:.8;">Esqueci minha senha</a></p>
+        <button type="submit" class="btn-save auth-submit" id="nome-submit">Concluir e entrar</button>
+        <p style="text-align:center;font-size:13px;margin:12px 0 0;"><a href="#" id="nome-voltar" style="color:inherit;opacity:.8;">Voltar</a></p>
       </form>
 
       <form id="esqueci-form" class="auth-form" style="display:none">
@@ -77,15 +94,12 @@
         <button type="submit" class="btn-save auth-submit" id="twofa-submit">Confirmar</button>
       </form>
 
-      <div class="auth-divider" id="auth-divider"><span>ou</span></div>
-      <div id="google-btn-container" class="google-btn-wrap"></div>
-      <p id="google-btn-fallback" class="google-btn-fallback" style="display:none">Login com Google ainda não configurado neste servidor.</p>
       <a class="auth-funcionario" href="funcionario.html">Sou da equipe de uma loja · entrar com PIN</a>
       <p style="text-align:center;font-size:12px;margin:16px 0 0;opacity:.7;"><a href="privacidade.html" style="color:inherit;">Política de Privacidade</a> · <a href="termos.html" style="color:inherit;">Termos de Serviço</a></p>
     </div>
   </div>
 
-  <script src="js/login.js?v=20261173"></script>
-<script src="js/instalar.js?v=20261173"></script>
+  <script src="js/login.js?v=20261175"></script>
+<script src="js/instalar.js?v=20261175"></script>
 </body>
 </html>

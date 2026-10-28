@@ -239,7 +239,7 @@ function trocarEtapaMobile(colId, durante){
     const ativo = c.dataset.colId === colId;
     c.classList.toggle('active', ativo);
     c.setAttribute('aria-selected', ativo ? 'true' : 'false');
-    if(ativo && c.scrollIntoView) c.scrollIntoView({ inline:'center', block:'nearest' });
+    // sem rolar a fileira aqui: o dedo está em cima do chip e ele não pode fugir debaixo do dedo
   });
 }
 // arrastando um cliente no celular: parado ~0,4 s em cima do chip de outra etapa, abre aquela etapa

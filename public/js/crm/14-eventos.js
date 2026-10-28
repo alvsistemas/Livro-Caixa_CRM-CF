@@ -388,19 +388,8 @@ function bindAppEvents(){
   });
   const regenerarCodigoBtn = app.querySelector('[data-action="regenerar-codigo-equipe"]');
   if(regenerarCodigoBtn) regenerarCodigoBtn.addEventListener('click', regenerarCodigoEquipe);
-  app.querySelectorAll('[data-action="alterar-papel-membro"]').forEach(btn=>{
-    btn.addEventListener('click', ()=> alterarPapelMembro(btn.dataset.userId, btn.dataset.papel));
-  });
-  app.querySelectorAll('[data-action="toggle-supervisor-dados"]').forEach(btn=>{
-    btn.addEventListener('click', ()=> alterarSupervisorDeDados(btn.dataset.userId, btn.dataset.ativo==='1'));
-  });
-  app.querySelectorAll('[data-action="remover-membro"]').forEach(btn=>{
-    btn.addEventListener('click', ()=>{
-      showConfirm({
-        message: 'Remover esse membro da equipe? O funil dele continua intocado, só perde acesso ao chat e à supervisão.',
-        onConfirm: ()=>{ removerMembro(btn.dataset.userId); closeConfirm(); },
-      });
-    });
+  app.querySelectorAll('[data-action="abrir-opcoes-membro"]').forEach(btn=>{
+    btn.addEventListener('click', ()=> abrirOpcoesMembroModal(btn.dataset.userId));
   });
   const chatInternoInput = document.getElementById('chat-interno-input');
   if(chatInternoInput){
@@ -857,23 +846,19 @@ function bindAppEvents(){
         return;
       }
 
-      if(!cardTouchDrag.arrastando) return; // ainda esperando o temporizador decidir
-      e.preventDefault();
-      atualizarArrastoDeCard(e.clientX, e.clientY);
+      // arrastando: quem cuida é o documento (ver arrastoDeCardNoDocumento), que continua
+      // recebendo o dedo mesmo depois que a etapa de origem some ao abrir outra etapa
     }, { passive:false });
 
     cardEl.addEventListener('pointerup', (e)=>{
       clearTimeout(cardTouchLongPressTimer);
       if(!cardTouchDrag || cardTouchDrag.cardEl !== cardEl || cardTouchDrag.pointerId !== e.pointerId) return;
-      if(cardTouchDrag.arrastando){
-        e.preventDefault(); // evita o clique fantasma que abriria o card logo depois de soltar
-        finalizarArrastoDeCard(e.clientX, e.clientY);
-      }
+      if(cardTouchDrag.arrastando) return; // o documento finaliza
       cardTouchDrag = null;
     });
     cardEl.addEventListener('pointercancel', ()=>{
       clearTimeout(cardTouchLongPressTimer);
-      if(cardTouchDrag && cardTouchDrag.cardEl === cardEl && cardTouchDrag.arrastando) cancelarArrastoDeCard();
+      if(cardTouchDrag && cardTouchDrag.arrastando) return; // o documento cancela
       cardTouchDrag = null;
     });
   });
@@ -947,20 +932,30 @@ function iniciarArrastoDeCard(x, y){
   fantasma.className = 'card-touch-fantasma';
   const z = (window.zoomDaTela ? window.zoomDaTela() : 1);
   fantasma.style.width = rect.width / z + 'px';
-  fantasma.style.left = (x - rect.width/2) / z + 'px';
-  fantasma.style.top = (y - 24) / z + 'px';
   fantasma.innerHTML = cardTouchDrag.cardEl.querySelector('.card-body') ? cardTouchDrag.cardEl.querySelector('.card-body').innerHTML : cardTouchDrag.cardEl.innerHTML;
   document.body.appendChild(fantasma);
   cardTouchDrag.fantasmaEl = fantasma;
   if(navigator.vibrate) navigator.vibrate(15);
   atualizarArrastoDeCard(x, y);
 }
+// O fantasma fica logo ABAIXO do dedo (nunca em cima do que o dedo aponta) e dentro da tela.
+// Em cima da fileira de etapas ele encolhe, para os nomes das etapas continuarem à vista.
+function posicionarFantasma(x, y){
+  const f = cardTouchDrag && cardTouchDrag.fantasmaEl; if(!f) return;
+  const z = (window.zoomDaTela ? window.zoomDaTela() : 1);
+  const chips = document.getElementById('etapas-chips-mobile');
+  let sobreChips = false;
+  if(chips && chips.offsetParent !== null){ const r = chips.getBoundingClientRect(); sobreChips = y >= r.top - 12 && y <= r.bottom + 12; }
+  f.classList.toggle('compacto', sobreChips);
+  const largura = f.offsetWidth * z * (sobreChips ? .55 : 1);
+  const esquerda = Math.min(Math.max(8, x - largura/2), window.innerWidth - largura - 8);
+  f.style.left = esquerda / z + 'px';
+  f.style.top = (y + (sobreChips ? 34 : 22)) / z + 'px';
+}
 function atualizarArrastoDeCard(x, y){
   if(!cardTouchDrag || !cardTouchDrag.fantasmaEl) return;
   // isso aqui é barato — atualiza sempre na hora, o fantasma nunca fica atrasado atrás do dedo
-  const z = (window.zoomDaTela ? window.zoomDaTela() : 1);
-  cardTouchDrag.fantasmaEl.style.left = (x / z - cardTouchDrag.fantasmaEl.offsetWidth/2) + 'px';
-  cardTouchDrag.fantasmaEl.style.top = (y - 24) / z + 'px';
+  posicionarFantasma(x, y);
   cardTouchDrag.ultimoXCalculo = x;
   cardTouchDrag.ultimoYCalculo = y;
   // isso aqui é caro (olha a posição de TODOS os cards da coluna, toda vez) — segurando
@@ -1026,8 +1021,25 @@ function atualizarAutoScrollDoArrasto(x, y, colAlvo){
   clearInterval(autoScrollDoArrastoInterval);
   // celular: a página rola para cima (rumo aos chips de etapa) ou para baixo
   if(ehCelular() && cardTouchDrag){
+    // dedo na fileira de etapas, perto da ponta: a fileira desliza e mostra as próximas etapas
+    const chips = document.getElementById('etapas-chips-mobile');
+    if(chips){
+      const r = chips.getBoundingClientRect();
+      if(y >= r.top - 12 && y <= r.bottom + 12){
+        const borda = 56;
+        const dx = x < r.left + borda ? -Math.ceil((r.left + borda - x) / 5) : x > r.right - borda ? Math.ceil((x - (r.right - borda)) / 5) : 0;
+        if(dx){
+          autoScrollDoArrastoInterval = setInterval(()=>{
+            chips.scrollLeft += dx;
+            if(cardTouchDrag) verificarChipDeEtapaSobDedo(cardTouchDrag.ultimoX, cardTouchDrag.ultimoY); // o chip embaixo do dedo mudou
+          }, 16);
+        }
+        return; // em cima da fileira não rola a página
+      }
+    }
     let dy = 0;
-    if(!cardTouchDrag.chipHover && y < 130) dy = -12;
+    const topoLivreY = (document.querySelector('.main-topbar') || { getBoundingClientRect:()=>({ bottom:0 }) }).getBoundingClientRect().bottom;
+    if(!cardTouchDrag.chipHover && y < topoLivreY + 60) dy = -12;
     else if(y > window.innerHeight - 150) dy = 12;
     if(dy) autoScrollDoArrastoInterval = setInterval(()=> window.scrollBy(0, dy), 16);
     return;
@@ -1140,3 +1152,25 @@ document.addEventListener('scroll', (e)=>{
   if(!faixa || !faixa.parentElement) return;
   faixa.parentElement.classList.toggle('no-fim', faixa.scrollLeft + faixa.clientWidth >= faixa.scrollWidth - 4);
 }, true);
+
+// Arrastar card por toque, depois de confirmado: os eventos do dedo são tratados no documento.
+// Ao parar em cima do chip de outra etapa, essa etapa abre e a de origem some — o card
+// deixa de receber o dedo, então quem acompanha o arrastar até o fim é o documento.
+function arrastoDeCardNoDocumento(e){
+  if(!cardTouchDrag || !cardTouchDrag.arrastando || cardTouchDrag.pointerId !== e.pointerId) return;
+  if(e.type === 'pointermove'){
+    e.preventDefault();
+    cardTouchDrag.ultimoX = e.clientX; cardTouchDrag.ultimoY = e.clientY;
+    atualizarArrastoDeCard(e.clientX, e.clientY);
+  } else if(e.type === 'pointerup'){
+    e.preventDefault(); // evita o clique fantasma que abriria o card logo depois de soltar
+    finalizarArrastoDeCard(e.clientX, e.clientY);
+    cardTouchDrag = null;
+  } else {
+    cancelarArrastoDeCard();
+    cardTouchDrag = null;
+  }
+}
+document.addEventListener('pointermove', arrastoDeCardNoDocumento, { passive:false });
+document.addEventListener('pointerup', arrastoDeCardNoDocumento);
+document.addEventListener('pointercancel', arrastoDeCardNoDocumento);

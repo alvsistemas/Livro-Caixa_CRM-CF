@@ -152,7 +152,7 @@ main.pipeline-main{ padding-bottom:4px; }
 .card:hover{ box-shadow:0 10px 22px rgba(0,0,0,.10); transform:translateY(-2px); }
 .card.dragging{ opacity:.35; }
 .card.card-touch-arrastando{ opacity:.25; }
-.card-touch-fantasma{ position:fixed; z-index:250; pointer-events:none; background:var(--paper); border:2px solid var(--accent); border-radius:14px; padding:12px; box-shadow:0 16px 36px rgba(0,0,0,.35); transform:scale(1.03) rotate(-1deg); opacity:.96; }
+.card-touch-fantasma{ position:fixed; z-index:250; pointer-events:none; transform-origin:top left; transition:transform .12s ease; background:var(--paper); border:2px solid var(--accent); border-radius:14px; padding:12px; box-shadow:0 16px 36px rgba(0,0,0,.35); transform:scale(1.03) rotate(-1deg); opacity:.96; }
 .column.coluna-drag-alvo{ background:var(--hover-tint); outline:2px solid var(--accent); outline-offset:-2px; border-radius:14px; }
 
 /* alça de arraste — área bem maior e clara pra segurar o card */
@@ -205,7 +205,7 @@ main.pipeline-main{ padding-bottom:4px; }
 .modal-head button:hover{ color:#fff; background:rgba(255,255,255,.1); }
 .modal-body{ padding:20px; display:flex; flex-direction:column; gap:14px; max-height:calc(70vh / var(--zoom, 1)); overflow-y:auto; }
 .field label{ font-size:12px; font-weight:600; color:var(--ink-soft); }
-.field input[type=text], .field input[type=email], .field input[type=password], .field input[type=number], .field input[type=month], .field select, .field textarea{
+.field input[type=text], .field input[type=email], .field input[type=password], .field input[type=tel], .field input[type=url], .field input[type=search], .field input[type=number], .field input[type=month], .field select, .field textarea{
   width:100%; margin-top:5px; padding:10px 12px; min-height:42px; border-radius:8px; border:1px solid var(--line); font-size:13px; outline:none; font-family:inherit; color:var(--ink); background:var(--paper);
 }
 /* Campos de data/hora — estilizados à parte porque, por padrão, o navegador não
@@ -270,7 +270,7 @@ input[type=date]::-webkit-calendar-picker-indicator:hover, input[type=time]::-we
 .auth-subtitle{ font-size:12px; color:var(--ink-soft); text-align:center; margin:4px 0 20px; }
 .auth-tabs{ display:flex; gap:6px; margin-bottom:18px; background:var(--col-bg); border-radius:10px; padding:4px; }
 .auth-tab{ flex:1; padding:10px; min-height:40px; border-radius:8px; border:none; background:none; font-size:12px; font-weight:600; color:var(--ink-soft); cursor:pointer; }
-.auth-tab.active{ background:var(--accent); color:#fff; }
+.auth-tab.active{ color:#fff; }
 .auth-form{ display:flex; flex-direction:column; gap:14px; }
 .auth-submit{ margin-top:6px; padding:12px; min-height:44px; font-size:13px; width:100%; }
 .auth-box .error-banner{ position:static; margin:0 0 14px; box-shadow:none; animation:none; max-width:none; }
@@ -1285,3 +1285,51 @@ main.pipeline-main{ padding-left:0; padding-right:0; padding-top:16px; }
 .card-faixa .card-drag-handle{ flex:1; width:100%; align-items:flex-end; padding-bottom:10px; background:none; border-right:none; }
 .card-faixa .card-move-wrap{ width:100%; background:none; border-right:none; padding-bottom:12px; align-items:flex-start; flex:1; }
 .card-faixa .card-move-btn{ width:30px; height:30px; border:1px solid var(--line); background:var(--paper); color:var(--ink); }
+
+.card-touch-fantasma.compacto{ transform:scale(.55) rotate(-1deg); opacity:.9; }
+
+/* Tela de login: botões no mesmo tom e na mesma largura (Entrar, Criar conta, Google) */
+[data-theme="dark"] .auth-tab.active{ color:var(--bg); }
+[data-theme="dark"] .auth-submit{ background:var(--ink); color:var(--bg); }
+.auth-submit{ border-radius:10px; min-height:44px; }
+.auth-box .field input:focus{ border-color:var(--accent); box-shadow:0 0 0 3px var(--hover-tint); }
+[data-theme="dark"] .auth-box .field input:focus{ border-color:var(--ink-soft); }
+.google-btn-wrap{ width:100%; display:block; min-height:44px; }
+.google-btn-wrap > div{ border-radius:10px; overflow:hidden; }
+.google-btn-wrap iframe{ display:block; margin:0 auto; }
+
+/* Login: bloco que desliza entre as abas, campos que saem/entram, passo do nome */
+.auth-tabs{ position:relative; }
+.auth-tab{ position:relative; z-index:1; transition:color .25s ease; }
+.auth-tab-pill{ position:absolute; top:4px; bottom:4px; left:4px; width:calc(50% - 7px); border-radius:8px; background:var(--accent); transition:transform .32s cubic-bezier(.4,0,.2,1); }
+.auth-tabs[data-modo="register"] .auth-tab-pill{ transform:translateX(calc(100% + 6px)); }
+[data-theme="dark"] .auth-tab-pill{ background:var(--ink); }
+.auth-slide{ display:flex; flex-direction:column; gap:14px; }
+.auth-slide.sai-esq{ animation:auth-sai-esq .17s ease-in forwards; }
+.auth-slide.sai-dir{ animation:auth-sai-dir .17s ease-in forwards; }
+.auth-slide.entra-dir{ animation:auth-entra-dir .23s ease-out; }
+.auth-slide.entra-esq{ animation:auth-entra-esq .23s ease-out; }
+@keyframes auth-sai-esq{ to{ opacity:0; transform:translateX(-28px); } }
+@keyframes auth-sai-dir{ to{ opacity:0; transform:translateX(28px); } }
+@keyframes auth-entra-dir{ from{ opacity:0; transform:translateX(28px); } to{ opacity:1; transform:none; } }
+@keyframes auth-entra-esq{ from{ opacity:0; transform:translateX(-28px); } to{ opacity:1; transform:none; } }
+.auth-box{ transition:height .3s cubic-bezier(.4,0,.2,1); }
+#auth-main.passo-sai, #nome-form.passo-sai{ animation:auth-sai-esq .17s ease-in forwards; }
+#auth-main.passo-entra, #nome-form.passo-entra{ animation:auth-entra-dir .3s ease-out; }
+#nome-form{ flex-direction:column; }
+.auth-passo-titulo{ font-family:'Fraunces',serif; font-size:20px; font-weight:600; margin:0; text-align:center; }
+#nome-form .settings-page-note{ text-align:center; }
+#nome-form .error-banner{ margin:0; }
+@media (prefers-reduced-motion: reduce){ .auth-tab-pill, .auth-box{ transition:none; } .auth-slide, #auth-main, #nome-form{ animation:none !important; } }
+.a11y-sem-animacao .auth-tab-pill, .a11y-sem-animacao .auth-box{ transition:none; }
+
+/* Gestão > Membros: botão "Opções" em cada pessoa, que abre uma janela por cima com as ações */
+.membro-card{ flex-wrap:nowrap; }
+.membro-info{ min-width:0; }
+.membro-opcoes-btn{ flex-shrink:0; min-height:44px; padding:0 18px; border-radius:10px; }
+.modal-opcoes-membro .modal-body{ display:flex; flex-direction:column; gap:10px; }
+.opcao-membro{ display:flex; flex-direction:column; align-items:flex-start; gap:3px; width:100%; min-height:56px; padding:12px 16px; border-radius:12px; border:1px solid var(--line); background:var(--paper); color:var(--ink); font-family:inherit; text-align:left; cursor:pointer; }
+.opcao-membro b{ font-size:14px; font-weight:600; }
+.opcao-membro span{ font-size:12px; color:var(--ink-soft); }
+.opcao-membro:hover{ border-color:var(--ink); }
+.opcao-perigo b{ color:var(--danger); }

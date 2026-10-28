@@ -12,7 +12,15 @@ document.documentElement.setAttribute('data-theme', localStorage.getItem('darkMo
 const form = document.getElementById('auth-form');
 const errorBox = document.getElementById('auth-error');
 const submitBtn = document.getElementById('auth-submit');
-const fieldNome = document.getElementById('field-nome');
+const authTabs = document.querySelector('.auth-tabs');
+const authMain = document.getElementById('auth-main');
+const authSlide = document.getElementById('auth-slide');
+const authBox = document.querySelector('.auth-box');
+const nomeForm = document.getElementById('nome-form');
+const nomeError = document.getElementById('nome-error');
+const esqueciWrap = document.getElementById('esqueci-wrap');
+const SEM_ANIM = ()=> document.documentElement.classList.contains('a11y-sem-animacao') || (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+const esperar = (ms)=> new Promise(r=> setTimeout(r, SEM_ANIM() ? 0 : ms));
 const twofaForm = document.getElementById('twofa-form');
 const twofaSubmitBtn = document.getElementById('twofa-submit');
 const authDivider = document.getElementById('auth-divider');
@@ -69,14 +77,86 @@ if(localStorage.getItem('token')){
   el.hidden = false;
 })();
 
+// Troca de aba: o bloco claro desliza (CSS) e os campos saem para um lado e entram pelo outro.
+// O que já foi digitado fica. A caixa tem a mesma altura nas duas abas.
+let trocandoAba = false;
+function aplicarModo(){
+  submitBtn.textContent = modo==='register' ? 'Criar conta' : 'Entrar';
+  const senha = document.getElementById('a-senha');
+  senha.placeholder = modo==='register' ? 'Mínimo 6 caracteres' : 'Senha';
+  senha.setAttribute('autocomplete', modo==='register' ? 'new-password' : 'current-password');
+  esqueciWrap.style.visibility = modo==='register' ? 'hidden' : '';
+}
 document.querySelectorAll('.auth-tab').forEach(btn=>{
-  btn.addEventListener('click', ()=>{
+  btn.addEventListener('click', async ()=>{
+    if(btn.dataset.mode === modo || trocandoAba) return;
+    trocandoAba = true;
+    const paraDireita = btn.dataset.mode === 'register';
     modo = btn.dataset.mode;
     document.querySelectorAll('.auth-tab').forEach(b=> b.classList.toggle('active', b===btn));
-    fieldNome.style.display = modo==='register' ? 'block' : 'none';
-    submitBtn.textContent = modo==='register' ? 'Criar conta' : 'Entrar';
+    authTabs.dataset.modo = modo;
     errorBox.style.display = 'none';
+    authSlide.classList.add(paraDireita ? 'sai-esq' : 'sai-dir');
+    await esperar(170);
+    aplicarModo();
+    authSlide.classList.remove('sai-esq','sai-dir');
+    authSlide.classList.add(paraDireita ? 'entra-dir' : 'entra-esq');
+    await esperar(230);
+    authSlide.classList.remove('entra-dir','entra-esq');
+    trocandoAba = false;
   });
+});
+
+// Criar conta em dois passos: e-mail e senha; depois "Como podemos te chamar?".
+// A conta só é criada no segundo passo (com o nome) — quem desiste no meio não deixa conta sem nome.
+async function trocarPasso(sai, entra, displayEntra){
+  const h0 = authBox.offsetHeight;
+  sai.classList.add('passo-sai');
+  await esperar(170);
+  sai.style.display = 'none'; sai.classList.remove('passo-sai');
+  entra.style.display = displayEntra;
+  const h1 = authBox.offsetHeight;
+  if(!SEM_ANIM() && h0 !== h1){
+    authBox.style.height = h0 + 'px'; authBox.style.overflow = 'hidden';
+    void authBox.offsetHeight; // registra a altura antiga antes de animar
+    authBox.style.height = h1 + 'px';
+  }
+  entra.classList.add('passo-entra');
+  await esperar(300);
+  entra.classList.remove('passo-entra');
+  authBox.style.height = ''; authBox.style.overflow = '';
+}
+async function irParaPassoNome(){
+  await trocarPasso(authMain, nomeForm, 'flex');
+  document.getElementById('a-nome').focus();
+}
+document.getElementById('nome-voltar').addEventListener('click', async (e)=>{
+  e.preventDefault();
+  nomeError.style.display = 'none';
+  await trocarPasso(nomeForm, authMain, '');
+});
+nomeForm.addEventListener('submit', async (e)=>{
+  e.preventDefault();
+  nomeError.style.display = 'none';
+  const nome = document.getElementById('a-nome').value.trim();
+  if(!nome){ nomeError.textContent = 'Escreva o seu nome.'; nomeError.style.display = 'block'; return; }
+  const btn = document.getElementById('nome-submit');
+  btn.disabled = true;
+  try{
+    const res = await fetch(API_BASE + '/auth/register', {
+      method:'POST', headers:{ 'Content-Type':'application/json' },
+      body: JSON.stringify({ nome, email: document.getElementById('a-email').value.trim(), senha: document.getElementById('a-senha').value }),
+    });
+    const data = await res.json();
+    if(!res.ok){ throw new Error(data.error || 'Não foi possível criar a conta. Tente novamente.'); }
+    localStorage.setItem('token', data.token);
+    localStorage.setItem('user', JSON.stringify(data.user));
+    irDepoisDoLogin();
+  }catch(err){
+    nomeError.textContent = err.message;
+    nomeError.style.display = 'block';
+    btn.disabled = false;
+  }
 });
 
 form.addEventListener('submit', async (e)=>{
@@ -86,10 +166,16 @@ form.addEventListener('submit', async (e)=>{
 
   const email = document.getElementById('a-email').value.trim();
   const senha = document.getElementById('a-senha').value;
-  const nome = document.getElementById('a-nome').value.trim();
+  if(modo==='register'){
+    // primeiro e-mail e senha; o nome vem no passo seguinte e só então a conta é criada
+    submitBtn.disabled = false;
+    if(senha.length < 6){ errorBox.textContent = 'A senha precisa ter ao menos 6 caracteres.'; errorBox.style.display = 'block'; return; }
+    irParaPassoNome();
+    return;
+  }
 
-  const path = modo==='register' ? '/auth/register' : '/auth/login';
-  const body = modo==='register' ? { nome, email, senha } : { email, senha };
+  const path = '/auth/login';
+  const body = { email, senha };
 
   try{
     const res = await fetch(API_BASE + path, {
@@ -169,7 +255,10 @@ function initGoogleButton(clientId){
   });
   google.accounts.id.renderButton(
     document.getElementById('google-btn-container'),
-    { theme:'outline', size:'large', width:320, text:'continue_with', locale:'pt-BR' }
+    { theme: document.documentElement.getAttribute('data-theme')==='dark' ? 'filled_black' : 'outline',
+      size:'large', shape:'rectangular',
+      width: Math.min(400, Math.max(200, Math.round(document.getElementById('google-btn-container').clientWidth) || 320)),
+      text:'continue_with', locale:'pt-BR' }
   );
 }
 fetch(API_BASE + '/config/integracoes')
@@ -211,7 +300,6 @@ async function handleGoogleCredential(response){
 const esqueciForm = document.getElementById('esqueci-form');
 const resetForm = document.getElementById('reset-form');
 const infoBox = document.getElementById('auth-info');
-const authTabs = document.querySelector('.auth-tabs');
 
 function mostrarSomente(qual){ // 'login' | 'esqueci' | 'reset'
   form.style.display = qual==='login' ? '' : 'none';

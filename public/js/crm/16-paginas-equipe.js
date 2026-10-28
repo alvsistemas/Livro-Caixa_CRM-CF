@@ -335,6 +335,39 @@ function renderSupervisaoConteudo(){
       </div>
     </div>`;
 }
+// Gestão > Membros: as ações de cada pessoa ficam numa janela por cima (botão "Opções"),
+// cada uma com uma frase explicando. Chama as mesmas funções de antes.
+function abrirOpcoesMembroModal(userId){
+  const m = (equipe && equipe.membros || []).find(x=> String(x.id) === String(userId));
+  if(!m || m.souEu) return;
+  const nome = m.nome || m.email;
+  const ehGestor = m.papel === 'supervisor';
+  const root = document.getElementById('modal-root');
+  root.innerHTML = `
+    <div class="overlay" id="opcoes-membro-overlay">
+      <div class="modal modal-opcoes-membro" role="dialog" aria-label="Opções de ${esc(nome)}">
+        <div class="modal-head"><h3>${esc(nome)}</h3><button type="button" id="opcoes-membro-close" aria-label="Fechar">✕</button></div>
+        <div class="modal-body">
+          <p class="settings-page-note" style="margin:0">${ehGestor?'⭐ Gestor':'Membro'}${m.supervisorDeDados?' · 🛠 Supervisor de dados':''}</p>
+          <button type="button" class="opcao-membro" id="opcao-papel"><b>${ehGestor?'Tirar de gestor':'Tornar gestor'}</b><span>${ehGestor?'Deixa de ver e gerir a equipe.':'Passa a ver e gerir a equipe.'}</span></button>
+          <button type="button" class="opcao-membro" id="opcao-dados"><b>${m.supervisorDeDados?'Tirar supervisor de dados':'Tornar supervisor de dados'}</b><span>Acesso ao monitoramento de erros, em Configurações.</span></button>
+          <button type="button" class="opcao-membro opcao-perigo" id="opcao-remover"><b>Remover da equipe</b><span>O funil dele continua intocado; só perde acesso ao chat e à gestão.</span></button>
+        </div>
+      </div>
+    </div>`;
+  const fechar = ()=>{ root.innerHTML = ''; };
+  document.getElementById('opcoes-membro-close').addEventListener('click', fechar);
+  document.getElementById('opcoes-membro-overlay').addEventListener('click', (e)=>{ if(e.target.id === 'opcoes-membro-overlay') fechar(); });
+  document.getElementById('opcao-papel').addEventListener('click', ()=>{ fechar(); alterarPapelMembro(m.id, ehGestor ? 'membro' : 'supervisor'); });
+  document.getElementById('opcao-dados').addEventListener('click', ()=>{ fechar(); alterarSupervisorDeDados(m.id, !m.supervisorDeDados); });
+  document.getElementById('opcao-remover').addEventListener('click', ()=>{
+    fechar();
+    showConfirm({
+      message: 'Remover esse membro da equipe? O funil dele continua intocado, só perde acesso ao chat e à supervisão.',
+      onConfirm: ()=>{ removerMembro(m.id); closeConfirm(); },
+    });
+  });
+}
 function renderGestaoMembros(){
   return `
     <div class="settings-page-section">
@@ -348,12 +381,7 @@ function renderGestaoMembros(){
               <span>${esc(m.email||'')}</span>
               <span class="membro-selos"><span class="membro-selo ${m.papel==='supervisor'?'forte':''}">${m.papel==='supervisor'?'⭐ Gestor':'Membro'}</span>${m.supervisorDeDados?'<span class="membro-selo">🛠 Supervisor de dados</span>':''}</span>
             </div>
-            ${!m.souEu ? `
-              <div class="membro-acoes">
-                <button class="btn-outline gestao-mini" data-action="alterar-papel-membro" data-user-id="${m.id}" data-papel="${m.papel==='supervisor'?'membro':'supervisor'}">${m.papel==='supervisor'?'Tirar de gestor':'Tornar gestor'}</button>
-                <button class="btn-outline gestao-mini" data-action="toggle-supervisor-dados" data-user-id="${m.id}" data-ativo="${m.supervisorDeDados?'0':'1'}" title="Acesso ao monitoramento de erros, em Configurações">${m.supervisorDeDados?'Tirar supervisor de dados':'Supervisor de dados'}</button>
-                <button class="delete-link gestao-mini" data-action="remover-membro" data-user-id="${m.id}">Remover</button>
-              </div>` : ''}
+            ${!m.souEu ? `<button type="button" class="btn-outline membro-opcoes-btn" data-action="abrir-opcoes-membro" data-user-id="${m.id}" aria-label="Opções de ${esc(m.nome||m.email)}">Opções</button>` : ''}
           </div>
         `).join('')}
       </div>
