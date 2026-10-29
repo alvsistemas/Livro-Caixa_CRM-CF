@@ -112,7 +112,7 @@ describe('API com PostgreSQL (integração)', { skip: pular }, () => {
     const t = contas.ana.token;
     const leads = contas.ana.colunas.find((c) => c.nome === 'Novos contatos');
     const ganho = contas.ana.colunas.find((c) => c.tipo === 'ganho');
-    const c = await api('POST', '/api/cards', { cliente: 'João Silva', columnId: leads.id, valor: 10000.555, telefone: '(15) 99999-1234', etiquetas: ['vip'] }, t);
+    const c = await api('POST', '/api/cards', { cliente: 'João Silva', columnId: leads.id, tipoProduto: 'padrao', valor: 10000.555, telefone: '(15) 99999-1234', etiquetas: ['vip'] }, t);
     assert.equal(c.status, 201, JSON.stringify(c.dados));
     assert.equal(c.dados.valor, 10000.56);
     contas.ana.card = c.dados;
@@ -134,13 +134,44 @@ describe('API com PostgreSQL (integração)', { skip: pular }, () => {
     const t = contas.ana.token;
     const leads = contas.ana.colunas.find((c) => c.nome === 'Novos contatos');
     const ganho = contas.ana.colunas.find((c) => c.tipo === 'ganho');
-    const c = await api('POST', '/api/cards', { cliente: 'Pela ficha', columnId: leads.id, valor: 2000 }, t);
+    const c = await api('POST', '/api/cards', { cliente: 'Pela ficha', columnId: leads.id, valor: 2000, tipoProduto: 'padrao' }, t);
     const ed = await api('PUT', `/api/cards/${c.dados.id}`, { columnId: ganho.id, valor: 2000 }, t);
     assert.equal(ed.status, 200, JSON.stringify(ed.dados));
     assert.match(ed.dados.mes, /^\d{4}-\d{2}/);
     const com = await api('GET', '/api/comissoes', undefined, t);
     assert.ok(com.dados.contratos.some((x) => x.desc === 'Pela ficha'));
     await api('DELETE', `/api/cards/${c.dados.id}`, undefined, t);
+  });
+
+  test('produto/serviço: começa vazio, sem produto não tem comissão; escolher depois gera; produto sem % não gera', async () => {
+    const t = contas.ana.token;
+    const leads = contas.ana.colunas.find((c) => c.nome === 'Novos contatos');
+    const ganho = contas.ana.colunas.find((c) => c.tipo === 'ganho');
+    const contratosDe = async (nome) => (await api('GET', '/api/comissoes', undefined, t)).dados.contratos.filter((x) => x.desc === nome);
+    const c = await api('POST', '/api/cards', { cliente: 'Sem produto', columnId: leads.id, valor: 1000, produtoDetalhe: '2 aparelhos' }, t);
+    assert.equal(c.dados.tipoProduto, '');
+    assert.equal(c.dados.produtoDetalhe, '2 aparelhos');
+    await api('PUT', `/api/cards/${c.dados.id}/move`, { columnId: ganho.id }, t);
+    assert.equal((await contratosDe('Sem produto')).length, 0);
+    // produto criado na hora, com 4% de comissão, escolhido depois (pergunta do fechamento)
+    const r = await api('POST', '/api/regras-comissao', { nome: 'Instalação de ar', blocos: [{ parcelas: 1, percentual: 4 }] }, t);
+    assert.equal(r.dados.chave, 'instalacao_de_ar');
+    const ed = await api('PUT', `/api/cards/${c.dados.id}`, { tipoProduto: r.dados.chave }, t);
+    assert.equal(ed.status, 200, JSON.stringify(ed.dados));
+    const gerados = await contratosDe('Sem produto');
+    assert.equal(gerados.length, 1);
+    assert.equal(gerados[0].value, 40);
+    // produto sem comissão (0%): vira só o nome do que foi vendido
+    const semCom = await api('POST', '/api/regras-comissao', { nome: 'Camiseta básica', blocos: [{ parcelas: 1, percentual: 0 }] }, t);
+    const c2 = await api('POST', '/api/cards', { cliente: 'Produto sem comissão', columnId: leads.id, valor: 500, tipoProduto: semCom.dados.chave }, t);
+    await api('PUT', `/api/cards/${c2.dados.id}/move`, { columnId: ganho.id }, t);
+    assert.equal((await contratosDe('Produto sem comissão')).length, 0);
+    // contrato manual precisa do produto
+    const sem = await api('POST', '/api/comissoes', { desc: 'Manual', date: '2026-10-01', valorVenda: 100 }, t);
+    assert.equal(sem.status, 400);
+    assert.match(sem.dados.error, /produto ou serviço/);
+    for (const x of [c, c2]) await api('DELETE', `/api/cards/${x.dados.id}`, undefined, t);
+    for (const x of [r, semCom]) await api('DELETE', `/api/regras-comissao/${x.dados.id}`, undefined, t);
   });
 
   test('isolamento: outra pessoa não vê nem altera os dados', async () => {
@@ -429,7 +460,7 @@ describe('API com PostgreSQL (integração)', { skip: pular }, () => {
     const board = await api('GET', '/api/board', undefined, t);
     const leads = board.dados.columns.find((c) => c.tipo === 'aberto');
     const ganho = board.dados.columns.find((c) => c.tipo === 'ganho');
-    const c = await api('POST', '/api/cards', { cliente: 'Maria Souza', columnId: leads.id, valor: 10000 }, t);
+    const c = await api('POST', '/api/cards', { cliente: 'Maria Souza', columnId: leads.id, valor: 10000, tipoProduto: 'padrao' }, t);
     await api('PUT', `/api/cards/${c.dados.id}/move`, { columnId: ganho.id }, t);
     await new Promise((ok) => setTimeout(ok, 400)); // comissão gerada pelo Pipeline (5% de 10.000)
     let com = await api('GET', '/api/comissoes', undefined, t);
@@ -483,6 +514,8 @@ describe('API com PostgreSQL (integração)', { skip: pular }, () => {
     assert.equal(d2.some((x) => x.crmFechamento.tipo === 'frete'), false);
     assert.equal(d2.find((x) => x.crmFechamento.tipo === 'imposto').status, 'Pago');
     // regra sobre o valor negociado: a comissão volta a usar o valor do card
+    // conta nova não tem mais a regra "Padrão": cria (o nome "Padrão" gera a chave "padrao")
+    await api('POST', '/api/regras-comissao', { nome: 'Padrão', blocos: [{ parcelas: 1, percentual: 5 }] }, t);
     const regras = await api('GET', '/api/regras-comissao', undefined, t);
     const padrao = (regras.dados.regras || regras.dados).find((x) => x.chave === 'padrao');
     const mud = await api('PUT', `/api/regras-comissao/${padrao.id}`, { base: 'negociado' }, t);
@@ -490,7 +523,7 @@ describe('API com PostgreSQL (integração)', { skip: pular }, () => {
     const r3 = await api('POST', `/api/financeiro/fechamento/${c.dados.id}`, { descontoPct: 5, forma: 'avista', primeiraData: '2026-12-15', meio: 'pix' }, t);
     assert.equal(r3.dados.fechamento.comissao, 500);
     // card ganho sem valor (sem comissão do Pipeline): o fechamento cria a comissão pelo valor final
-    const semValor = await api('POST', '/api/cards', { cliente: 'Sem valor no card', columnId: leads.id, valor: 0 }, t);
+    const semValor = await api('POST', '/api/cards', { cliente: 'Sem valor no card', columnId: leads.id, valor: 0, tipoProduto: 'padrao' }, t);
     await api('PUT', `/api/cards/${semValor.dados.id}/move`, { columnId: ganho.id }, t);
     await api('PUT', `/api/regras-comissao/${padrao.id}`, { base: 'final' }, t);
     const r4 = await api('POST', `/api/financeiro/fechamento/${semValor.dados.id}`, { valorFinal: 2000, forma: 'avista', primeiraData: '2026-12-15', meio: 'pix' }, t);
@@ -504,7 +537,7 @@ describe('API com PostgreSQL (integração)', { skip: pular }, () => {
     const leads = board.dados.columns.find((c) => c.tipo === 'aberto');
     const ganho = board.dados.columns.find((c) => c.tipo === 'ganho');
     const perdido = board.dados.columns.find((c) => c.tipo === 'perdido');
-    const c = await api('POST', '/api/cards', { cliente: 'Cliente Desistiu', columnId: leads.id, valor: 3000 }, t);
+    const c = await api('POST', '/api/cards', { cliente: 'Cliente Desistiu', columnId: leads.id, valor: 3000, tipoProduto: 'padrao' }, t);
     await api('PUT', `/api/cards/${c.dados.id}/move`, { columnId: ganho.id }, t);
     await new Promise((ok) => setTimeout(ok, 400));
     await api('POST', `/api/financeiro/fechamento/${c.dados.id}`, { valorFinal: 3000, forma: 'parcelado', parcelas: 3, primeiraData: '2026-10-10', meio: 'pix', recebido: true, custos: { produto: 1000, impostoPct: 5 } }, t);
@@ -579,7 +612,7 @@ describe('API com PostgreSQL (integração)', { skip: pular }, () => {
       // o membro fica sem; a gestora continua com tudo
       const bm = await api('GET', '/api/board', undefined, membro.token);
       const col = bm.dados.columns[0];
-      const card = await api('POST', '/api/cards', { cliente: 'Lead do vendedor', columnId: col.id, valor: 100 }, membro.token);
+      const card = await api('POST', '/api/cards', { cliente: 'Lead do vendedor', columnId: col.id, valor: 100, tipoProduto: 'padrao' }, membro.token);
       const del = await api('DELETE', `/api/cards/${card.dados.id}`, undefined, membro.token);
       assert.equal(del.status, 403);
       assert.match(del.dados.error, /Excluir clientes/);
@@ -612,6 +645,8 @@ describe('API com PostgreSQL (integração)', { skip: pular }, () => {
       assert.ok(JSON.stringify(lista).includes('pelo suporte do Livro-Caixa (suporte.perm@teste.com)'));
 
       // regras de comissão de um cliente, pelo Painel do dono
+      assert.equal((await api('GET', `/api/dono/clientes/${membro.user.id}/regras`, undefined, suporte.token)).dados.regras.length, 0); // conta nova: sem regras
+      await api('POST', `/api/dono/clientes/${membro.user.id}/regras`, { nome: 'Padrão', blocos: [{ parcelas: 1, percentual: 5 }] }, suporte.token);
       const rg = await api('GET', `/api/dono/clientes/${membro.user.id}/regras`, undefined, suporte.token);
       assert.equal(rg.status, 200, JSON.stringify(rg.dados));
       const padrao = rg.dados.regras.find((r) => r.chave === 'padrao');
@@ -807,6 +842,7 @@ describe('API com PostgreSQL (integração)', { skip: pular }, () => {
     assert.ok(ed.status < 300, JSON.stringify(ed.dados));
     assert.equal(ed.dados.value, 1500);
     assert.ok((await api('DELETE', `/api/comissoes/${nova.dados.id}`, undefined, t)).status < 300);
+    await api('POST', '/api/regras-comissao', { nome: 'Padrão', blocos: [{ parcelas: 1, percentual: 5 }] }, t);
     const regras = await api('GET', '/api/regras-comissao', undefined, t);
     const r1 = regras.dados.regras[0];
     const er = await api('PUT', `/api/regras-comissao/${r1.id}`, { nome: 'Padrão novo', blocos: [{ parcelas: 2, percentual: 3 }] }, t);

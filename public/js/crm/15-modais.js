@@ -73,7 +73,7 @@ function abrirNovoCardComTipo(columnId, tipoPessoa){
     __isNew: true, id:null, columnId,
     cliente:'', valor:0, temperatura:'morno', telefone:'', obs:'',
     mes: '', mesInicioContato: dataInicial, // início de contato já vem preenchido (é agora); mês de venda fica em branco até a venda acontecer de verdade
-    etiquetas: [], camposPersonalizados: {}, tipoProduto: tipoProdutoPadrao(),
+    etiquetas: [], camposPersonalizados: {}, tipoProduto: '', produtoDetalhe: '',
     tipoPessoa, clienteFisica:'', clienteJuridica:'',
     cnpj:'', razaoSocial:'', inscricaoEstadual:'', ramoAtividade:'', contatoNome:'', contatoCargo:'',
   };
@@ -568,12 +568,7 @@ function renderModal(){
               </select>
             </div>
           </div>
-          <div class="field">
-            <label>Produto / serviço</label>
-            <select id="f-tipo-produto">
-              ${renderOpcoesTipoProduto(f.tipoProduto||'padrao')}
-            </select>
-          </div>
+          ${htmlCampoProduto('f', f.tipoProduto||'', { detalhe: f.produtoDetalhe||'' })}
           <div class="field-row">
             <div class="field">
               <label>Mês de início de contato</label>
@@ -687,8 +682,7 @@ function renderModal(){
   const toggleArquivarBtn = document.getElementById('f-toggle-arquivar');
   if(toggleArquivarBtn) toggleArquivarBtn.addEventListener('click', toggleArquivarCard);
   document.getElementById('f-coluna').addEventListener('change', (e)=> modalForm.columnId = e.target.value);
-  const tipoProdutoEl = document.getElementById('f-tipo-produto');
-  if(tipoProdutoEl) tipoProdutoEl.addEventListener('change', (e)=> modalForm.tipoProduto = e.target.value);
+  ligarCampoProduto('f', (chave)=>{ modalForm.tipoProduto = chave; }, { aoDetalhe: (t)=>{ modalForm.produtoDetalhe = t; } });
   document.getElementById('f-mes').addEventListener('change', (e)=>{
     modalForm.mes = e.target.value;
     atualizarNotaCicloDeVenda();

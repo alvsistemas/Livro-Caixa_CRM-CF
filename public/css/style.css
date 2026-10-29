@@ -1333,3 +1333,30 @@ main.pipeline-main{ padding-left:0; padding-right:0; padding-top:16px; }
 .opcao-membro span{ font-size:12px; color:var(--ink-soft); }
 .opcao-membro:hover{ border-color:var(--ink); }
 .opcao-perigo b{ color:var(--danger); }
+
+/* ---------- Produto / serviço: campo de digitar com sugestões (js/crm/18-produto-servico.js) ---------- */
+.ps-wrap{ position:relative; }
+.ps-input{ width:100%; box-sizing:border-box; }
+.ps-lista{ position:absolute; left:0; right:0; top:calc(100% + 6px); z-index:40; max-height:300px; overflow-y:auto; background:var(--paper); border:1px solid var(--line); border-radius:10px; box-shadow:0 14px 30px rgba(0,0,0,.22); }
+.ps-grupo{ font-size:10.5px; letter-spacing:.06em; text-transform:uppercase; color:var(--ink-soft); padding:10px 14px 4px; }
+.ps-item, .ps-criar{ display:flex; justify-content:space-between; align-items:center; gap:10px; width:100%; min-height:40px; padding:8px 14px; border:none; background:none; color:var(--ink); font:inherit; font-size:13px; text-align:left; cursor:pointer; }
+.ps-item small{ color:var(--ink-soft); font-size:11.5px; white-space:nowrap; }
+.ps-item.on, .ps-item:hover, .ps-criar.on, .ps-criar:hover{ background:var(--hover-tint); }
+.ps-criar{ justify-content:flex-start; gap:4px; border-top:1px solid var(--line); }
+.ps-vazio{ padding:12px 14px; font-size:12.5px; color:var(--ink-soft); }
+.ps-escolhido{ display:flex; align-items:center; justify-content:space-between; gap:8px; min-height:42px; padding:0 4px 0 12px; border:1px solid var(--line); border-radius:8px; background:var(--paper); font-size:13px; color:var(--ink); }
+.ps-escolhido-nome{ font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.ps-limpar{ border:none; background:none; color:var(--ink-soft); cursor:pointer; min-width:36px; min-height:36px; border-radius:8px; font-size:14px; }
+.ps-limpar:hover{ background:var(--hover-tint); color:var(--ink); }
+.ps-dica{ font-size:11.5px; color:var(--ink-soft); margin:6px 0 0; }
+.ps-novo-form{ display:flex; flex-direction:column; gap:8px; padding:12px 14px; font-size:13px; color:var(--ink); }
+.ps-novo-form small{ color:var(--ink-soft); font-size:11.5px; }
+.ps-novo-pct{ display:flex; align-items:center; justify-content:space-between; gap:10px; font-size:12.5px; color:var(--ink-soft); }
+.ps-novo-pct span{ display:flex; align-items:center; gap:6px; color:var(--ink); }
+.ps-novo-pct input{ width:72px; padding:8px 10px; border:1px solid var(--line); border-radius:8px; background:var(--paper); color:var(--ink); font:inherit; text-align:right; }
+.ps-novo-botoes{ display:flex; justify-content:flex-end; gap:8px; }
+.ps-novo-botoes button{ min-height:36px; padding:0 14px; }
+.card-produto{ font-size:12px; color:var(--ink-soft); margin:4px 0 2px; overflow-wrap:anywhere; }
+.card-produto-nome{ color:var(--ink); font-weight:600; }
+.produto-venda-modal{ max-width:440px; }
+.produto-venda-modal .modal-body{ overflow:visible; }

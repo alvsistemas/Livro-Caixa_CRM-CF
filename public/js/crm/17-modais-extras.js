@@ -2,7 +2,7 @@
 // compartilham as mesmas variáveis globais (é o antigo script.js dividido, como no CRM de consórcio).
 /* ---------- modal do contrato de comissão ---------- */
 function openNewContrato(){
-  contratoModalForm = { __isNew:true, id:null, desc:'', scope:'Pessoal', valorVenda:0, tipoProduto: tipoProdutoPadrao(), date: comissoesMonth + '-01' };
+  contratoModalForm = { __isNew:true, id:null, desc:'', scope:'Pessoal', valorVenda:0, tipoProduto: '', date: comissoesMonth + '-01' };
   renderContratoModal();
 }
 function openEditContrato(id){
@@ -51,12 +51,7 @@ function renderContratoModal(){
               <div class="scope-btn ${f.scope==='Empresa'?'active':''}" data-scope="Empresa">Empresa</div>
             </div>
           </div>
-          <div class="field">
-            <label>Produto / serviço</label>
-            <select id="c-tipo-produto">
-              ${renderOpcoesTipoProduto(f.tipoProduto)}
-            </select>
-          </div>
+          ${htmlCampoProduto('c', f.tipoProduto||'', { obrigatorio: true })}
           <div class="field">
             <label>Valor da venda</label>
             <div class="money-wrap">
@@ -101,14 +96,14 @@ function renderContratoModal(){
     });
   });
 
-  document.getElementById('c-tipo-produto').addEventListener('change', (e)=>{
-    contratoModalForm.tipoProduto = e.target.value;
+  ligarCampoProduto('c', (chave)=>{
+    contratoModalForm.tipoProduto = chave;
     const prev = calcComissaoPreviewPorTipo(contratoModalForm.valorVenda, contratoModalForm.tipoProduto);
     const previewEl = document.getElementById('c-preview');
     if(previewEl) previewEl.innerHTML = previewComissaoHtml(prev);
     const notaMes = document.getElementById('c-mes-nota');
     if(notaMes) notaMes.textContent = textoNotaMesContrato(contratoModalForm.tipoProduto);
-  });
+  }, { obrigatorio: true });
 
   const valorVendaInput = document.getElementById('c-valor-venda');
   valorVendaInput.addEventListener('input', (e)=>{
@@ -203,14 +198,14 @@ function htmlRegrasLista(){
           <button id="regras-modal-close">✕</button>
         </div>
         <div class="modal-body">
-          <p class="settings-page-note">Cada regra define como uma comissão é calculada, em blocos de parcelas — como uma planilha. Crie, renomeie, edite ou exclua regras à vontade: comissões já lançadas guardam o cálculo da época e não mudam retroativamente.</p>
+          <p class="settings-page-note">Cada produto ou serviço tem a sua comissão, em blocos de parcelas (como uma planilha). Os que você cria digitando no cadastro do cliente também aparecem aqui — ajuste a comissão se precisar. Produto sem comissão (0%) serve só para identificar o que foi vendido.</p>
           ${!regrasComissaoLoaded ? `<div class="tasks-empty">Carregando…</div>` : (regrasComissao.length ? `
             <div class="regras-lista">
               ${regrasComissao.map(r=>`
                 <div class="regra-row">
                   <div class="regra-row-info">
                     <div class="regra-row-nome">${esc(r.nome)} ${r.mesIndependente?'<span class="badge badge-neutral" title="O mês da comissão pode ser editado sem alterar o mês do contato">Mês independente</span>':''}</div>
-                    <div class="regra-row-blocos">${(r.blocos||[]).map(b=>`${b.parcelas}x ${(b.percentual*100).toLocaleString('pt-BR',{maximumFractionDigits:6})}%`).join(' · ')}</div>
+                    <div class="regra-row-blocos">${pctDaRegra(r) > 0 ? (r.blocos||[]).map(b=>`${b.parcelas}x ${(b.percentual*100).toLocaleString('pt-BR',{maximumFractionDigits:6})}%`).join(' · ') : 'Sem comissão'}</div>
                   </div>
                   <div class="regra-row-actions">
                     <button class="icon-btn" data-action="editar-regra" data-regra-id="${r.id}" title="Editar">${ICON_EDIT}</button>
@@ -219,7 +214,7 @@ function htmlRegrasLista(){
                 </div>
               `).join('')}
             </div>
-          ` : `<div class="tasks-empty">Nenhuma regra cadastrada ainda.</div>`)}
+          ` : `<div class="tasks-empty">Nenhum produto ou serviço ainda. Crie aqui em "+ Nova regra" ou digitando o nome no cadastro do cliente.</div>`)}
         </div>
         <div class="modal-foot">
           <span></span>

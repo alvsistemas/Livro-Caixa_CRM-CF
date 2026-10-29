@@ -473,6 +473,7 @@ function renderCard(card){
             <span class="card-name">${card.tipoPessoa==='juridica' ? '🏢 ' : ''}${esc(card.cliente) || 'Sem nome'}</span>
             <span class="temp-badge" style="color:${temp.color};background:${temp.bg}">${temp.emoji} ${temp.label}</span>
           </div>
+          ${card.tipoProduto || card.produtoDetalhe ? `<div class="card-produto">${card.tipoProduto ? `<span class="card-produto-nome">${esc(nomeDoProduto(card.tipoProduto))}</span>` : ''}${card.tipoProduto && card.produtoDetalhe ? ' · ' : ''}${card.produtoDetalhe ? `<span>${esc(card.produtoDetalhe)}</span>` : ''}</div>` : ''}
           <div class="card-value-row">
             ${card.fechamento && !card.fechamento.cancelado && Number(card.fechamento.valorFinal) !== Number(card.valor)
               ? `<span class="card-value" title="Valor final do fechamento (no card: ${fmtBRL(card.valor)})">${fmtBRL(card.fechamento.valorFinal)}</span>`

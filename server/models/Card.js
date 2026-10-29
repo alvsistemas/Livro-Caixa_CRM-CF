@@ -22,7 +22,8 @@ module.exports = definirModelo('Card', {
     telefoneNormalizado: { type: 'string', default: null }, // só dígitos, com DDI — casa mensagens do WhatsApp
     instagramId: { type: 'string', default: null }, // remetente no Instagram — casa mensagens de DM
     obs: { type: 'string', default: '' },
-    tipoProduto: { type: 'string', default: 'padrao', trim: true },
+    tipoProduto: { type: 'string', default: '', trim: true }, // chave da regra de comissão (o produto/serviço); vazio = sem produto
+    produtoDetalhe: { type: 'string', default: '', trim: true }, // detalhe livre do que foi vendido (não mexe na comissão)
     mes: { type: 'string', default: '' }, // "YYYY-MM" ou "YYYY-MM-DD" — mês de venda
     mesInicioContato: { type: 'string', default: '' },
     colunaDesde: { type: 'date', default: () => new Date() }, // quando entrou na coluna atual

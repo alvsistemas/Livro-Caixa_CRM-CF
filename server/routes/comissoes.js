@@ -33,7 +33,8 @@ router.post('/', async (req, res) => {
     if (valorNum <= 0) {
       return res.status(400).json({ error: 'Valor da venda é obrigatório.' });
     }
-    const tipo = tipoProduto && String(tipoProduto).trim() ? String(tipoProduto).trim() : 'padrao';
+    const tipo = tipoProduto && String(tipoProduto).trim() ? String(tipoProduto).trim() : '';
+    if (!tipo) return res.status(400).json({ error: 'Escolha o produto ou serviço: é ele que define a comissão.' });
     const regra = await obterRegraPorChave(req.userId, tipo);
 
     const { parcelas, parcelas1, value, value2, blocos } = calcComissaoPorRegra(valorNum, regra);
@@ -76,7 +77,7 @@ router.put('/:id', async (req, res) => {
       if (!contratoAtual) return res.status(404).json({ error: 'Contrato não encontrado.' });
       const valorNum = valorVenda !== undefined ? (parseFloat(valorVenda) || 0) : contratoAtual.valorVenda;
       const tipo = tipoProduto !== undefined
-        ? (String(tipoProduto).trim() || 'padrao')
+        ? (String(tipoProduto).trim() || contratoAtual.tipoProduto || 'padrao')
         : (contratoAtual.tipoProduto || 'padrao');
       const regra = await obterRegraPorChave(req.userId, tipo);
       const { parcelas, parcelas1, value, value2, blocos } = calcComissaoPorRegra(valorNum, regra);
@@ -101,7 +102,7 @@ router.put('/:id', async (req, res) => {
     // a regra dessa comissão marca o mês como independente (pagamentos que podem demorar a
     // acontecer de verdade).
     const regraDoContrato = await obterRegraPorChave(req.userId, contrato.tipoProduto);
-    if (date && contrato.cardId && !regraDoContrato.mesIndependente) {
+    if (date && contrato.cardId && !(regraDoContrato && regraDoContrato.mesIndependente)) {
       const novoMes = contrato.date.toISOString().slice(0, 10); // "YYYY-MM-DD" — o contrato sempre usa o dia 1, mas mantém o formato de data completa igual ao do lead
       await Card.findOneAndUpdate({ _id: contrato.cardId, userId: req.userId }, { mes: novoMes });
     }

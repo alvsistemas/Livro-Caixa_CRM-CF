@@ -67,7 +67,7 @@ async function executarAutomacoesDaColuna(userId, colunaId, card) {
   }
 }
 
-const CAMPOS_PERMITIDOS = ['columnId', 'cliente', 'valor', 'temperatura', 'telefone', 'obs', 'mes', 'mesInicioContato', 'etiquetas', 'camposPersonalizados', 'tipoProduto', 'tipoPessoa', 'cnpj', 'razaoSocial', 'inscricaoEstadual', 'ramoAtividade', 'contatoNome', 'contatoCargo'];
+const CAMPOS_PERMITIDOS = ['columnId', 'cliente', 'valor', 'temperatura', 'telefone', 'obs', 'mes', 'mesInicioContato', 'etiquetas', 'camposPersonalizados', 'tipoProduto', 'produtoDetalhe', 'tipoPessoa', 'cnpj', 'razaoSocial', 'inscricaoEstadual', 'ramoAtividade', 'contatoNome', 'contatoCargo'];
 function filtrarCampos(body) {
   const dados = {};
   for (const campo of CAMPOS_PERMITIDOS) {
@@ -120,7 +120,7 @@ router.get('/duplicados', async (req, res) => {
 });
 
 // POST /api/cards/unificar { manterId, juntarIds: [...] } -> junta tudo no contato mantido e arquiva os outros
-const CAMPOS_PARA_COMPLETAR = ['cnpj', 'razaoSocial', 'inscricaoEstadual', 'ramoAtividade', 'contatoNome', 'contatoCargo', 'tipoProduto', 'obs'];
+const CAMPOS_PARA_COMPLETAR = ['cnpj', 'razaoSocial', 'inscricaoEstadual', 'ramoAtividade', 'contatoNome', 'contatoCargo', 'tipoProduto', 'produtoDetalhe', 'obs'];
 router.post('/unificar', async (req, res) => {
   try {
     const manterId = String((req.body && req.body.manterId) || '');
@@ -280,6 +280,12 @@ router.put('/:id', async (req, res) => {
       await gerarComissaoAutomaticaSeGanho(req.userId, card, dados.columnId);
       await cancelarComissaoSePerdidoAposGanho(req.userId, card, dados.columnId);
       const recarregado = await Card.findOne({ _id: card._id, userId: req.userId }); // a comissão pode ter preenchido o mês de venda
+      if (recarregado) card = recarregado;
+    } else if (dados.tipoProduto !== undefined && dados.tipoProduto) {
+      // escolheu o produto depois de a venda já estar em "ganho" (ex.: pela pergunta do fechamento):
+      // gera a comissão agora (não duplica se já existir)
+      await gerarComissaoAutomaticaSeGanho(req.userId, card, card.columnId);
+      const recarregado = await Card.findOne({ _id: card._id, userId: req.userId });
       if (recarregado) card = recarregado;
     }
 

@@ -1,24 +1,23 @@
 const RegraComissao = require('../models/RegraComissao');
 
-/* ---- Regras padrão do sistema ----
-   Servem de ponto de partida pra cada usuário na primeira vez que ele acessa Comissões.
-   O usuário pode editar, renomear, excluir e criar outras na engrenagem (ex: uma regra
-   por produto, serviço ou linha de venda). */
+/* ---- Regra antiga "Padrão" ----
+   Até a versão 20261176 toda conta nascia com a regra "Padrão" (5% numa parcela) e todo contato
+   apontava para ela. Agora a conta começa SEM regras: o produto/serviço do contato começa vazio e
+   só tem comissão quem cria um produto com comissão. Esta regra fica só como reserva para os
+   contatos e contratos antigos que apontam para "padrao" e cuja regra foi apagada. */
 const REGRAS_PADRAO = [
   { chave: 'padrao', nome: 'Padrão', blocos: [{ parcelas: 1, percentual: 0.05 }], mesIndependente: false, padrao: true, ordem: 0 },
 ];
 
-// Garante que o usuário tenha regras cadastradas — na primeira vez, cria as padrão.
-// Sempre devolve em ordem de exibição.
+// Regras (produtos/serviços) do usuário, em ordem de exibição. Não cria nada sozinho.
 async function obterRegrasDoUsuario(userId) {
   const existentes = await RegraComissao.find({ userId });
-  if (existentes.length > 0) {
-    return existentes.sort((a, b) => a.ordem - b.ordem);
-  }
-  const criadas = await RegraComissao.insertMany(
-    REGRAS_PADRAO.map((r) => ({ ...r, userId }))
-  );
-  return criadas.sort((a, b) => a.ordem - b.ordem);
+  return existentes.sort((a, b) => a.ordem - b.ordem);
+}
+
+// Soma de todos os percentuais (0 = produto sem comissão)
+function percentualTotalDaRegra(regra) {
+  return (regra && Array.isArray(regra.blocos) ? regra.blocos : []).reduce((s, b) => s + (Number(b.percentual) || 0) * Math.max(1, parseInt(b.parcelas, 10) || 1), 0);
 }
 
 // Busca uma regra específica pela chave (ex: "padrao"). Se por algum motivo não existir
@@ -26,6 +25,7 @@ async function obterRegrasDoUsuario(userId) {
 // regra padrão equivalente sem nunca quebrar o cálculo — na pior das hipóteses, uma
 // regra genérica de 1 parcela e 0%.
 async function obterRegraPorChave(userId, chave) {
+  if (!chave) return null; // contato sem produto/serviço: sem comissão
   const regras = await obterRegrasDoUsuario(userId);
   const encontrada = regras.find((r) => r.chave === chave);
   if (encontrada) return encontrada;
@@ -57,4 +57,4 @@ async function gerarChaveUnica(userId, nome, ignorarId) {
   return `${base}_${n}`;
 }
 
-module.exports = { REGRAS_PADRAO, obterRegrasDoUsuario, obterRegraPorChave, slugify, gerarChaveUnica };
+module.exports = { REGRAS_PADRAO, obterRegrasDoUsuario, obterRegraPorChave, percentualTotalDaRegra, slugify, gerarChaveUnica };

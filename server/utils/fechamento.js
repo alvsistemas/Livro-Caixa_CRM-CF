@@ -9,7 +9,7 @@
 const crypto = require('crypto');
 const { query, transacao } = require('../db/pool');
 const Contrato = require('../models/Contrato');
-const { obterRegraPorChave } = require('./regrasComissao');
+const { obterRegraPorChave, percentualTotalDaRegra } = require('./regrasComissao');
 const { calcComissaoPorRegra } = require('./comissaoCalc');
 
 const FORMAS = ['avista', 'parcelado', 'entrada'];
@@ -230,10 +230,12 @@ function totalDaComissao(ct) {
 // Só mexe na comissão gerada pelo Pipeline (as manuais ficam como a pessoa fez).
 async function ajustarComissao(userId, card, f) {
   const regra = await obterRegraPorChave(userId, card.tipoProduto);
-  const base = regra.base === 'negociado' ? (Number(card.valor) || 0) : f.valorFinal;
   let contrato = await Contrato.findOne({ cardId: card._id, userId });
+  if (!regra) return { contrato, regra: null, base: f.valorFinal }; // sem produto/serviço: sem comissão
+  const base = regra.base === 'negociado' ? (Number(card.valor) || 0) : f.valorFinal;
   if (contrato && !contrato.geradoAutomaticamente) return { contrato, regra, base };
   if (!(base > 0)) return { contrato, regra, base };
+  if (!contrato && !(percentualTotalDaRegra(regra) > 0)) return { contrato, regra, base }; // produto sem comissão
   const calc = calcComissaoPorRegra(base, regra);
   if (!contrato) {
     const hoje = new Date();
@@ -241,7 +243,7 @@ async function ajustarComissao(userId, card, f) {
     contrato = await Contrato.create({
       userId, cardId: card._id, geradoAutomaticamente: true, desc: card.cliente || 'Cliente', scope: 'Pessoal',
       date: new Date(Number(mes.slice(0, 4)), Number(mes.slice(5, 7)) - 1, 1), valorVenda: base,
-      tipoProduto: card.tipoProduto || 'padrao', regraNome: regra.nome || '',
+      tipoProduto: card.tipoProduto, regraNome: regra.nome || '',
       parcelas: calc.parcelas, parcelas1: calc.parcelas1, value: calc.value, value2: calc.value2, blocos: calc.blocos,
     });
   } else if (Number(contrato.valorVenda) !== base) {
@@ -374,7 +376,9 @@ async function salvarTaxas(userId, novas) {
 // Regra de comissão do card (pra janela mostrar a comissão prevista)
 async function regraDoCard(userId, card) {
   const regra = await obterRegraPorChave(userId, card.tipoProduto);
-  const percentualTotal = (regra.blocos || []).reduce((s, b) => s + (Number(b.percentual) || 0) * (Math.max(1, parseInt(b.parcelas, 10) || 1)), 0);
+  if (!regra) return null; // sem produto/serviço: a janela não mostra comissão
+  const percentualTotal = percentualTotalDaRegra(regra);
+  if (!(percentualTotal > 0)) return null;
   return { nome: regra.nome || 'Padrão', base: regra.base === 'negociado' ? 'negociado' : 'final', percentualTotal };
 }
 async function definirModo(userId, modo) {

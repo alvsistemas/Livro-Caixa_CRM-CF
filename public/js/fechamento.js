@@ -89,6 +89,11 @@ async function talvezPedirFechamento(card, colunaAnteriorId) {
     }
     return;
   }
+  // venda fechada sem produto/serviço numa conta que usa comissões: pergunta qual foi (dá para pular)
+  if (entrou && !card.tipoProduto && typeof usaComissoes === 'function' && usaComissoes() && typeof perguntarProdutoDaVenda === 'function') {
+    await perguntarProdutoDaVenda(card);
+    card = board.cards.find((c) => c.id === card.id) || card;
+  }
   if (saiu) { if (fechValendo(card) && !(typeof podeCrm === 'function' && !podeCrm('funcoes', 'fechamentoVenda'))) abrirVendaDesfeita(card.id); return; }
   if (!entrou || fechValendo(card)) return;
   if (typeof podeCrm === 'function' && !podeCrm('funcoes', 'fechamentoVenda')) return; // o gestor não liberou
