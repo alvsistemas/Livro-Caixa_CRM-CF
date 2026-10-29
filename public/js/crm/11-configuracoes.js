@@ -129,7 +129,7 @@ function renderConfigSeguranca(){
         <span class="settings-page-subtitle" style="margin:0;">Log de auditoria</span>
         <span class="auditoria-toggle-seta ${auditoriaExpandida?'aberta':''}">▾</span>
       </button>
-      ${auditoriaExpandida ? `
+      ${auditoriaExpandida ? `<div class="anim-abre">
         <p class="settings-page-note">Últimos eventos de segurança da sua conta.</p>
         ${!auditoriaCarregada ? `<p class="settings-page-note">Carregando…</p>` : (auditoriaEventos.length ? `
           <div class="historico-lista">
@@ -141,7 +141,7 @@ function renderConfigSeguranca(){
             `).join('')}
           </div>
         ` : `<p class="dash-empty">Nenhum evento registrado ainda.</p>`)}
-      ` : ''}
+      </div>` : ''}
     </div>
   `;
 }
@@ -671,7 +671,7 @@ function renderConfiguracoesPage(){
     </div>
 
     <div class="config-layout ${configMobileConteudo ? 'mostrando-conteudo' : 'mostrando-lista'}">
-      <div class="config-sidebar">
+      <div class="config-sidebar" data-anim-grupo="config-lista" data-anim-troca="${configMobileConteudo}" data-anim-ordem="${configMobileConteudo?1:0}">
         ${CONFIG_CATEGORIAS.map(g=>{
           const itens = g.itens.filter(([key])=> (!acessoCrm || acessoCrm.gestor || key === 'aparencia') && (key !== 'monitoramento' || podeVerMonitoramento())); // equipe: só a aparência
           return itens.length ? `
@@ -679,7 +679,7 @@ function renderConfiguracoesPage(){
           ${itens.map(([key,label])=>`<button class="config-sidebar-item ${configCategoriaAtiva===key?'active':''}" data-action="set-config-categoria" data-categoria="${key}">${label}</button>`).join('')}
         ` : '';}).join('')}
       </div>
-      <div class="config-content">
+      <div class="config-content" data-anim-grupo="config" data-anim-troca="${configCategoriaAtiva}|${configMobileConteudo}" data-anim-ordem="${configMobileConteudo?1:0}">
         <button type="button" class="config-voltar-mobile" data-action="config-voltar-mobile">‹ Configurações</button>
         ${renderFn()}
       </div>

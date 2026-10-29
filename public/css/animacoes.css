@@ -1,0 +1,63 @@
+/* Animações de transição (usadas por js/animacoes.js) — CRM, Controle financeiro, PDV e tela de escolha.
+   Usa as propriedades "translate" e "scale" (e não "transform"), para somar com o posicionamento
+   que cada elemento já tem. "Menos animação" (acessibilidade.css) desliga tudo isto. */
+
+:root{ --anim-suave:cubic-bezier(.2,.8,.2,1); --anim-sai:cubic-bezier(.4,0,1,1); }
+/* --anim-atraso (negativo) faz a animação continuar do meio quando a tela é redesenhada durante ela */
+.anim-janela-entra, .anim-janela-entra > *, .anim-menu-entra, .anim-aviso-entra, .anim-pagina, .anim-troca, .anim-vem-direita, .anim-vem-esquerda, .anim-item-entra{ animation-delay:var(--anim-atraso, 0ms) !important; }
+
+/* ---------- janelas: fundo escurece e a caixa sobe ---------- */
+@keyframes anim-fundo-entra{ from{ opacity:0; } to{ opacity:1; } }
+@keyframes anim-fundo-sai{ from{ opacity:1; } to{ opacity:0; } }
+@keyframes anim-caixa-entra{ from{ opacity:0; translate:0 14px; scale:.97; } to{ opacity:1; translate:0 0; scale:1; } }
+@keyframes anim-caixa-sai{ from{ opacity:1; translate:0 0; scale:1; } to{ opacity:0; translate:0 10px; scale:.98; } }
+.anim-janela-entra{ animation:anim-fundo-entra .2s ease-out both; }
+.anim-janela-entra > *{ animation:anim-caixa-entra .26s var(--anim-suave) both; }
+.anim-janela-sai{ animation:anim-fundo-sai .2s ease-in both; }
+.anim-janela-sai > *{ animation:anim-caixa-sai .2s var(--anim-sai) both; }
+@media (max-width:768px){
+  /* no celular as janelas ocupam a tela: entram subindo de baixo */
+  @keyframes anim-caixa-entra-cel{ from{ opacity:.4; translate:0 48px; } to{ opacity:1; translate:0 0; } }
+  @keyframes anim-caixa-sai-cel{ from{ opacity:1; translate:0 0; } to{ opacity:0; translate:0 40px; } }
+  .anim-janela-entra > *{ animation:anim-caixa-entra-cel .28s var(--anim-suave) both; }
+  .anim-janela-sai > *{ animation:anim-caixa-sai-cel .2s var(--anim-sai) both; }
+}
+
+/* ---------- menus que abrem por cima ---------- */
+@keyframes anim-menu-entra{ from{ opacity:0; translate:0 -6px; scale:.98; } to{ opacity:1; translate:0 0; scale:1; } }
+@keyframes anim-menu-sai{ from{ opacity:1; translate:0 0; } to{ opacity:0; translate:0 -4px; } }
+.anim-menu-entra{ animation:anim-menu-entra .16s var(--anim-suave) both; transform-origin:top center; }
+.anim-menu-sai{ animation:anim-menu-sai .14s var(--anim-sai) both; }
+
+/* ---------- avisos ---------- */
+@keyframes anim-aviso-entra{ from{ opacity:0; translate:0 -8px; } to{ opacity:1; translate:0 0; } }
+@keyframes anim-aviso-sai{ from{ opacity:1; } to{ opacity:0; translate:0 -6px; } }
+.anim-aviso-entra{ animation:anim-aviso-entra .2s var(--anim-suave) both; }
+.anim-aviso-sai{ animation:anim-aviso-sai .2s var(--anim-sai) both; }
+
+/* ---------- troca de conteúdo (página, mês, etapa, seção) ---------- */
+/* página inteira: só o fade (deslizar a página mexeria nos botões fixos dela, como o "+ Novo contato") */
+@keyframes anim-pagina{ from{ opacity:0; } to{ opacity:1; } }
+.anim-pagina{ animation:anim-pagina .22s ease-out both; }
+@keyframes anim-troca{ from{ opacity:0; translate:0 6px; } to{ opacity:1; translate:0 0; } }
+@keyframes anim-vem-direita{ from{ opacity:0; translate:28px 0; } to{ opacity:1; translate:0 0; } }
+@keyframes anim-vem-esquerda{ from{ opacity:0; translate:-28px 0; } to{ opacity:1; translate:0 0; } }
+.anim-troca{ animation:anim-troca .24s var(--anim-suave) both; }
+.anim-vem-direita{ animation:anim-vem-direita .26s var(--anim-suave) both; }
+.anim-vem-esquerda{ animation:anim-vem-esquerda .26s var(--anim-suave) both; }
+
+/* ---------- item novo numa lista ---------- */
+@keyframes anim-item-entra{ from{ opacity:0; translate:0 -6px; } to{ opacity:1; translate:0 0; } }
+.anim-item-entra{ animation:anim-item-entra .26s var(--anim-suave) both; }
+
+/* ---------- botões: cor muda suave e "afunda" um pouco ao tocar ---------- */
+:where(button, .btn, .btn-save, .btn-outline, .btn-primary, .tab-btn, .chip, [role="tab"]){
+  transition:background-color .18s ease, color .18s ease, border-color .18s ease, box-shadow .18s ease, opacity .18s ease, scale .12s ease;
+}
+:where(button, .btn, [role="tab"]):active:not(:disabled){ scale:.97; }
+/* setas que giram ao abrir e chaves que deslizam */
+:where(.dash-panel-seta, .auditoria-toggle-seta, .nav-mais-seta, .seta-abre, .acordeao-seta){ transition:transform .22s var(--anim-suave), rotate .22s var(--anim-suave); }
+:where(.a11y-chave i, .switch, .toggle-switch, .switch::after, .toggle-switch::after){ transition:all .2s var(--anim-suave); }
+
+/* ---------- a gaveta (menu lateral) do celular desliza e o fundo escurece ---------- */
+.sidebar-backdrop{ transition:opacity .22s ease; }

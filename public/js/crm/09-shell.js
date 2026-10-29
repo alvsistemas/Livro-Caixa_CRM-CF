@@ -87,7 +87,7 @@ function renderApp(){
             <span>🛠 Você está no funil de <b>${esc(atuandoComo.nome)}</b> — o que você criar, editar, excluir ou mover aqui vale para o funil dele e fica registrado.</span>
             <button type="button" class="btn-outline" data-action="sair-funil-de">Sair do funil</button>
           </div>` : ''}
-        ${pageHtml}
+        <div class="pagina-anim" data-anim-troca="${currentPage}|${currentPage==='equipe' ? equipeTela : ''}">${pageHtml}</div>
       </div>
     </div>
   `;
@@ -235,6 +235,9 @@ function trocarEtapaMobile(colId, durante){
   pipelineEtapaMobileId = colId;
   if(!durante){ renderApp(); return; }
   document.querySelectorAll('.column').forEach(c=> c.classList.toggle('col-ativa-mobile', c.dataset.colId === colId));
+  const boardEl = document.querySelector('.board[data-anim-grupo="etapa"]');
+  if(boardEl) boardEl.dataset.animTroca = `${funilAtualId}|${colId}`;
+  if(window.Animar) Animar.marcar('etapa', `${funilAtualId}|${colId}`, [...document.querySelectorAll('.column')].findIndex(c=> c.dataset.colId === colId));
   document.querySelectorAll('.etapa-chip-mobile').forEach(c=>{
     const ativo = c.dataset.colId === colId;
     c.classList.toggle('active', ativo);

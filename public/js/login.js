@@ -19,7 +19,7 @@ const authBox = document.querySelector('.auth-box');
 const nomeForm = document.getElementById('nome-form');
 const nomeError = document.getElementById('nome-error');
 const esqueciWrap = document.getElementById('esqueci-wrap');
-const SEM_ANIM = ()=> document.documentElement.classList.contains('a11y-sem-animacao') || (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+const SEM_ANIM = ()=> document.documentElement.classList.contains('a11y-sem-movimento') || (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
 const esperar = (ms)=> new Promise(r=> setTimeout(r, SEM_ANIM() ? 0 : ms));
 const twofaForm = document.getElementById('twofa-form');
 const twofaSubmitBtn = document.getElementById('twofa-submit');

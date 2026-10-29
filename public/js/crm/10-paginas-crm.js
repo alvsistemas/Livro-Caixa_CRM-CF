@@ -98,7 +98,7 @@ function renderDashboardPage(){
       </div>
     </div>
 
-    <div class="metric-grid">
+    <div class="metric-grid" data-anim-grupo="dash-periodo" data-anim-troca="${dashboardPeriod}" data-anim-ordem="${['7dias','mes','trimestre','ano'].indexOf(dashboardPeriod)}">
       <div class="metric-card">
         <div class="metric-card-top"><span>Novos contatos</span><span class="metric-icon">${ICON_USERS}</span></div>
         <div class="metric-value">${m.novosLeads}</div>
@@ -291,8 +291,8 @@ function renderPipelinePage(){
     </div>
     <p class="etapas-dica-mobile">Para mudar um cliente de etapa, segure o cartão e arraste até o nome da etapa, em cima.</p>`; })()}
 
-    <main class="pipeline-main">
-      <div class="board">
+    <main class="pipeline-main" data-anim-grupo="funil" data-anim-troca="${funilAtualId}|${filterMonth||''}|${filtroEsfriando?1:0}">
+      <div class="board" data-anim-grupo="etapa" data-anim-troca="${funilAtualId}|${etapaAtivaMobile(columnsDoFunil)}" data-anim-ordem="${Math.max(0, columnsDoFunil.findIndex(c=>c.id===etapaAtivaMobile(columnsDoFunil)))}">
         ${columnsDoFunil.map(col => renderColumn(col, col.id === etapaAtivaMobile(columnsDoFunil))).join('')}
         <div class="add-col-wrap">
           ${addingCol ? `
@@ -557,7 +557,7 @@ function renderLeadsPage(){
     <div class="leads-chips-mobile" role="tablist" aria-label="Filtrar contatos">
       ${chips.map(([k,l])=>`<button type="button" role="tab" class="etapa-chip-mobile ${leadsTipoMobile===k?'active':''}" data-action="leads-tipo-mobile" data-tipo="${k}" aria-selected="${leadsTipoMobile===k}">${l} <span class="etapa-chip-qtd">${k ? leads.filter(c=> tipoDe(c)===k).length : leads.length}</span></button>`).join('')}
     </div>
-    <div class="leads-cards-mobile">
+    <div class="leads-cards-mobile" data-anim-grupo="leads-tipo" data-anim-troca="${leadsTipoMobile}" data-anim-ordem="${chips.findIndex(([k])=> k===leadsTipoMobile)}">
       ${lista.length ? lista.map(c=>{
         const col = board.columns.find(k=>k.id===c.columnId);
         const tipo = col ? (TIPOS[col.tipo] || TIPOS.aberto) : TIPOS.aberto;
@@ -576,7 +576,7 @@ function renderLeadsPage(){
     <button type="button" class="fab-novo-lead" data-action="open-new-lead">+ Novo contato</button>`;
     })()}
 
-    <div class="leads-table-wrap">
+    <div class="leads-table-wrap" data-anim-grupo="leads-filtro" data-anim-troca="${leadsStatusFilter}|${leadsOrdenarPor}">
       <table class="leads-table">
         <thead>
           <tr>
@@ -863,7 +863,7 @@ function renderTarefasPage(){
     <div class="funil-tabs" style="margin-bottom:20px;">
       ${abas.map(([key,label])=>`<button class="tab-btn ${agendaSubTab===key?'active':''}" data-action="set-agenda-subtab" data-subtab="${key}">${label}</button>`).join('')}
     </div>
-    ${agendaSubTab==='calendario' ? renderCalendarioConteudo() : renderGerotConteudo()}
+    <div data-anim-grupo="agenda-sub" data-anim-troca="${agendaSubTab}" data-anim-ordem="${agendaSubTab==='calendario'?0:1}">${agendaSubTab==='calendario' ? renderCalendarioConteudo() : renderGerotConteudo()}</div>
   `;
 }
 const GEROT_DIAS = ['Segunda','Terça','Quarta','Quinta','Sexta'];
@@ -975,7 +975,7 @@ function renderCalendarioConteudo(){
 
     <div class="month-step-nav" style="margin-bottom:16px;">
       <button class="icon-btn" data-action="agenda-mes" data-delta="-1" title="Mês anterior">‹</button>
-      <span>${monthLabel(agendaMesAtual, true)}</span>
+      <span data-anim-grupo="agenda-mes-rotulo" data-anim-troca="${agendaMesAtual}" data-anim-ordem="${ordemDoMes(agendaMesAtual)}">${monthLabel(agendaMesAtual, true)}</span>
       <button class="icon-btn" data-action="agenda-mes" data-delta="1" title="Próximo mês">›</button>
       <button class="btn-outline" data-action="agenda-hoje" style="margin-left:10px;">Hoje</button>
     </div>
@@ -987,7 +987,7 @@ function renderCalendarioConteudo(){
       </div>
     ` : ''}
 
-    <div class="agenda-grid">
+    <div class="agenda-grid" data-anim-grupo="agenda-mes" data-anim-troca="${agendaMesAtual}" data-anim-ordem="${ordemDoMes(agendaMesAtual)}">
       ${['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'].map(d=>`<div class="agenda-grid-header">${d}</div>`).join('')}
       ${celulas.map(dia=>{
         if(dia===null) return `<div class="agenda-cell agenda-cell-vazia"></div>`;
@@ -1030,7 +1030,7 @@ function renderComissoesPage(){
       <div class="page-head-actions">
         <div class="month-step-nav">
           <button class="icon-btn" data-action="comissoes-mes" data-delta="-1" title="Mês anterior">‹</button>
-          <span>${monthLabel(comissoesMonth, true)}</span>
+          <span data-anim-grupo="comissoes-mes-rotulo" data-anim-troca="${comissoesMonth}" data-anim-ordem="${ordemDoMes(comissoesMonth)}">${monthLabel(comissoesMonth, true)}</span>
           <button class="icon-btn" data-action="comissoes-mes" data-delta="1" title="Próximo mês">›</button>
         </div>
         ${renderBotaoOrdenar('comissoes', comissoesOrdenarPor, null, true)}
@@ -1039,7 +1039,7 @@ function renderComissoesPage(){
       </div>
     </div>
 
-    <div class="metric-grid">
+    <div class="metric-grid" data-anim-grupo="comissoes-mes" data-anim-troca="${comissoesMonth}" data-anim-ordem="${ordemDoMes(comissoesMonth)}">
       <div class="metric-card">
         <div class="metric-card-top"><span>Previsto este mês</span></div>
         <div class="metric-value">${fmtBRL(stats.previstoMes)}</div>

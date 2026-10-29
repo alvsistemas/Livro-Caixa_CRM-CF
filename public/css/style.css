@@ -1321,7 +1321,7 @@ main.pipeline-main{ padding-left:0; padding-right:0; padding-top:16px; }
 #nome-form .settings-page-note{ text-align:center; }
 #nome-form .error-banner{ margin:0; }
 @media (prefers-reduced-motion: reduce){ .auth-tab-pill, .auth-box{ transition:none; } .auth-slide, #auth-main, #nome-form{ animation:none !important; } }
-.a11y-sem-animacao .auth-tab-pill, .a11y-sem-animacao .auth-box{ transition:none; }
+.a11y-sem-movimento .auth-tab-pill, .a11y-sem-animacao .auth-box{ transition:none; }
 
 /* Gestão > Membros: botão "Opções" em cada pessoa, que abre uma janela por cima com as ações */
 .membro-card{ flex-wrap:nowrap; }

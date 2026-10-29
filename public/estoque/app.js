@@ -196,7 +196,7 @@
     }
     const pode = (BV.passo === 1 && BV.tipo) || (BV.passo === 2 && BV.controla !== null) || BV.passo === 3;
     $("#boas-vindas").innerHTML = `<div class="bv"><div class="bv-caixa">
-      <p class="bv-marca">PDV · primeiro acesso</p>${passos}${corpo}
+      <p class="bv-marca">PDV · primeiro acesso</p>${passos}<div data-anim-grupo="bv" data-anim-troca="${BV.passo}" data-anim-ordem="${BV.passo}">${corpo}</div>
       ${BV.erro ? `<p class="erro-form">${esc(BV.erro)}</p>` : ""}
       <div class="bv-rodape">
         ${BV.passo > 1 ? `<button class="btn claro" data-a="bv-voltar">Voltar</button>` : `<a class="btn claro" href="/">Agora não</a>`}
@@ -326,6 +326,7 @@
     const fn = { caixa: telaCaixa, vender: telaVender, pedidos: telaPedidos, mesas: telaMesas, cozinha: telaCozinha, produtos: telaProdutos, compras: telaCompras, relatorios: telaRelatorios, clientes: telaClientes, cardapio: telaCardapio, config: telaConfig }[S.tab] || telaCaixa;
     if (["pedidos", "mesas", "cozinha", "cardapio"].includes(S.tab) && !tem("restaurante")) { $("#main").innerHTML = completoHtml("restaurante"); return; }
     $("#main").innerHTML = fn();
+    if (window.Animar) Animar.trocar($("#main"), S.tab + "|" + (S.relAba || ""), { grupo: S.tab, ordem: ["vendas", "produtos", "horarios", "caixas", "despesas"].indexOf(S.relAba) });
     if (S.tab === "cardapio") desenharQr();
   }
   const topo = (titulo, sub, direita = "") => `<div class="topo"><div><h1 class="titulo">${titulo}</h1>${sub ? `<p class="sub">${sub}</p>` : ""}</div>${direita ? `<div class="linha">${direita}</div>` : ""}</div>`;

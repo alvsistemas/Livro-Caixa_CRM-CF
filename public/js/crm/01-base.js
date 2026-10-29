@@ -28,6 +28,8 @@ function inicioDaSemana(data){
   d.setDate(d.getDate() + deslocamento);
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
 }
+// número do mês para as animações (mês seguinte desliza da direita)
+const ordemDoMes = (key)=>{ const [a,m] = String(key||'').split('-').map(Number); return (a||0)*12 + (m||0); };
 const monthLabel = (key, full=false) => {
   if(!key) return '';
   const [y,m] = key.split('-').map(Number);

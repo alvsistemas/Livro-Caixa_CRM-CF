@@ -30,13 +30,13 @@ function renderRelatoriosPage(){
       </div>
     </div>
 
-    <div class="metric-grid">
+    <div class="metric-grid" data-anim-grupo="rel-funil" data-anim-troca="${relatorioFunilId||''}">
       <div class="metric-card"><div class="metric-card-top"><span>Total ganho</span></div><div class="metric-value">${fmtBRL(totalGanho)}</div></div>
       <div class="metric-card"><div class="metric-card-top"><span>Total perdido</span></div><div class="metric-value">${fmtBRL(totalPerdido)}</div></div>
       <div class="metric-card"><div class="metric-card-top"><span>Total de contatos</span></div><div class="metric-value">${cardsRel.length}</div></div>
     </div>
 
-    <div class="rel-graficos">
+    <div class="rel-graficos" data-anim-grupo="rel-graficos" data-anim-troca="${relatorioFunilId||''}">
       <div class="dash-panel">
         <div class="dash-panel-title">Valor ganho por mês</div>
         ${graficoMensal(dados, d=>d.ganhoValor, valorCurto, d=>`${fmtBRL(d.ganhoValor)}${d.ganhoQtd?` · ${d.ganhoQtd} venda${d.ganhoQtd===1?'':'s'}`:''}`, 'Nenhuma venda nos últimos 12 meses.')}
@@ -260,8 +260,10 @@ function renderEquipeAberta(){
         ${abas.map(([key,label])=>`<button class="tab-btn ${equipeSubTab===key?'active':''}" data-action="set-equipe-subtab" data-subtab="${key}">${label}</button>`).join('')}
       </div>
     ` : ''}
+    <div data-anim-grupo="equipe-sub" data-anim-troca="${equipeSubTab}" data-anim-ordem="${equipeSubTab==='chat'?0:1}">
     ${equipeSubTab==='chat' ? renderChatInternoConteudo() : ''}
     ${equipeSubTab==='supervisao' && equipe.souSupervisor ? renderSupervisaoConteudo() : ''}
+    </div>
   `;
 }
 
@@ -323,13 +325,13 @@ function renderSupervisaoConteudo(){
     permissoes: ()=> typeof renderPermissoesEquipe === 'function' ? renderPermissoesEquipe() : '' }[gestaoSecao] || renderGestaoMembros;
   return `
     <div class="config-layout gestao-layout ${gestaoMobileConteudo ? 'mostrando-conteudo' : 'mostrando-lista'}">
-      <div class="config-sidebar">
+      <div class="config-sidebar" data-anim-grupo="gestao-lista" data-anim-troca="${gestaoMobileConteudo}" data-anim-ordem="${gestaoMobileConteudo?1:0}">
         ${GESTAO_SECOES.map(g=>`
           <div class="config-sidebar-grupo">${g.grupo}</div>
           ${g.itens.map(([k,l])=>`<button class="config-sidebar-item ${gestaoSecao===k?'active':''}" data-action="set-gestao-secao" data-secao="${k}">${l}${k==='membros' ? ` <span class="gestao-conta">${equipe.membros.length}</span>` : ''}</button>`).join('')}
         `).join('')}
       </div>
-      <div class="config-content">
+      <div class="config-content" data-anim-grupo="gestao" data-anim-troca="${gestaoSecao}|${gestaoMobileConteudo}" data-anim-ordem="${gestaoMobileConteudo?1:0}">
         <button type="button" class="config-voltar-mobile" data-action="gestao-voltar-mobile">‹ Gestão</button>
         ${conteudo()}
       </div>

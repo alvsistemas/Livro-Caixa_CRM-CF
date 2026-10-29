@@ -23,7 +23,7 @@ function renderEscolhaModoGestorModal(){
           <h3>Novo contato</h3>
           <button id="escolha-tipo-close" aria-label="Fechar">✕</button>
         </div>
-        <div class="modal-body" style="display:flex; flex-direction:column; gap:10px;">
+        <div class="modal-body" data-anim-grupo="passo-novo" data-anim-troca="modo" data-anim-ordem="0" style="display:flex; flex-direction:column; gap:10px;">
           <p class="settings-page-note" style="margin:0 0 4px">Para quem é este contato?</p>
           <button type="button" class="tipo-pessoa-escolha-btn" data-modo="0">Padrão<span class="escolha-sub">Fica nas suas negociações</span></button>
           <button type="button" class="tipo-pessoa-escolha-btn" data-modo="1">⭐ Gestor<span class="escolha-sub">Cadastrar direto para alguém da equipe</span></button>
@@ -46,7 +46,7 @@ function renderEscolhaTipoPessoaModal(){
           <h3>Novo contato</h3>
           <button id="escolha-tipo-close">✕</button>
         </div>
-        <div class="modal-body" style="display:flex; flex-direction:column; gap:10px;">
+        <div class="modal-body" data-anim-grupo="passo-novo" data-anim-troca="tipo" data-anim-ordem="1" style="display:flex; flex-direction:column; gap:10px;">
           <button type="button" class="tipo-pessoa-escolha-btn" data-tipo="fisica">👤 Pessoa física</button>
           <button type="button" class="tipo-pessoa-escolha-btn" data-tipo="juridica">🏢 Pessoa jurídica</button>
         </div>

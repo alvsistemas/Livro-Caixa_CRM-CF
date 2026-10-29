@@ -463,6 +463,8 @@ function render() {
   else if (state.tab === "objetivos") main.innerHTML = renderObjetivos();
   else if (state.tab === "lucro") main.innerHTML = renderLucro();
   else if (state.tab === "cadastro") main.innerHTML = renderCadastro();
+  // animação: outra aba = fade; mesma aba em outro mês = desliza para o lado do mês
+  if (window.Animar) Animar.trocar(main, state.tab + "|" + state.month, { grupo: state.tab, ordem: (() => { const [a, m] = String(state.month || "").split("-").map(Number); return (a || 0) * 12 + (m || 0); })() });
   attachMainEvents();
   if (typeof atualizarBadgeAPagar === "function") atualizarBadgeAPagar();
   if (typeof marcarNavCelular === "function") marcarNavCelular();
@@ -1691,7 +1693,7 @@ function openQuiz(isRefazer) {
     const q = QUIZ[passo];
     const el = montar(`
       ${!isRefazer && passo === 0 ? `<div class="onb-head"><h1>Vamos montar seu perfil</h1><p>Responda ${QUIZ.length} perguntas rápidas. As dicas e a cor do painel vão acompanhar o seu jeito de lidar com dinheiro.</p></div>` : ""}
-      <div class="quiz-card">
+      <div class="quiz-card" data-anim-grupo="quiz" data-anim-troca="${passo}" data-anim-ordem="${passo}">
         <div class="quiz-progresso" aria-hidden="true">${QUIZ.map((_, i) => `<span class="${i < passo ? "feito" : i === passo ? "atual" : ""}"></span>`).join("")}</div>
         <p class="quiz-contador">Pergunta ${passo + 1} de ${QUIZ.length}</p>
         <h2 class="quiz-pergunta">${escapeHtml(q.pergunta)}</h2>
