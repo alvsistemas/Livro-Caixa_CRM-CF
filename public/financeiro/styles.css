@@ -61,7 +61,8 @@ h1.page-title { font-family: 'Fraunces', Georgia, serif; font-size: 24px; font-w
   .hamburger-btn { display: flex; }
   .sidebar { transform: translateX(-100%); box-shadow: 0 0 40px rgba(0,0,0,.3); z-index: 160; }
   .app-shell.sidebar-open .sidebar { transform: translateX(0); }
-  .app-shell.sidebar-open .sidebar-backdrop { display: block; position: fixed; inset: 0; background: rgba(0,0,0,.35); z-index: 150; }
+  .sidebar-backdrop { display: block; position: fixed; inset: 0; background: rgba(0,0,0,.35); z-index: 150; opacity: 0; pointer-events: none; transition: opacity .22s ease; }
+  .app-shell.sidebar-open .sidebar-backdrop { opacity: 1; pointer-events: auto; }
   .main-area { margin-left: 0; padding: 20px 16px 40px; }
 }
 .row-between { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 14px; margin-bottom: 22px; }
@@ -545,30 +546,20 @@ tr:hover td { background: rgba(0,0,0,0.015); }
 @keyframes maisLinha { from { border-left-color: transparent; } }
 
 /* =====================================================================
-   Celular (igual ao CRM): barra fixa embaixo, "+ Lançamento", lançamentos em cartões
-   que abrem a edição com um toque e janelas em tela cheia
+   Celular (igual ao CRM): menu pelas três linhas no topo (barra fixa em cima), "+ Lançamento"
+   embaixo à esquerda e a bolinha da IA à direita, lançamentos em cartões que abrem a edição com
+   um toque e janelas em tela cheia
    ===================================================================== */
-.nav-cel, .fab-lanc, .tx-mini { display: none; }
+.fab-lanc, .tx-mini { display: none; }
 @media (max-width: 768px) {
-  .hamburger-btn { display: none !important; }
-  .main-area { padding-bottom: calc(150px + env(safe-area-inset-bottom)) !important; }
-  .nav-cel {
-    display: grid; grid-template-columns: repeat(5, 1fr); position: fixed; left: 0; right: 0; bottom: 0; z-index: 170;
-    height: calc(66px + env(safe-area-inset-bottom)); padding-bottom: env(safe-area-inset-bottom);
-    background: var(--page); border-top: 1px solid var(--rule);
-  }
-  .nav-cel-item {
-    position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
-    border: none; background: none; color: var(--ink-muted); font: inherit; font-size: 11px; font-weight: 600; min-height: 48px; padding: 0 2px; cursor: pointer;
-    -webkit-tap-highlight-color: transparent;
-  }
-  .nav-cel-item span { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .nav-cel-item.active { color: var(--ink); font-weight: 700; }
-  .nav-cel-item.active::before { content: ''; position: absolute; top: 0; width: 28px; height: 3px; border-radius: 0 0 3px 3px; background: var(--char, var(--ink)); }
-  .nav-cel-badge { position: absolute; top: 6px; left: calc(50% + 6px); min-width: 16px; height: 16px; padding: 0 4px; border-radius: 999px; background: var(--red); color: #fff; font-size: 10px; font-style: normal; font-weight: 700; display: flex; align-items: center; justify-content: center; }
-  .nav-cel-badge[hidden] { display: none; }
+  .main-topbar { position: sticky; top: 0; z-index: 140; background: var(--bg, var(--page)); margin: -8px -16px 8px; padding: 8px 16px; }
+  /* contas atrasadas: bolinha vermelha nas três linhas (antes ficava na barra de baixo) */
+  #abrir-menu { position: relative; }
+  #abrir-menu.tem-aviso::after { content: ''; position: absolute; top: 6px; right: 6px; width: 9px; height: 9px; border-radius: 50%; background: var(--red); box-shadow: 0 0 0 2px var(--page); }
+  .main-topbar .hamburger-btn { margin-bottom: 0; }
+  .main-area { padding-bottom: calc(88px + env(safe-area-inset-bottom)) !important; }
   .fab-lanc {
-    display: flex; align-items: center; position: fixed; right: 16px; bottom: calc(82px + env(safe-area-inset-bottom)); z-index: 125;
+    display: flex; align-items: center; position: fixed; left: 16px; bottom: calc(20px + env(safe-area-inset-bottom)); z-index: 125;
     height: 52px; padding: 0 20px; border-radius: 999px; border: none; background: var(--char, var(--ink)); color: #fff;
     font: inherit; font-size: 14px; font-weight: 700; box-shadow: 0 8px 20px rgba(0,0,0,.28); cursor: pointer;
   }
@@ -582,11 +573,10 @@ tr:hover td { background: rgba(0,0,0,0.015); }
   /* janelas em tela cheia */
   .modal-overlay { padding: 0 !important; align-items: stretch !important; z-index: 180 !important; }
   .modal-box { max-width: none !important; width: 100%; height: 100%; max-height: 100dvh !important; border-radius: 0 !important; padding: 18px 16px calc(24px + env(safe-area-inset-bottom)) !important; }
-  /* o assistente fica acima da barra e do botão */
-  .assistente-bolha { right: 14px !important; bottom: calc(150px + env(safe-area-inset-bottom)) !important; width: 48px; height: 48px; }
+  /* a bolinha da IA fica sozinha embaixo, à direita */
+  .assistente-bolha { right: 16px; bottom: calc(20px + env(safe-area-inset-bottom)); width: 52px; height: 52px; }
   .sidebar { z-index: 160; }
 }
-@media (max-width: 768px) { .sidebar { padding-bottom: calc(90px + env(safe-area-inset-bottom)); } }
 /* no celular o "+ Lançamento" de baixo substitui o "+ Novo" do topo */
 @media (max-width: 768px) { #new-tx-btn, #new-tx-emp-btn { display: none; } }
 

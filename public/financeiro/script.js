@@ -411,30 +411,18 @@ document.getElementById("nav-mais-btn").addEventListener("click", () => {
 
 // No celular a barra lateral vira uma gaveta aberta pelo botão de menu (igual ao CRM)
 function fecharMenu() { document.getElementById("app-root").classList.remove("sidebar-open"); if (typeof marcarNavCelular === "function") marcarNavCelular(); }
-document.getElementById("abrir-menu").addEventListener("click", () => document.getElementById("app-root").classList.add("sidebar-open"));
+document.getElementById("abrir-menu").addEventListener("click", () => { document.getElementById("app-root").classList.add("sidebar-open"); marcarNavCelular(); });
 document.getElementById("menu-fundo").addEventListener("click", fecharMenu);
-/* Celular: barra de baixo (Painel, Lançamentos, A pagar, Lucro, Mais) e o "+ Lançamento" */
-var ABAS_CEL = ["dashboard", "lancamentos", "apagar", "lucro"];
+/* Celular: menu pelas três linhas no topo (sem barra embaixo); embaixo só o "+ Lançamento" (à esquerda) e a bolinha da IA (à direita) */
 var ABAS_COM_FAB = ["dashboard", "lancamentos", "apagar", "lucro", "empresa"];
 function marcarNavCelular() {
   const menuAberto = document.getElementById("app-root").classList.contains("sidebar-open");
   document.body.classList.toggle("menu-cel-aberto", menuAberto);
-  document.querySelectorAll("[data-tab-cel]").forEach((b) => { const on = b.dataset.tabCel === state.tab && !menuAberto; b.classList.toggle("active", on); if (on) b.setAttribute("aria-current", "page"); else b.removeAttribute("aria-current"); });
-  const mais = document.getElementById("nav-cel-mais");
-  if (mais) { mais.classList.toggle("active", menuAberto || !ABAS_CEL.includes(state.tab)); mais.setAttribute("aria-expanded", String(menuAberto)); }
   const fab = document.getElementById("fab-lanc");
   if (fab) fab.hidden = !ABAS_COM_FAB.includes(state.tab);
-  const b = document.getElementById("badge-apagar"); const bc = document.getElementById("badge-apagar-cel");
-  if (b && bc) { bc.hidden = b.hidden; bc.textContent = b.textContent; }
+  const badge = document.getElementById("badge-apagar"); const menu = document.getElementById("abrir-menu");
+  if (menu) { const aviso = !!(badge && !badge.hidden); menu.classList.toggle("tem-aviso", aviso); menu.setAttribute("aria-label", aviso ? `Abrir o menu (${badge.textContent} conta${badge.textContent === "1" ? "" : "s"} a pagar atrasada${badge.textContent === "1" ? "" : "s"})` : "Abrir o menu"); }
 }
-document.querySelectorAll("[data-tab-cel]").forEach((b) => b.addEventListener("click", () => { fecharMenu(); irParaAba(b.dataset.tabCel); }));
-document.getElementById("nav-cel-mais").addEventListener("click", () => {
-  const app = document.getElementById("app-root");
-  app.classList.toggle("sidebar-open");
-  // o "Mais" de baixo já abre o menu com o grupo "Mais" aberto (as abas que não cabem na barra)
-  if (app.classList.contains("sidebar-open")) { const g = document.getElementById("nav-mais"); if (g) { g.classList.add("aberto"); const bt = document.getElementById("nav-mais-btn"); if (bt) bt.setAttribute("aria-expanded", "true"); } }
-  marcarNavCelular();
-});
 document.getElementById("fab-lanc").addEventListener("click", () => openTxModal(null, state.tab === "empresa" ? "Empresa" : undefined));
 // "Olá, Nome" e a foto no topo da barra lateral
 function atualizarCabecalho() {
