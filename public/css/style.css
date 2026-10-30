@@ -1360,3 +1360,8 @@ main.pipeline-main{ padding-left:0; padding-right:0; padding-top:16px; }
 .card-produto-nome{ color:var(--ink); font-weight:600; }
 .produto-venda-modal{ max-width:440px; }
 .produto-venda-modal .modal-body{ overflow:visible; }
+/* erro do produto/serviço: aparece logo acima da caixa */
+.ps-erro-msg{ margin:0 0 6px; font-size:12px; font-weight:600; color:var(--danger); }
+.ps-field.com-erro .ps-input{ border-color:var(--danger); box-shadow:0 0 0 3px var(--danger-soft); }
+/* cartão do funil: nada lá dentro seleciona texto nem abre o menu do navegador ao segurar (o arrastar por toque precisa do gesto) */
+.card *{ -webkit-user-select:none; user-select:none; -webkit-touch-callout:none; }

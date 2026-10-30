@@ -455,7 +455,7 @@ async function toggleEventoConcluido(id){
 async function saveContratoFromModal(){
   const f = contratoModalForm;
   if(!f.desc.trim() || !f.valorVenda) return;
-  if(!f.tipoProduto){ errorMsg = 'Escolha o produto ou serviço: é ele que define a comissão.'; renderApp(); return; }
+  if(!f.tipoProduto){ marcarErroProduto('c', 'Escolha o produto ou serviço: é ele que define a comissão.'); return; }
   const dados = { desc: f.desc, scope: f.scope, date: f.date, valorVenda: f.valorVenda, tipoProduto: f.tipoProduto };
   try{
     if(f.__isNew){

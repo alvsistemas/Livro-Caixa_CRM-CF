@@ -34,7 +34,7 @@
     // ---- blocos que abrem no meio da página
     { tipo: 'abre', sel: '.pipeline-insights-conteudo, .equipes-nova, .anim-abre, .leads-bulk-bar, .integ-detalhe' },
     // ---- avisos
-    { tipo: 'aviso', sel: '.mensagem-salvo-toast, .error-banner, .settings-page-msg, .aviso-flutuante' },
+    { tipo: 'aviso', sel: '.mensagem-salvo-toast, .error-banner, .ps-erro-msg, .settings-page-msg, .aviso-flutuante' },
     // ---- estados que mudam de classe
     { tipo: 'estado', sel: '.app-shell', classes: ['sidebar-open'], alvos: ['.sidebar', '.sidebar-backdrop'], props: ['transform', 'opacity'], dur: 260 },
     { tipo: 'estado', sel: '.tab-btn, .chip, .etapa-chip-mobile, .nav-item, .config-sidebar-item, .tipo-pessoa-select-btn, .tab, .aba, .filtro, .auth-tab, .quiz-opcao, .opcao, .temp-btn, .pill, .mais-item, .menu-btn',
@@ -286,8 +286,29 @@
     entrar(el, desliza ? (op.ordem > ant.o ? 'anim-vem-direita' : 'anim-vem-esquerda') : (op.fade || 'anim-pagina'), DUR.troca);
   }
 
+  // Some com um bloco que está no meio da página: fade + a altura (e as margens) vão a zero, então o que
+  // está embaixo sobe suave em vez de pular. Depois tira do documento.
+  function recolherERemover(el, ms = 280) {
+    if (!el || !el.parentNode) return;
+    if (semMov()) { el.remove(); return; }
+    const cs = getComputedStyle(el);
+    const h = el.offsetHeight;
+    el.style.overflow = 'hidden';
+    el.style.pointerEvents = 'none';
+    const an = el.animate([
+      { opacity: 1, height: h + 'px', marginTop: cs.marginTop, marginBottom: cs.marginBottom, paddingTop: cs.paddingTop, paddingBottom: cs.paddingBottom, translate: '0 0' },
+      { opacity: 0, offset: 0.45, translate: '0 -6px' },
+      { opacity: 0, height: '0px', marginTop: '0px', marginBottom: '0px', paddingTop: '0px', paddingBottom: '0px', translate: '0 -6px' },
+    ], { duration: ms, easing: 'cubic-bezier(.4,0,.2,1)', fill: 'forwards' });
+    let feito = false;
+    const tirar = () => { if (!feito) { feito = true; el.remove(); } };
+    an.onfinish = tirar;
+    setTimeout(tirar, ms + 80);
+  }
+
   window.Animar = {
     trocar,
+    recolherERemover,
     // avisa que o grupo já está mostrando este valor (mudou sem redesenhar), para não animar depois
     marcar(grupo, chave, ordem) { vistos[grupo] = { k: String(chave), o: parseFloat(ordem) }; },
     // pausa as animações por um instante (ex.: um redesenho grande que não deve animar)

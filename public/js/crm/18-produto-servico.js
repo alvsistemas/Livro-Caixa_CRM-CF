@@ -177,6 +177,25 @@ function ligarCampoProduto(prefixo, aoEscolher, op = {}){
   });
 }
 
+// Aviso de erro logo acima da caixa do produto (em vez do aviso no canto da tela).
+// Some sozinho quando um produto é escolhido (o campo é redesenhado).
+function marcarErroProduto(prefixo, texto){
+  const raiz = document.querySelector(`.ps-field[data-ps="${prefixo}"]`);
+  if(!raiz) { errorMsg = texto; renderApp(); return; }
+  raiz.classList.add('com-erro');
+  let msg = raiz.querySelector('.ps-erro-msg');
+  if(!msg){
+    msg = document.createElement('p');
+    msg.className = 'ps-erro-msg';
+    msg.setAttribute('role', 'alert');
+    raiz.querySelector('label').after(msg);
+  }
+  msg.textContent = '⚠ ' + texto;
+  raiz.scrollIntoView({ block:'center', behavior: (window.Animar && Animar.semMovimento()) ? 'auto' : 'smooth' });
+  const input = raiz.querySelector('.ps-input');
+  if(input){ input.setAttribute('aria-invalid', 'true'); input.focus({ preventScroll:true }); }
+}
+
 /* ---------- venda fechada sem produto: qual foi? ---------- */
 // Só aparece se a conta usa comissões e o contato está sem produto. Devolve uma Promise (resolve ao fechar).
 function perguntarProdutoDaVenda(card){

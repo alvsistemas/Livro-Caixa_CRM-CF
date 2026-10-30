@@ -763,7 +763,7 @@ function bindAppEvents(){
     btn.addEventListener('click', ()=>{
       try{ localStorage.setItem('faixaTesteFechadaEm', hojeLocalISO()); }catch(err){}
       const el = btn.closest('.faixa-teste');
-      if(el) el.remove();
+      if(el){ if(window.Animar) Animar.recolherERemover(el); else el.remove(); }
     });
   });
   app.querySelectorAll('[data-action="abrir-fechamento"]').forEach(btn=>{
@@ -792,6 +792,9 @@ function bindAppEvents(){
   /* drag and drop */
   app.querySelectorAll('.card').forEach(cardEl=>{
     cardEl.addEventListener('dragstart', (e)=>{
+      // no celular quem cuida é o arrastar por toque (abaixo): o "arrastar nativo" do navegador
+      // (segurar e arrastar um elemento draggable) roubava o gesto no meio do cartão
+      if(cardTouchDrag){ e.preventDefault(); return; }
       e.dataTransfer.setData('text/x-crm-card', cardEl.dataset.cardId);
       cardEl.classList.add('dragging');
     });
@@ -805,8 +808,14 @@ function bindAppEvents(){
     // lista também — por isso, aqui embaixo, quando o gesto claramente é rolar (dedo
     // se move rápido, sem pausa) em vez de arrastar (segura parado um instante), a
     // gente rola a lista na mão, imitando o que o navegador faria sozinho.
+    // segurar o dedo no texto do cartão abria o menu do navegador (copiar, selecionar…) e cancelava o arrastar
+    cardEl.addEventListener('contextmenu', (e)=>{ if(cardTouchDrag || (e.sourceCapabilities && e.sourceCapabilities.firesTouchEvents)) e.preventDefault(); });
     cardEl.addEventListener('pointerdown', (e)=>{
       if(e.pointerType === 'mouse') return;
+      cardEl.draggable = false; // com o dedo, sem o arrastar nativo do navegador (volta a ser arrastável pelo mouse ao soltar)
+      const religar = ()=>{ cardEl.draggable = true; document.removeEventListener('pointerup', religar, true); document.removeEventListener('pointercancel', religar, true); };
+      document.addEventListener('pointerup', religar, true);
+      document.addEventListener('pointercancel', religar, true);
       if(e.target.closest('.card-move-wrap') || e.target.closest('[data-action="toggle-move-menu"]') || e.target.closest('.wa-btn')) return; // não conflita com os botões
       const cardsContainer = cardEl.closest('.cards');
       cardTouchDrag = {
