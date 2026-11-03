@@ -245,7 +245,7 @@ function trocarEtapaMobile(colId, durante){
     // sem rolar a fileira aqui: o dedo está em cima do chip e ele não pode fugir debaixo do dedo
   });
 }
-// arrastando um cliente no celular: parado ~0,4 s em cima do chip de outra etapa, abre aquela etapa
+// arrastando um cliente no celular: parado ~0,2 s em cima do chip de outra etapa, abre aquela etapa (soltar em cima do chip já move)
 let chipHoverTimer = null;
 function verificarChipDeEtapaSobDedo(x, y){
   if(!cardTouchDrag || !ehCelular()) return;
@@ -263,7 +263,7 @@ function verificarChipDeEtapaSobDedo(x, y){
       trocarEtapaMobile(id, true);
       if(navigator.vibrate) navigator.vibrate(10);
     }
-  }, 400);
+  }, 220);
 }
 
 function renderSidebar(){

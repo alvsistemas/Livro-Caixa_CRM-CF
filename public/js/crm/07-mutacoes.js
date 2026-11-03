@@ -46,7 +46,7 @@ async function moveCard(cardId, columnId, ordem, opcoes){
   // redesenho e decidir a direção certa da animação (pra cima, pra baixo, ou parado)
   const elAntigo = document.querySelector(`.card[data-card-id="${cardId}"]`);
   const topAntigo = elAntigo ? elAntigo.getBoundingClientRect().top : null;
-  if(elAntigo){
+  if(elAntigo && !(opcoes && opcoes.rapido)){ // arrastando com o dedo o cartão já está "fora" (fantasma): sem esperar
     elAntigo.classList.add('card-saindo'); // fade simples na saída — a direção certa só dá pra saber depois, na chegada
     await new Promise(resolve=> setTimeout(resolve, 150));
   }

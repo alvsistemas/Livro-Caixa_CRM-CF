@@ -138,6 +138,8 @@
 - Versão 20261179: contrato manual sem produto mostra o aviso logo acima da caixa do produto (`marcarErroProduto`), em vez do aviso no canto da tela.
 - Versão 20261180: fechar a faixa do teste grátis (✕) some com fade e encolhendo, e a tela sobe suave (`Animar.recolherERemover`).
 - Versão 20261181: arrastar o cartão pelo meio no celular. No toque, o cartão deixa de ser `draggable` (o arrastar nativo do navegador roubava o gesto), o `dragstart` é cancelado durante o arrastar por toque e o menu de segurar (contextmenu) é bloqueado; nada dentro do cartão seleciona texto.
+- Versão 20261182: arrastar no celular mais rápido — segurar 200 ms (era 280), parado no nome da etapa 220 ms (era 400), soltar em cima do nome da etapa já move para ela, e sem a espera de 150 ms da animação de saída quando vem do toque (`moveCard(..., { rapido:true })`). Documento completo do sistema: sistema-arrastar-leads-celular.txt (entregue ao usuário).
+- Versão 20261184: página de divulgação (`public/site/index.html`, em `/conheca`) no celular (até 760px): topo fixo (`.topo-site`, sticky; o embrulho usa `overflow:clip` para não quebrar o sticky) só com ☰ à esquerda + logo; links e botões vão para a gaveta lateral que abre pela esquerda (`#gaveta`, `#gaveta-fundo`, `body.menu-aberto`; fecha no ✕, no fundo, ao escolher link ou com Esc). Computador sem mudança.
 - Relatórios do CRM: gráfico de barras dos 12 meses + lista só dos meses com valor. Celular: faixa do resumo do funil com seta "continua" que some ao chegar no fim.
 
 ## Pendências

@@ -827,7 +827,7 @@ function bindAppEvents(){
         if(!cardTouchDrag || cardTouchDrag.modoRolagem) return; // já virou rolagem, não inicia arrastar
         try{ cardEl.setPointerCapture(cardTouchDrag.pointerId); }catch(err){ /* aparelho sem suporte — segue sem capturar */ }
         iniciarArrastoDeCard(cardTouchDrag.ultimoX, cardTouchDrag.ultimoY);
-      }, 280);
+      }, 200);
     });
 
     cardEl.addEventListener('pointermove', (e)=>{
@@ -1075,12 +1075,22 @@ function atualizarAutoScrollDoArrasto(x, y, colAlvo){
 }
 function finalizarArrastoDeCard(x, y){
   if(!cardTouchDrag) return;
-  const colAlvo = encontrarColunaMaisProxima(x);
   const cardId = cardTouchDrag.cardId;
+  // soltou em cima do nome de uma etapa (fileira de cima): vai direto para ela, no fim da lista —
+  // sem precisar esperar a etapa abrir e descer até a lista
+  const sob = document.elementFromPoint(x, y);
+  const chip = sob && sob.closest ? sob.closest('#etapas-chips-mobile .etapa-chip-mobile') : null;
+  if(chip && chip.dataset.colId){
+    limparVisualDoArrasto();
+    if(typeof trocarEtapaMobile === 'function') trocarEtapaMobile(chip.dataset.colId, true);
+    moveCard(cardId, chip.dataset.colId, undefined, { rapido:true });
+    return;
+  }
+  const colAlvo = encontrarColunaMaisProxima(x);
   limparVisualDoArrasto();
   if(colAlvo && colAlvo.dataset.colId){
     const ordem = calcularOrdemDeInsercao(colAlvo, y, cardId);
-    moveCard(cardId, colAlvo.dataset.colId, ordem);
+    moveCard(cardId, colAlvo.dataset.colId, ordem, { rapido:true });
   }
 }
 function cancelarArrastoDeCard(){

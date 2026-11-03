@@ -47,20 +47,42 @@ img{max-width:100%}
 #duvidas summary::after{content:'+';font-size:26px;font-weight:500;color:#0E6B53;flex-shrink:0;line-height:1}
 #duvidas details[open] summary::after{content:'−'}
 #duvidas summary:focus-visible{outline:3px solid #E8A33D;outline-offset:3px}
+/* ---------- celular: topo fixo com menu (gaveta lateral pela esquerda, como nos aplicativos) ---------- */
+.topo-menu-btn,.gaveta,.gaveta-fundo{display:none}
+@media (max-width:760px){
+  .topo-site{position:sticky;top:0;z-index:40;background:rgba(245,244,239,.94);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);padding:12px 20px !important;flex-wrap:nowrap !important;justify-content:flex-start !important;gap:12px !important;border-bottom:1px solid transparent;transition:border-color .2s}
+  .topo-site.rolou{border-bottom-color:#E3E1D8}
+  .topo-links{display:none !important}
+  .topo-site .topo-menu-btn{order:-1}
+  .topo-menu-btn{display:flex;align-items:center;justify-content:center;width:46px;height:46px;border-radius:12px;border:1.5px solid #D5D3C9;background:#fff;color:#14211D;cursor:pointer;padding:0}
+  .gaveta-fundo{display:block;position:fixed;inset:0;background:rgba(20,33,29,.45);z-index:60;opacity:0;visibility:hidden;transition:opacity .25s,visibility .25s}
+  .gaveta{display:flex;flex-direction:column;position:fixed;top:0;left:0;bottom:0;width:min(84vw,340px);background:#F5F4EF;z-index:61;padding:18px 20px 24px;box-shadow:20px 0 50px -20px rgba(20,33,29,.45);transform:translateX(-105%);transition:transform .3s cubic-bezier(.2,.8,.2,1);visibility:hidden}
+  body.menu-aberto .gaveta{transform:none;visibility:visible}
+  body.menu-aberto .gaveta-fundo{opacity:1;visibility:visible}
+  body.menu-aberto{overflow:hidden}
+  .gaveta-topo{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px}
+  .gaveta-links a.nav{display:flex;align-items:center;justify-content:space-between;padding:16px 4px;font-size:19px;font-weight:600;border-bottom:1px solid #E3E1D8}
+  .gaveta-links a.nav::after{content:'›';color:#0E6B53;font-size:24px;line-height:1}
+  .gaveta-acoes{margin-top:auto;display:flex;flex-direction:column;gap:12px;padding-top:24px}
+  .gaveta-acoes a{display:block;text-align:center;padding:15px 20px;border-radius:999px;font-weight:700;font-size:16px}
+  .hero-p{font-size:17px !important}
+  .hero-sec{padding-top:28px !important}
+}
+@media (prefers-reduced-motion:reduce){.gaveta,.gaveta-fundo{transition:none}}
 </style>
 </head>
 <body id="topo">
-<div style="width:100%;overflow:hidden">
+<div style="width:100%;overflow:hidden;overflow:clip"><!-- "clip" corta o que sobra sem impedir o topo fixo (sticky) do celular -->
 
 <!-- NAV -->
-<div style="max-width:1200px;margin:0 auto;padding:22px 24px;box-sizing:border-box;display:flex;flex-wrap:wrap;gap:16px;align-items:center;justify-content:space-between">
+<div class="topo-site" id="topo-site" style="max-width:1200px;margin:0 auto;padding:22px 24px;box-sizing:border-box;display:flex;flex-wrap:wrap;gap:16px;align-items:center;justify-content:space-between">
   <div style="display:flex;align-items:center;gap:10px">
     <div style="width:34px;height:34px;border-radius:9px;background:#0E6B53;display:flex;align-items:center;justify-content:center">
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#F5F4EF" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6h5v12H4zM10 6h5v8h-5zM16 6h4v5h-4z"/></svg>
     </div>
     <span style="font-family:'Bricolage Grotesque',sans-serif;font-weight:800;font-size:20px;letter-spacing:-0.01em">Livro-Caixa</span>
   </div>
-  <div style="display:flex;flex-wrap:wrap;gap:22px;align-items:center;font-size:15px;font-weight:500">
+  <div class="topo-links" style="display:flex;flex-wrap:wrap;gap:22px;align-items:center;font-size:15px;font-weight:500">
     <a class="nav" href="#recursos">Recursos</a>
     <a class="nav" href="#telas">Telas</a>
     <a class="nav" href="#planos">Planos</a>
@@ -68,14 +90,44 @@ img{max-width:100%}
     <a class="nav" id="link-entrar" data-app="/login.html" href="/login.html" style="font-weight:700">Entrar</a>
     <a class="btn" data-app="/login.html?cadastro=1&amp;teste=1" href="/login.html?cadastro=1&amp;teste=1" style="background:#14211D;color:#F5F4EF;padding:12px 20px;border-radius:999px;font-weight:700;min-height:20px">Quero uma demonstração</a>
   </div>
+  <button type="button" class="topo-menu-btn" id="abrir-menu" aria-label="Abrir menu" aria-expanded="false" aria-controls="gaveta">
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+  </button>
 </div>
 
+<!-- MENU DO CELULAR (gaveta lateral) -->
+<div class="gaveta-fundo" id="gaveta-fundo"></div>
+<nav class="gaveta" id="gaveta" aria-label="Menu" aria-hidden="true">
+  <div class="gaveta-topo">
+    <div style="display:flex;align-items:center;gap:10px">
+    <div style="width:34px;height:34px;border-radius:9px;background:#0E6B53;display:flex;align-items:center;justify-content:center">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#F5F4EF" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6h5v12H4zM10 6h5v8h-5zM16 6h4v5h-4z"/></svg>
+    </div>
+    <span style="font-family:'Bricolage Grotesque',sans-serif;font-weight:800;font-size:20px;letter-spacing:-0.01em">Livro-Caixa</span>
+  </div>
+    <button type="button" class="topo-menu-btn" id="fechar-menu" aria-label="Fechar menu">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
+    </button>
+  </div>
+  <div class="gaveta-links">
+    <a class="nav" href="#recursos">Recursos</a>
+    <a class="nav" href="#telas">Telas</a>
+    <a class="nav" href="#planos">Planos</a>
+    <a class="nav" href="#duvidas">Dúvidas</a>
+  </div>
+  <div class="gaveta-acoes">
+    <a id="link-entrar-gaveta" data-app="/login.html" href="/login.html" style="border:2px solid #14211D">Entrar</a>
+    <a data-app="/login.html?cadastro=1&amp;teste=1" href="/login.html?cadastro=1&amp;teste=1" style="background:#0E6B53;color:#fff">Começar 7 dias grátis</a>
+    <a data-app="/login.html?cadastro=1&amp;teste=1" href="/login.html?cadastro=1&amp;teste=1" style="background:#14211D;color:#F5F4EF">Quero uma demonstração</a>
+  </div>
+</nav>
+
 <!-- HERO -->
-<div style="max-width:1200px;margin:0 auto;padding:48px 24px 24px;box-sizing:border-box;display:flex;flex-wrap:wrap;gap:48px;align-items:center">
+<div class="hero-sec" style="max-width:1200px;margin:0 auto;padding:48px 24px 24px;box-sizing:border-box;display:flex;flex-wrap:wrap;gap:48px;align-items:center">
   <div style="flex:1 1 460px;min-width:0">
     <div style="display:inline-block;background:#DCEBE3;color:#0A4F3D;font-weight:700;font-size:13px;padding:7px 14px;border-radius:999px;letter-spacing:.02em">Para qualquer negócio que vende</div>
     <h1 class="h1" style="margin:22px 0 0;font-size:62px;line-height:1.02;letter-spacing:-0.03em;font-weight:800">Cada lead no lugar certo. Cada venda, acompanhada.</h1>
-    <p style="margin:22px 0 0;font-size:19px;line-height:1.55;color:#42524D;max-width:520px">Dois aplicativos com um login só: um CRM com pipeline em Kanban, comissões, agenda e WhatsApp a um clique, e um Controle financeiro que junta essas vendas com as suas despesas e mostra o lucro de verdade. No celular ou no computador.</p>
+    <p class="hero-p" style="margin:22px 0 0;font-size:19px;line-height:1.55;color:#42524D;max-width:520px">Dois aplicativos com um login só: um CRM com pipeline em Kanban, comissões, agenda e WhatsApp a um clique, e um Controle financeiro que junta essas vendas com as suas despesas e mostra o lucro de verdade. No celular ou no computador.</p>
     <div style="margin-top:32px;display:flex;flex-wrap:wrap;gap:14px;align-items:center">
       <a class="btn" data-app="/login.html?cadastro=1&amp;teste=1" href="/login.html?cadastro=1&amp;teste=1" style="background:#0E6B53;color:#fff;padding:16px 28px;border-radius:999px;font-weight:700;font-size:17px">Começar 7 dias grátis</a>
       <a class="btn" href="#telas" style="border:2px solid #14211D;padding:14px 26px;border-radius:999px;font-weight:700;font-size:17px">Ver o painel por dentro</a>
@@ -341,7 +393,7 @@ img{max-width:100%}
   document.querySelectorAll('[data-app]').forEach(function(a){ a.href=APP+a.getAttribute('data-app'); });
   var ano=document.getElementById('ano'); if(ano) ano.textContent=new Date().getFullYear();
   // quem já está logado neste navegador vê "Abrir o sistema" em vez de "Entrar"
-  try{ if(!meta.content && localStorage.getItem('token')){ var le=document.getElementById('link-entrar'); if(le){ le.textContent='Abrir o sistema'; le.href=APP+'/'; } } }catch(e){}
+  try{ if(!meta.content && localStorage.getItem('token')){ var le=document.getElementById('link-entrar'); if(le){ le.textContent='Abrir o sistema'; le.href=APP+'/'; } var lg=document.getElementById('link-entrar-gaveta'); if(lg){ lg.textContent='Abrir o sistema'; lg.href=APP+'/'; } } }catch(e){}
   /* Preços e promoção vêm do próprio sistema (nunca ficam diferentes do que é cobrado).
      De quebra, essa chamada "acorda" o servidor enquanto a pessoa ainda está lendo. */
   var brl=function(v){ return Number(v).toLocaleString('pt-BR',{style:'currency',currency:'BRL',minimumFractionDigits: v%1?2:0}); };
@@ -363,6 +415,17 @@ img{max-width:100%}
       pr.hidden=false;
     }
   }).catch(function(){ /* sem resposta: ficam os preços escritos na página */ });
+})();
+(function(){
+  /* menu do celular: abre/fecha a gaveta; fecha ao escolher um link, no fundo ou com Esc */
+  var abrir=document.getElementById('abrir-menu'), fechar=document.getElementById('fechar-menu'), g=document.getElementById('gaveta'), f=document.getElementById('gaveta-fundo'), topo=document.getElementById('topo-site');
+  function definir(aberto){ document.body.classList.toggle('menu-aberto',aberto); abrir.setAttribute('aria-expanded',aberto); g.setAttribute('aria-hidden',!aberto); if(aberto) fechar.focus(); else abrir.focus({preventScroll:true}); }
+  abrir.addEventListener('click',function(){ definir(true); });
+  fechar.addEventListener('click',function(){ definir(false); });
+  f.addEventListener('click',function(){ definir(false); });
+  g.querySelectorAll('a').forEach(function(a){ a.addEventListener('click',function(){ document.body.classList.remove('menu-aberto'); abrir.setAttribute('aria-expanded',false); g.setAttribute('aria-hidden',true); }); });
+  document.addEventListener('keydown',function(e){ if(e.key==='Escape'&&document.body.classList.contains('menu-aberto')) definir(false); });
+  window.addEventListener('scroll',function(){ topo.classList.toggle('rolou',window.scrollY>4); },{passive:true});
 })();
 (function(){
   var b=document.getElementById('voltar-topo');
