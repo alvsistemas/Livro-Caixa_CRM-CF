@@ -48,7 +48,9 @@ router.get('/', async (req, res) => {
         hoje: { vendas: vHoje.rows[0].n, total: r2(vHoje.rows[0].total) },
         mes: { vendas: vMes.rows[0].n, total: r2(vMes.rows[0].total), ticket: vMes.rows[0].n ? r2(vMes.rows[0].total / vMes.rows[0].n) : 0, descontos: r2(vMes.rows[0].descontos), ...(verCustos ? { lucro: r2(vMes.rows[0].lucro) } : {}) },
         canceladas: { vendas: cancel.rows[0].n, total: r2(cancel.rows[0].total) },
-        caixa: caixa.rows[0] ? { numero: caixa.rows[0].numero, abertoPor: caixa.rows[0].aberto_por || '', desde: caixa.rows[0].aberto_em, esquecido: !!esquecidos.caixa, horas: esquecidos.caixa ? esquecidos.caixa.horas : 0 } : null,
+        caixa: caixa.rows[0] ? { numero: caixa.rows[0].numero, abertoPor: caixa.rows[0].aberto_por || '', desde: caixa.rows[0].aberto_em, esquecido: !!esquecidos.caixa, horas: esquecidos.caixa ? esquecidos.caixa.horas : 0,
+          turnoTerminou: esquecidos.caixa && esquecidos.caixa.turnoTerminou ? esquecidos.caixa.turnoTerminou : null, turno: esquecidos.caixa ? esquecidos.caixa.turno || '' : '' } : null,
+        caixasConferir: esquecidos.conferir,
         mesasEsquecidas: esquecidos.mesas,
         crm: { novos: crmNovos.rows[0].n, ganhos: crmGanhos.vendas.quantidade, ganhosValor: crmGanhos.vendas.total },
         // o negócio inteiro: balcão + CRM, e o resultado da Empresa no Controle financeiro

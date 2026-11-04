@@ -15,6 +15,7 @@
 const crypto = require('crypto');
 const { query, transacao } = require('../db/pool');
 const { MEIOS, hojeBR, lerModo } = require('./fechamento');
+const { diaDeTrabalho } = require('./caixaHorario');
 const F = require('./fidelidade');
 const { comoSistema } = require('../db/contexto');
 
@@ -485,8 +486,10 @@ async function registrarVenda(userId, d = {}, agora = new Date()) {
     const t = new Date(d.feitaEm);
     if (!Number.isNaN(t.getTime()) && t <= new Date(agora.getTime() + 5 * 60000) && t >= new Date(agora.getTime() - 7 * 86400000)) feitaEm = t;
   }
-  if (feitaEm && !d.data) d = { ...d, data: hojeBR(feitaEm) };
-  const hoje = hojeBR(agora);
+  // dia de trabalho: no caixa 24 horas, a venda antes da virada do dia conta no dia anterior
+  const pdvCfg = await require('./caixa').lerPdv(userId);
+  if (feitaEm && !d.data) d = { ...d, data: diaDeTrabalho(pdvCfg, feitaEm) };
+  const hoje = diaDeTrabalho(pdvCfg, agora);
   const data = dataOu(d.data, hoje);
   // pagamentos: [{ meio, valor }] (pode dividir; o dinheiro pode passar do total e vira troco)
   // ou só "meio" (um meio só, o total inteiro)
@@ -809,12 +812,15 @@ async function excluirGasto(userId, id) {
 /* ------------------------------ Resumo ------------------------------ */
 
 async function resumo(userId, agora = new Date()) {
-  const hoje = hojeBR(agora);
+  const hoje = diaDeTrabalho(await require('./caixa').lerPdv(userId), agora);
   const mes = hoje.slice(0, 7);
   const ini = `${mes}-01`;
+  // último dia do mês de verdade (o "dia 31" não existe em fevereiro, abril, junho, setembro e novembro)
+  const [anoM, mesM] = mes.split('-').map(Number);
+  const fimMes = `${mes}-${String(new Date(Date.UTC(anoM, mesM, 0)).getUTCDate()).padStart(2, '0')}`;
   const v = await query(
     `SELECT data, total, cmv, taxa, acrescimo, itens FROM estoque_vendas WHERE user_id = $1::uuid AND NOT cancelada AND data >= $2 AND data <= $3`,
-    [userId, ini, `${mes}-31`]);
+    [userId, ini, fimMes]);
   const somar = (lista) => lista.reduce((a, r) => ({ n: a.n + 1, total: a.total + Number(r.total), cmv: a.cmv + Number(r.cmv), taxa: a.taxa + Number(r.taxa) }), { n: 0, total: 0, cmv: 0, taxa: 0 });
   const doMes = somar(v.rows);
   const doDia = somar(v.rows.filter((r) => r.data === hoje));
@@ -825,7 +831,7 @@ async function resumo(userId, agora = new Date()) {
   }
   const g = await query(
     `SELECT COALESCE(sum(valor), 0)::float AS total FROM financeiro_lancamentos WHERE user_id = $1::uuid AND extras->'estoque'->>'origem' IN ('gasto', 'compra') AND data >= $2 AND data <= $3`,
-    [userId, ini, `${mes}-31`]);
+    [userId, ini, fimMes]);
   const produtos = await listarProdutos(userId);
   const alertas = [];
   for (const p of produtos) {

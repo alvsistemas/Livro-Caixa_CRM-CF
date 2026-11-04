@@ -15,18 +15,33 @@ function ontemDe(hoje) {
 }
 const horasDesde = (quando, agora) => (agora.getTime() - new Date(quando).getTime()) / 3600000;
 
-// Caixa e mesas abertos há tempo demais (para avisar no PDV, no Painel do dono e no e-mail)
+// Caixa e mesas abertos há tempo demais (para avisar no PDV, no Painel do dono e no e-mail).
+// Caixa: no modo "24 horas, em turnos", é o turno que acabou sem conferir (ficar aberto a noite toda é
+// normal); no horário de funcionamento ele fecha sozinho; nos outros, aberto de um dia para o outro (12 h).
+// "conferir": caixas que fecharam sozinhos e ninguém contou a gaveta.
 async function esquecidos(userId, agora = new Date()) {
-  const [cx, ms] = await Promise.all([
-    query(`SELECT numero, aberto_em, aberto_por FROM estoque_caixas WHERE user_id = $1::uuid AND status = 'aberto'`, [userId]),
+  const [cx, ms, pend, pdv] = await Promise.all([
+    query(`SELECT numero, aberto_em, aberto_por, turno, previsto_fim FROM estoque_caixas WHERE user_id = $1::uuid AND status = 'aberto'`, [userId]),
     query(`SELECT c.numero, c.rotulo, c.aberta_em, m.nome AS mesa FROM estoque_comandas c LEFT JOIN estoque_mesas m ON m.user_id = c.user_id AND m.id = c.mesa_id
             WHERE c.user_id = $1::uuid AND c.status IN ('aberta', 'conta') ORDER BY c.aberta_em`, [userId]),
+    query(`SELECT numero, fechado_em, turno FROM estoque_caixas WHERE user_id = $1::uuid AND status = 'fechado' AND conferir ORDER BY fechado_em DESC LIMIT 10`, [userId]),
+    require('./caixa').lerPdv(userId),
   ]);
-  const caixa = cx.rows[0] && horasDesde(cx.rows[0].aberto_em, agora) >= HORAS_CAIXA_ESQUECIDO
-    ? { numero: cx.rows[0].numero, desde: cx.rows[0].aberto_em, abertoPor: cx.rows[0].aberto_por || '', horas: Math.floor(horasDesde(cx.rows[0].aberto_em, agora)) } : null;
+  const c = cx.rows[0];
+  let caixa = null;
+  if (c) {
+    const fim = c.previsto_fim ? new Date(c.previsto_fim) : null;
+    const turnoVencido = pdv.modoCaixa === 'turnos' && fim && fim <= agora;
+    const velho = pdv.modoCaixa !== 'turnos' && !(pdv.modoCaixa === 'horario' && fim) && horasDesde(c.aberto_em, agora) >= HORAS_CAIXA_ESQUECIDO;
+    if (turnoVencido || velho) {
+      caixa = { numero: c.numero, desde: c.aberto_em, abertoPor: c.aberto_por || '', horas: Math.floor(horasDesde(c.aberto_em, agora)) };
+      if (turnoVencido) Object.assign(caixa, { turno: c.turno || '', turnoTerminou: fim });
+    }
+  }
   const mesas = ms.rows.filter((m) => horasDesde(m.aberta_em, agora) >= HORAS_MESA_ESQUECIDA)
     .map((m) => ({ nome: m.mesa || m.rotulo || `Comanda ${m.numero}`, desde: m.aberta_em, horas: Math.floor(horasDesde(m.aberta_em, agora)) }));
-  return { caixa, mesas };
+  const conferir = pend.rows.map((r) => ({ numero: r.numero, fechadoEm: r.fechado_em, turno: r.turno || '' }));
+  return { caixa, mesas, conferir };
 }
 
 async function temPdv(userId) {

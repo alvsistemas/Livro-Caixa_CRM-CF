@@ -84,7 +84,11 @@ function montarEmailResumo({ nome, resumo, equipe, hoje, pdv }) {
     const dataOntem = pdv.ontem.data.split('-').reverse().slice(0, 2).join('/');
     corpo += titulo('PDV (balcão)') + `<p style="margin:6px 0 0;">Ontem (${dataOntem}): <b>${brl(pdv.ontem.total)}</b> em ${pdv.ontem.vendas} ${pdv.ontem.vendas === 1 ? 'venda' : 'vendas'} · no mês: ${brl(pdv.mes.total)}</p>`;
     const avisos = [];
-    if (pdv.esquecidos.caixa) avisos.push(`<li style="color:#a00;">Caixa nº ${pdv.esquecidos.caixa.numero} aberto há ${pdv.esquecidos.caixa.horas} horas${pdv.esquecidos.caixa.abertoPor ? ` (aberto por ${escaparHtml(pdv.esquecidos.caixa.abertoPor)})` : ''} — feche no PDV para conferir o dinheiro.</li>`);
+    const ec = pdv.esquecidos.caixa;
+    if (ec && ec.turnoTerminou) avisos.push(`<li style="color:#a00;">O turno${ec.turno ? ` ${escaparHtml(ec.turno.toLowerCase())}` : ''} do caixa nº ${ec.numero} terminou e a gaveta não foi conferida — confira no PDV para passar o turno.</li>`);
+    else if (ec) avisos.push(`<li style="color:#a00;">Caixa nº ${ec.numero} aberto há ${ec.horas} horas${ec.abertoPor ? ` (aberto por ${escaparHtml(ec.abertoPor)})` : ''} — feche no PDV para conferir o dinheiro.</li>`);
+    const pc = pdv.esquecidos.conferir || [];
+    if (pc.length) avisos.push(`<li style="color:#a00;">${pc.length === 1 ? `O caixa nº ${pc[0].numero} fechou sozinho e falta conferir` : `${pc.length} caixas fecharam sozinhos e falta conferir`} — conte a gaveta no PDV.</li>`);
     else if (pdv.caixa.aberto) avisos.push(`<li>Caixa nº ${pdv.caixa.numero} aberto.</li>`);
     if (pdv.esquecidos.mesas.length) avisos.push(`<li style="color:#a00;">${pdv.esquecidos.mesas.length === 1 ? `${escaparHtml(pdv.esquecidos.mesas[0].nome)} está aberta` : `${pdv.esquecidos.mesas.length} mesas estão abertas`} há mais de 6 horas.</li>`);
     if (pdv.pedidosDoCardapioEsperando) avisos.push(`<li>${pdv.pedidosDoCardapioEsperando} ${pdv.pedidosDoCardapioEsperando === 1 ? 'pedido do cardápio esperando' : 'pedidos do cardápio esperando'}.</li>`);

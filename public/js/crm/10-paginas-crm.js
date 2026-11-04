@@ -226,17 +226,17 @@ function renderPipelinePage(){
     </div>
 
     <div class="tabs">
-      <button class="tab-btn ${filterMonth===null?'active':''}" data-action="set-month" data-month="">Geral</button>
+      <button class="tab-btn ${filterMonth===null?'active':''}" data-action="set-month" data-month="" title="Todos os contatos deste funil">Geral <span class="tab-qtd">${contarContatosDoFunil('')}</span></button>
       <div class="date-wrap">
         <button class="tab-btn ${filterMonth?'active':''}" data-action="toggle-date-menu">
-          📅 ${filterMonth ? monthLabel(filterMonth) : 'Escolher data'}
+          📅 ${filterMonth ? `${monthLabel(filterMonth)} <span class="tab-qtd">${contarContatosDoFunil(filterMonth)}</span>` : 'Escolher data'}
         </button>
         ${dateMenuOpen ? `
           <div class="date-menu">
             <div class="date-menu-title">Meses com dados</div>
             ${months.length ? `
               <div class="date-menu-list">
-                ${months.map(m=>`<button class="date-menu-item ${filterMonth===m?'active':''}" data-action="set-month" data-month="${m}">${monthLabel(m, true)}</button>`).join('')}
+                ${months.map(m=>`<button class="date-menu-item ${filterMonth===m?'active':''}" data-action="set-month" data-month="${m}"><span>${monthLabel(m, true)}</span><span class="tab-qtd">${contarContatosDoFunil(m)}</span></button>`).join('')}
               </div>
             ` : `<p class="date-menu-empty">Nenhum mês com dados ainda.</p>`}
             <div class="date-menu-sep"></div>

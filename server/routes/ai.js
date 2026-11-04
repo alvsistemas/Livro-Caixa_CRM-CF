@@ -177,7 +177,7 @@ async function contextoDaPessoa(userId, contexto) {
 const FERRAMENTAS_ASSISTENTE = [
   {
     name: 'resumo_pdv',
-    description: 'PDV (vendas no balcão/restaurante): vendas de hoje, de ontem e do mês (total, quantidade, ticket médio, lucro bruto), os mais vendidos do mês, produtos com estoque baixo ou que acabaram, se o caixa está aberto (e desde quando), caixa ou mesas esquecidos abertos, pedidos do cardápio esperando e fiado em aberto. Use para qualquer pergunta sobre o balcão, o restaurante, o estoque ou o caixa.',
+    description: 'PDV (vendas no balcão/restaurante): vendas de hoje, de ontem e do mês (total, quantidade, ticket médio, lucro bruto), os mais vendidos do mês, produtos com estoque baixo ou que acabaram, se o caixa está aberto (e desde quando), caixa ou mesas esquecidos abertos (ou turno do caixa que terminou sem conferir), caixas que fecharam sozinhos e falta conferir, pedidos do cardápio esperando e fiado em aberto. Use para qualquer pergunta sobre o balcão, o restaurante, o estoque ou o caixa.',
     input_schema: { type: 'object', properties: {} },
   },
   {

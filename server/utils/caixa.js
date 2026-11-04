@@ -19,6 +19,7 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { query, transacao } = require('../db/pool');
 const { hojeBR, MEIOS } = require('./fechamento');
+const H = require('./caixaHorario');
 
 class ErroCaixa extends Error {}
 const erro = (m) => new ErroCaixa(m);
@@ -39,8 +40,22 @@ const SEGREDO = () => `${process.env.JWT_SECRET || 'troque-este-segredo-no-env'}
 
 /* ------------------------------ configurações do PDV ------------------------------ */
 
-const PDV_PADRAO = { exigirCaixa: true, exigirOperador: false, descontoMaxCaixa: 10, reciboRodape: 'Obrigado pela preferência!', taxaServico: 10 };
-function pdvDe(p) { return { ...PDV_PADRAO, ...(p && typeof p === 'object' ? p : {}) }; }
+const PDV_PADRAO = {
+  exigirCaixa: true, exigirOperador: false, descontoMaxCaixa: 10, reciboRodape: 'Obrigado pela preferência!', taxaServico: 10,
+  // como o caixa funciona (utils/caixaHorario.js): manual, horario, turnos ou livre
+  modoCaixa: 'manual', avisoMin: 15,
+  horario: { abre: '08:00', fecha: '18:00', dias: [1, 2, 3, 4, 5, 6] },
+  turnos: [{ nome: 'Manhã', inicio: '06:00', fim: '14:00' }, { nome: 'Tarde', inicio: '14:00', fim: '22:00' }, { nome: 'Noite', inicio: '22:00', fim: '06:00' }],
+  virada: '06:00',
+};
+function pdvDe(p) {
+  const o = p && typeof p === 'object' ? p : {};
+  const r = { ...PDV_PADRAO, ...o };
+  // contas de antes dos modos: "só vender com o caixa aberto" desligado = sem caixa
+  if (!H.MODOS.includes(o.modoCaixa)) r.modoCaixa = o.exigirCaixa === false ? 'livre' : 'manual';
+  r.exigirCaixa = r.modoCaixa !== 'livre';
+  return r;
+}
 async function lerPdv(userId) {
   const { rows } = await query('SELECT pdv FROM estoque_negocio WHERE user_id = $1::uuid', [userId]);
   return pdvDe(rows[0] && rows[0].pdv);
@@ -48,7 +63,18 @@ async function lerPdv(userId) {
 async function salvarPdv(userId, d = {}) {
   const atual = await lerPdv(userId);
   const n = { ...atual };
-  if (d.exigirCaixa !== undefined) n.exigirCaixa = !!d.exigirCaixa;
+  if (d.exigirCaixa !== undefined && d.modoCaixa === undefined) n.modoCaixa = d.exigirCaixa ? (n.modoCaixa === 'livre' ? 'manual' : n.modoCaixa) : 'livre';
+  if (d.modoCaixa !== undefined) {
+    if (!H.MODOS.includes(d.modoCaixa)) throw erro('Escolha como o caixa funciona.');
+    n.modoCaixa = d.modoCaixa;
+  }
+  try {
+    if (d.horario !== undefined) n.horario = H.validarHorario(d.horario);
+    if (d.turnos !== undefined) n.turnos = H.validarTurnos(d.turnos);
+    if (d.virada !== undefined) { const v = H.minutos(d.virada); if (v === null) throw new Error('Informe a virada do dia (ex.: 06:00).'); n.virada = H.hhmm(v); }
+  } catch (e) { throw erro(e.message); }
+  if (d.avisoMin !== undefined) { const a = Math.round(Number(d.avisoMin)); if (!Number.isFinite(a) || a < 0 || a > 120) throw erro('O aviso antes de fechar vai de 0 a 120 minutos.'); n.avisoMin = a; }
+  n.exigirCaixa = n.modoCaixa !== 'livre';
   if (d.descontoMaxCaixa !== undefined) n.descontoMaxCaixa = valor(d.descontoMaxCaixa, 'Desconto máximo', 0) > 100 ? 100 : valor(d.descontoMaxCaixa, 'Desconto máximo', 0);
   if (d.reciboRodape !== undefined) n.reciboRodape = texto(d.reciboRodape, 140);
   if (d.taxaServico !== undefined) { const t = valor(d.taxaServico, 'Taxa de serviço', 0); if (t > 30) throw erro('A taxa de serviço vai até 30%.'); n.taxaServico = t; }
@@ -61,6 +87,11 @@ async function salvarPdv(userId, d = {}) {
   }
   await query('INSERT INTO estoque_negocio (user_id) VALUES ($1::uuid) ON CONFLICT (user_id) DO NOTHING', [userId]);
   await query('UPDATE estoque_negocio SET pdv = $2::jsonb, updated_at = now() WHERE user_id = $1::uuid', [userId, JSON.stringify(n)]);
+  // mudou o modo, o horário ou os turnos: o caixa aberto passa a seguir o novo (fim previsto e nome do turno)
+  if (d.modoCaixa !== undefined || d.horario !== undefined || d.turnos !== undefined) {
+    const j = janelaParaAbrir(n, new Date());
+    await query(`UPDATE estoque_caixas SET previsto_fim = $2, turno = $3 WHERE user_id = $1::uuid AND status = 'aberto'`, [userId, j ? j.fim.toISOString() : null, (j && j.nome) || '']);
+  }
   return n;
 }
 
@@ -168,6 +199,8 @@ function caixaObj(r) {
   return {
     id: r.id, numero: r.numero, status: r.status, trocoInicial: Number(r.troco_inicial), abertoEm: r.aberto_em, abertoPor: r.aberto_por,
     fechadoEm: r.fechado_em, fechadoPor: r.fechado_por, esperado: r.esperado || {}, contado: r.contado || {}, diferenca: Number(r.diferenca), obs: r.obs,
+    turno: r.turno || '', previstoFim: r.previsto_fim || null, abertoAuto: !!r.aberto_auto, fechadoAuto: !!r.fechado_auto,
+    conferir: !!r.conferir, trocoConferir: !!r.troco_conferir, trocoDe: r.troco_de || null, conferidoEm: r.conferido_em || null, conferidoPor: r.conferido_por || '',
   };
 }
 async function caixaAbertoRow(userId) {
@@ -211,19 +244,46 @@ async function resumoDoCaixa(userId, caixaRow) {
   };
 }
 
-async function situacaoCaixa(userId) {
-  const aberto = await caixaAbertoRow(userId);
-  return { aberto: aberto ? await resumoDoCaixa(userId, aberto) : null };
+// Caixas fechados sozinhos que ainda falta conferir (o mais novo primeiro)
+async function pendentesDeConferir(userId) {
+  const { rows } = await query(`SELECT * FROM estoque_caixas WHERE user_id = $1::uuid AND status = 'fechado' AND conferir ORDER BY fechado_em DESC LIMIT 10`, [userId]);
+  return rows.map(caixaObj);
 }
 
-async function abrirCaixa(userId, d = {}, operador = '') {
+async function situacaoCaixa(userId, agora = new Date()) {
+  const aberto = await caixaAbertoRow(userId);
+  const pdv = await lerPdv(userId);
+  const r = { aberto: aberto ? await resumoDoCaixa(userId, aberto) : null, pendentes: await pendentesDeConferir(userId), agora: agora.toISOString() };
+  // o que o automático vai fazer (para a tela mostrar "fecha sozinho às 18:00" / "abre sozinho amanhã às 08:00")
+  if (pdv.modoCaixa === 'horario') { const p = H.proximaAbertura(pdv.horario, agora); r.proximaAbertura = p ? p.inicio.toISOString() : null; }
+  return r;
+}
+
+// Fim previsto do caixa aberto agora: o fim do horário/turno em que está (ou do próximo, se abriu um pouco antes)
+function janelaParaAbrir(pdv, agora) {
+  let j = H.janelaAtual(pdv, agora);
+  if (!j && pdv.modoCaixa === 'horario') {
+    const p = H.proximaAbertura(pdv.horario, agora);
+    if (p && p.inicio - agora <= 3 * 3600000) j = p; // abriu até 3 horas antes do horário
+  }
+  return j;
+}
+
+// extra (uso interno): { auto, abertoEm, trocoDe, trocoConferir, janela }
+async function abrirCaixa(userId, d = {}, operador = '', agora = new Date(), extra = {}) {
   const troco = d.trocoInicial === undefined || d.trocoInicial === '' ? 0 : valor(d.trocoInicial, 'Troco inicial', 0);
+  const pdv = await lerPdv(userId);
+  const j = extra.janela !== undefined ? extra.janela : janelaParaAbrir(pdv, agora);
   return transacao(async () => {
     if (await caixaAbertoRow(userId)) throw erro('Já existe um caixa aberto.');
     await query('INSERT INTO estoque_negocio (user_id) VALUES ($1::uuid) ON CONFLICT (user_id) DO NOTHING', [userId]);
     const n = (await query('UPDATE estoque_negocio SET seq_caixa = seq_caixa + 1 WHERE user_id = $1::uuid RETURNING seq_caixa AS n', [userId])).rows[0].n;
-    await query('INSERT INTO estoque_caixas (user_id, numero, troco_inicial, aberto_por) VALUES ($1::uuid, $2, $3, $4)', [userId, n, troco, texto(operador, 60)]);
-    return situacaoCaixa(userId);
+    await query(
+      `INSERT INTO estoque_caixas (user_id, numero, troco_inicial, aberto_por, aberto_em, turno, previsto_fim, aberto_auto, troco_conferir, troco_de)
+       VALUES ($1::uuid, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+      [userId, n, troco, texto(operador, 60), (extra.abertoEm || agora).toISOString(), (j && j.nome) || '', j ? j.fim.toISOString() : null,
+        !!extra.auto, !!extra.trocoConferir, extra.trocoDe || null]);
+    return situacaoCaixa(userId, agora);
   });
 }
 
@@ -252,34 +312,175 @@ async function movimentarCaixa(userId, d = {}, operador = '', agora = new Date()
   });
 }
 
+// Quebra (falta) ou sobra de caixa no Controle financeiro. Devolve o id do lançamento.
+async function lancarDiferenca(userId, cx, difC, data) {
+  const id = novoId('cx');
+  const { rows } = await query('SELECT COALESCE(max(posicao), -1)::int AS p FROM financeiro_lancamentos WHERE user_id = $1::uuid', [userId]);
+  const falta = difC < 0;
+  await query(
+    `INSERT INTO financeiro_lancamentos (user_id, id, posicao, data, descricao, tipo, categoria, escopo, forma, status, valor, recorrencia, parcelas, extras)
+     VALUES ($1::uuid, $2, $3, $4, $5, $6, $7, 'Empresa', 'Dinheiro', 'Pago', $8, 'unico', NULL, $9::jsonb)`,
+    [userId, id, rows[0].p + 1, data, `${falta ? 'Quebra' : 'Sobra'} de caixa — caixa #${cx.numero}`, falta ? 'Despesa' : 'Receita', falta ? 'Quebra de caixa' : 'Outros',
+      reais(Math.abs(difC)), JSON.stringify({ estoque: { origem: 'caixa', caixaId: cx.id, numero: cx.numero } })]);
+  return id;
+}
+
 async function fecharCaixa(userId, d = {}, operador = '', agora = new Date()) {
   const contado = {};
   for (const k of MEIOS_CAIXA) if (d.contado && d.contado[k] !== undefined && d.contado[k] !== '') contado[k] = valor(d.contado[k], 'Valor contado', 0);
   if (contado.dinheiro === undefined) throw erro('Conte o dinheiro do caixa e informe o valor.');
-  const hoje = hojeBR(agora);
+  const hoje = H.diaDeTrabalho(await lerPdv(userId), agora);
   return transacao(async () => {
     const cx = (await query(`SELECT * FROM estoque_caixas WHERE user_id = $1::uuid AND status = 'aberto' FOR UPDATE`, [userId])).rows[0];
     if (!cx) throw erro('Não há caixa aberto.');
     const r = await resumoDoCaixa(userId, cx);
     const difC = centavos(contado.dinheiro) - centavos(r.esperado.dinheiro);
-    const lancIds = [];
-    if (difC !== 0) {
-      const id = novoId('cx');
-      const { rows } = await query('SELECT COALESCE(max(posicao), -1)::int AS p FROM financeiro_lancamentos WHERE user_id = $1::uuid', [userId]);
-      const falta = difC < 0;
-      await query(
-        `INSERT INTO financeiro_lancamentos (user_id, id, posicao, data, descricao, tipo, categoria, escopo, forma, status, valor, recorrencia, parcelas, extras)
-         VALUES ($1::uuid, $2, $3, $4, $5, $6, $7, 'Empresa', 'Dinheiro', 'Pago', $8, 'unico', NULL, $9::jsonb)`,
-        [userId, id, rows[0].p + 1, hoje, `${falta ? 'Quebra' : 'Sobra'} de caixa — caixa #${cx.numero}`, falta ? 'Despesa' : 'Receita', falta ? 'Quebra de caixa' : 'Outros',
-          reais(Math.abs(difC)), JSON.stringify({ estoque: { origem: 'caixa', caixaId: cx.id, numero: cx.numero } })]);
-      lancIds.push(id);
-    }
+    const lancIds = difC !== 0 ? [await lancarDiferenca(userId, cx, difC, hoje)] : [];
+    // contar a gaveta no fechamento também confere o troco (se o caixa abriu sozinho)
     await query(
-      `UPDATE estoque_caixas SET status = 'fechado', fechado_em = now(), fechado_por = $3, esperado = $4::jsonb, contado = $5::jsonb, diferenca = $6, obs = $7, lancamento_ids = $8::text[]
+      `UPDATE estoque_caixas SET status = 'fechado', fechado_em = $9, fechado_por = $3, esperado = $4::jsonb, contado = $5::jsonb, diferenca = $6, obs = $7, lancamento_ids = $8::text[], troco_conferir = false
         WHERE user_id = $1::uuid AND id = $2::uuid`,
-      [userId, cx.id, texto(operador, 60), JSON.stringify(r.esperado), JSON.stringify(contado), reais(difC), texto(d.obs, 300), lancIds]);
+      [userId, cx.id, texto(operador, 60), JSON.stringify(r.esperado), JSON.stringify(contado), reais(difC), texto(d.obs, 300), lancIds, agora.toISOString()]);
+    // o troco veio de um caixa que fechou sozinho e ninguém contou a gaveta no começo: não dá para
+    // separar de qual dos dois é a diferença, então ela fica toda neste fechamento e aquele sai da lista
+    if (cx.troco_conferir && cx.troco_de) {
+      const orig = (await query(`SELECT * FROM estoque_caixas WHERE user_id = $1::uuid AND id = $2::uuid AND conferir FOR UPDATE`, [userId, cx.troco_de])).rows[0];
+      if (orig) await marcarConferido(userId, orig, centavos((orig.esperado || {}).dinheiro || 0), 0, operador, agora, `Conferido junto com o fechamento do caixa #${cx.numero}`);
+    }
     const fechado = (await query('SELECT * FROM estoque_caixas WHERE user_id = $1::uuid AND id = $2::uuid', [userId, cx.id])).rows[0];
     return resumoDoCaixa(userId, fechado);
+  });
+}
+
+/* ----------------------- caixa automático (horário e turnos) ----------------------- */
+
+// Fecha sozinho (horário de funcionamento): guarda o que deveria ter e marca "falta conferir".
+// Não lança diferença no financeiro: ninguém contou a gaveta.
+async function fecharSozinho(userId, cx, quando) {
+  const r = await resumoDoCaixa(userId, cx);
+  await query(
+    `UPDATE estoque_caixas SET status = 'fechado', fechado_em = $3, fechado_por = '', fechado_auto = true, conferir = true, esperado = $4::jsonb, contado = '{}'::jsonb, diferenca = 0
+      WHERE user_id = $1::uuid AND id = $2::uuid AND status = 'aberto'`,
+    [userId, cx.id, quando.toISOString(), JSON.stringify(r.esperado)]);
+}
+
+// Abre e fecha sozinho conforme o modo. Roda de minuto em minuto (server.js) e quando o PDV
+// carrega (se o servidor atrasou, faz o que ficou para trás com o horário certo).
+async function ajustarCaixaAutomatico(userId, agora = new Date()) {
+  const pdv = await lerPdv(userId);
+  if (pdv.modoCaixa !== 'horario' && pdv.modoCaixa !== 'turnos') return false;
+  return transacao(async () => {
+    // uma execução por vez para esta conta
+    await query('INSERT INTO estoque_negocio (user_id) VALUES ($1::uuid) ON CONFLICT (user_id) DO NOTHING', [userId]);
+    await query('SELECT 1 FROM estoque_negocio WHERE user_id = $1::uuid FOR UPDATE', [userId]);
+    let mudou = false;
+    let cx = (await query(`SELECT * FROM estoque_caixas WHERE user_id = $1::uuid AND status = 'aberto' FOR UPDATE`, [userId])).rows[0];
+    // horário de funcionamento: passou da hora de fechar
+    if (cx && pdv.modoCaixa === 'horario' && cx.previsto_fim && new Date(cx.previsto_fim) <= agora) {
+      await fecharSozinho(userId, cx, new Date(cx.previsto_fim));
+      cx = null; mudou = true;
+    }
+    if (cx) return mudou;
+    const j = H.janelaAtual(pdv, agora);
+    if (!j) return mudou;
+    // já teve caixa neste horário/turno (abriu, ou alguém fechou na mão): não abre de novo sozinho
+    const ja = await query(`SELECT 1 FROM estoque_caixas WHERE user_id = $1::uuid AND (aberto_em >= $2 OR fechado_em > $2) LIMIT 1`, [userId, j.inicio.toISOString()]);
+    if (ja.rows.length) return mudou;
+    // troco: o que ficou na gaveta no último caixa (contado, ou o que deveria ter se fechou sozinho)
+    const ult = (await query(`SELECT * FROM estoque_caixas WHERE user_id = $1::uuid AND status = 'fechado' ORDER BY fechado_em DESC LIMIT 1`, [userId])).rows[0];
+    const trocoC = !ult ? 0 : ult.conferir ? centavos((ult.esperado || {}).dinheiro || 0) : centavos((ult.contado || {}).dinheiro || 0);
+    await abrirCaixa(userId, { trocoInicial: reais(Math.max(0, trocoC)) }, '', agora, {
+      auto: true, abertoEm: j.inicio > agora ? agora : j.inicio, janela: j, trocoConferir: true, trocoDe: ult && ult.conferir ? ult.id : null,
+    });
+    return true;
+  });
+}
+
+// Todas as contas com caixa automático (agendador do server.js, de minuto em minuto)
+async function processarCaixasAutomaticos(agora = new Date()) {
+  try {
+    const { rows } = await query(`SELECT user_id::text AS id FROM estoque_negocio WHERE pdv->>'modoCaixa' IN ('horario', 'turnos')`);
+    for (const r of rows) {
+      try { await ajustarCaixaAutomatico(r.id, agora); } catch (e) { console.error('Caixa automático:', r.id, e.message); }
+    }
+  } catch (e) { console.error('Erro no caixa automático:', e.message); }
+}
+
+// Conferir e passar o turno: conta a gaveta, fecha o caixa do turno e abre o do próximo turno
+// com o dinheiro contado como troco (menos o que foi retirado na troca, se alguém tirou).
+async function passarTurno(userId, d = {}, operador = '', agora = new Date()) {
+  const pdv = await lerPdv(userId);
+  return transacao(async () => {
+    const cx = await caixaAbertoRow(userId);
+    if (!cx) throw erro('Não há caixa aberto.');
+    const fechado = await fecharCaixa(userId, d, operador, agora);
+    const retirado = d.retirado === undefined || d.retirado === '' ? 0 : valor(d.retirado, 'Valor retirado', 0);
+    const trocoC = centavos(fechado.caixa.contado.dinheiro || 0) - centavos(retirado);
+    if (trocoC < 0) throw erro('Não dá para retirar mais do que o dinheiro contado.');
+    // próximo turno: o que está valendo agora (ou o que começa quando este termina, se passou antes da hora)
+    const fim = cx.previsto_fim ? new Date(cx.previsto_fim) : null;
+    const alvo = fim && fim > agora ? fim : agora;
+    const j = pdv.modoCaixa === 'turnos' ? H.turnoEm(pdv.turnos, alvo) : null;
+    const novo = await abrirCaixa(userId, { trocoInicial: reais(trocoC) }, operador, agora, { janela: j });
+    return { fechado, ...novo };
+  });
+}
+
+// Quando o troco de um caixa veio de outro que fechou sozinho: a contagem de agora confere esse
+// caixa de antes. difC = contado agora − o que deveria ter agora (no caixa aberto).
+async function conferirOrigem(userId, aberto, difC, retiradoC, operador, agora, obs) {
+  const orig = (await query(`SELECT * FROM estoque_caixas WHERE user_id = $1::uuid AND id = $2::uuid AND conferir FOR UPDATE`, [userId, aberto.troco_de])).rows[0];
+  if (!orig) return null;
+  // a gaveta de verdade no fim daquele caixa = o troco com que este abriu + a diferença + o que tiraram depois
+  const gavetaC = centavos(aberto.troco_inicial) + difC + retiradoC;
+  return marcarConferido(userId, orig, gavetaC, retiradoC, operador, agora, obs);
+}
+async function marcarConferido(userId, cx, gavetaC, retiradoC, operador, agora, obs) {
+  const esperado = { ...(cx.esperado || {}) };
+  const difC = gavetaC - centavos(esperado.dinheiro || 0);
+  const lancIds = [...(cx.lancamento_ids || [])];
+  if (difC !== 0) lancIds.push(await lancarDiferenca(userId, cx, difC, H.partesBR(new Date(cx.fechado_em)).data));
+  // o que foi tirado da gaveta depois que fechou (levado para o cofre ou o banco) fica registrado como sangria
+  if (retiradoC > 0) {
+    await query(`INSERT INTO estoque_caixa_mov (user_id, caixa_id, tipo, meio, valor, descricao, operador) VALUES ($1::uuid, $2::uuid, 'sangria', 'dinheiro', $3, 'Retirado da gaveta depois do fechamento', $4)`,
+      [userId, cx.id, reais(retiradoC), texto(operador, 60)]);
+  }
+  const contado = { ...(cx.contado || {}), dinheiro: reais(gavetaC - retiradoC) };
+  esperado.dinheiro = reais(centavos(esperado.dinheiro || 0) - retiradoC);
+  await query(
+    `UPDATE estoque_caixas SET conferir = false, conferido_em = $3, conferido_por = $4, contado = $5::jsonb, esperado = $6::jsonb, diferenca = $7, lancamento_ids = $8::text[],
+            obs = CASE WHEN $9 = '' THEN obs ELSE $9 END
+      WHERE user_id = $1::uuid AND id = $2::uuid`,
+    [userId, cx.id, agora.toISOString(), texto(operador, 60), JSON.stringify(contado), JSON.stringify(esperado), reais(difC), lancIds, texto(obs, 300)]);
+  return reais(difC);
+}
+
+// Conferir a gaveta depois: d = { caixaId?, contado: dinheiro contado agora, retirado?, obs? }
+// - sem caixaId (ou o caixa de onde veio o troco do caixa aberto): conta a gaveta agora; acerta o
+//   troco do caixa aberto e confere o caixa que fechou sozinho (se houver);
+// - outro caixa pendente: a contagem é comparada direto com o que ele deveria ter (vale se a gaveta
+//   não foi mexida depois que ele fechou).
+async function conferirCaixa(userId, d = {}, operador = '', agora = new Date()) {
+  const contadoC = centavos(valor(d.contado, 'Valor contado', 0));
+  const retiradoC = d.retirado === undefined || d.retirado === '' ? 0 : centavos(valor(d.retirado, 'Valor retirado', 0));
+  return transacao(async () => {
+    const aberto = (await query(`SELECT * FROM estoque_caixas WHERE user_id = $1::uuid AND status = 'aberto' FOR UPDATE`, [userId])).rows[0];
+    const doAberto = aberto && aberto.troco_conferir && (!d.caixaId || d.caixaId === aberto.troco_de);
+    let diferenca = 0;
+    if (doAberto) {
+      const r = await resumoDoCaixa(userId, aberto);
+      const difC = contadoC - centavos(r.esperado.dinheiro); // diferença na gaveta agora
+      if (aberto.troco_de) diferenca = await conferirOrigem(userId, aberto, difC, retiradoC, operador, agora, d.obs) || 0;
+      // o troco certo deste caixa é o que tinha de verdade quando abriu
+      const trocoC = Math.max(0, centavos(aberto.troco_inicial) + difC);
+      await query(`UPDATE estoque_caixas SET troco_inicial = $3, troco_conferir = false WHERE user_id = $1::uuid AND id = $2::uuid`, [userId, aberto.id, reais(trocoC)]);
+    } else {
+      if (!ehUuid(d.caixaId)) throw erro('Nada para conferir agora.');
+      const cx = (await query(`SELECT * FROM estoque_caixas WHERE user_id = $1::uuid AND id = $2::uuid AND status = 'fechado' AND conferir FOR UPDATE`, [userId, d.caixaId])).rows[0];
+      if (!cx) throw erro('Este caixa já foi conferido.');
+      diferenca = await marcarConferido(userId, cx, contadoC + retiradoC, retiradoC, operador, agora, d.obs);
+    }
+    return { diferenca, ...(await situacaoCaixa(userId, agora)) };
   });
 }
 
@@ -368,5 +569,6 @@ module.exports = {
   ErroCaixa, MEIOS_CAIXA, PDV_PADRAO, pdvDe, lerPdv, salvarPdv, operadorObj, CHEFIA,
   listarOperadores, salvarOperador, excluirOperador, entrarOperador, operadorDoPedido,
   situacaoCaixa, abrirCaixa, movimentarCaixa, fecharCaixa, historicoCaixas, caixaPorId,
+  ajustarCaixaAutomatico, processarCaixasAutomaticos, passarTurno, conferirCaixa, pendentesDeConferir,
   contaFiado, receberFiado, fiadoEmAberto,
 };

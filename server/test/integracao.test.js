@@ -1546,6 +1546,112 @@ describe('API com PostgreSQL (integração)', { skip: pular }, () => {
     assert.equal((await api('PUT', '/api/estoque/pdv', { exigirOperador: false }, t, comGer)).status, 200);
   });
 
+  test('PDV caixa automático: horário de funcionamento (abre e fecha sozinho, falta conferir) e conferência depois', async () => {
+    const C = require('../utils/caixa'); const E = require('../utils/estoque');
+    const br = (s) => new Date(`${s}-03:00`);
+    const reg = (await api('POST', '/api/auth/register', { nome: 'Horário', email: 'caixa-horario@teste.com', senha: 'senha123' })).dados;
+    const t = reg.token; const uid = reg.user.id;
+    await api('PUT', '/api/estoque/negocio', { tipo: 'loja', nome: 'Loja das 8' }, t);
+    const prod = (await api('POST', '/api/estoque/produtos', { nome: 'Kit', preco: 50, custo: 20, controlaEstoque: false }, t)).dados.produto;
+    // configuração: horário inválido recusado; horário de 08:00 às 18:00 todos os dias
+    assert.equal((await api('PUT', '/api/estoque/pdv', { modoCaixa: 'horario', horario: { abre: '08:00', fecha: '08:00', dias: [1] } }, t)).status, 400);
+    let r = await api('PUT', '/api/estoque/pdv', { modoCaixa: 'horario', avisoMin: 15, horario: { abre: '08:00', fecha: '18:00', dias: [0, 1, 2, 3, 4, 5, 6] } }, t);
+    assert.equal(r.status, 200, JSON.stringify(r.dados));
+    assert.equal(r.dados.pdv.modoCaixa, 'horario');
+    assert.equal(r.dados.pdv.exigirCaixa, true);
+    // antes do horário não abre; às 08:05 abre sozinho com a hora certa (08:00) e o fim previsto
+    assert.equal(await C.ajustarCaixaAutomatico(uid, br('2026-11-04T07:00:00')), false);
+    assert.equal(await C.ajustarCaixaAutomatico(uid, br('2026-11-04T08:05:00')), true);
+    let sit = await C.situacaoCaixa(uid, br('2026-11-04T08:06:00'));
+    const cx1 = sit.aberto.caixa;
+    assert.equal(cx1.abertoAuto, true);
+    assert.equal(cx1.trocoConferir, true);
+    assert.equal(new Date(cx1.abertoEm).toISOString(), br('2026-11-04T08:00:00').toISOString());
+    assert.equal(new Date(cx1.previstoFim).toISOString(), br('2026-11-04T18:00:00').toISOString());
+    // venda de 50 em dinheiro às 10:00 entra no caixa
+    const v = await E.registrarVenda(uid, { itens: [{ produtoId: prod.id, qtd: 1 }], meio: 'dinheiro' }, br('2026-11-04T10:00:00'));
+    assert.equal(v.venda.caixaId, cx1.id);
+    // 18:01: fecha sozinho às 18:00, sem contagem (falta conferir) e sem quebra no financeiro
+    assert.equal(await C.ajustarCaixaAutomatico(uid, br('2026-11-04T18:01:00')), true);
+    sit = await C.situacaoCaixa(uid, br('2026-11-04T18:02:00'));
+    assert.equal(sit.aberto, null);
+    assert.equal(sit.pendentes.length, 1);
+    assert.equal(sit.pendentes[0].fechadoAuto, true);
+    assert.equal(new Date(sit.pendentes[0].fechadoEm).toISOString(), br('2026-11-04T18:00:00').toISOString());
+    assert.equal(sit.pendentes[0].esperado.dinheiro, 50);
+    assert.equal(sit.proximaAbertura, br('2026-11-05T08:00:00').toISOString());
+    assert.equal(await C.ajustarCaixaAutomatico(uid, br('2026-11-04T18:30:00')), false, 'fora do horário não abre');
+    // no outro dia abre sozinho com o troco que deveria estar na gaveta (50), vindo do caixa pendente
+    assert.equal(await C.ajustarCaixaAutomatico(uid, br('2026-11-05T08:10:00')), true);
+    sit = await C.situacaoCaixa(uid, br('2026-11-05T08:11:00'));
+    const cx2 = sit.aberto.caixa;
+    assert.equal(cx2.trocoInicial, 50);
+    assert.equal(cx2.trocoDe, cx1.id);
+    // conta a gaveta: 30, e alguém tinha levado 15 para o cofre ontem à noite → faltaram 5 no caixa de ontem
+    r = await C.conferirCaixa(uid, { contado: 30, retirado: 15 }, 'Ana', br('2026-11-05T08:20:00'));
+    assert.equal(r.diferenca, -5);
+    assert.equal(r.pendentes.length, 0);
+    assert.equal(r.aberto.caixa.trocoInicial, 30, 'o troco de hoje fica certo');
+    assert.equal(r.aberto.caixa.trocoConferir, false);
+    const c1 = (await C.caixaPorId(uid, cx1.id)).caixa;
+    assert.equal(c1.conferir, false);
+    assert.equal(c1.conferidoPor, 'Ana');
+    assert.equal(c1.contado.dinheiro, 30);
+    assert.equal(c1.esperado.dinheiro, 35);
+    assert.equal(c1.diferenca, -5);
+    const q = await pool.query(`SELECT data, valor, tipo FROM financeiro_lancamentos WHERE user_id = $1::uuid AND descricao = $2`, [uid, `Quebra de caixa — caixa #${cx1.numero}`]);
+    assert.equal(q.rows.length, 1);
+    assert.equal(q.rows[0].data, '2026-11-04', 'a quebra fica no dia do caixa que fechou sozinho');
+    assert.equal(Number(q.rows[0].valor), 5);
+    // fechar na mão no meio do dia: não reabre sozinho no mesmo horário
+    await C.fecharCaixa(uid, { contado: { dinheiro: 30 } }, 'Ana', br('2026-11-05T12:00:00'));
+    assert.equal(await C.ajustarCaixaAutomatico(uid, br('2026-11-05T12:05:00')), false);
+    // pelo app: conferir sem nada pendente dá erro claro; "sem caixa" desliga a exigência
+    assert.equal((await api('POST', '/api/estoque/caixa/conferir', { contado: 10 }, t)).status, 400);
+    r = await api('PUT', '/api/estoque/pdv', { modoCaixa: 'livre' }, t);
+    assert.equal(r.dados.pdv.exigirCaixa, false);
+  });
+
+  test('PDV caixa automático: 24 horas em turnos, passar o turno e virada do dia', async () => {
+    const C = require('../utils/caixa'); const E = require('../utils/estoque');
+    const br = (s) => new Date(`${s}-03:00`);
+    const reg = (await api('POST', '/api/auth/register', { nome: 'Turnos', email: 'caixa-turnos@teste.com', senha: 'senha123' })).dados;
+    const t = reg.token; const uid = reg.user.id;
+    await api('PUT', '/api/estoque/negocio', { tipo: 'loja', nome: 'Posto 24h' }, t);
+    const prod = (await api('POST', '/api/estoque/produtos', { nome: 'Café', preco: 6, custo: 2, controlaEstoque: false }, t)).dados.produto;
+    assert.equal((await api('PUT', '/api/estoque/pdv', { modoCaixa: 'turnos', turnos: [{ nome: 'A', inicio: '06:00', fim: '15:00' }, { nome: 'B', inicio: '14:00', fim: '06:00' }] }, t)).status, 400, 'turnos que se sobrepõem');
+    let r = await api('PUT', '/api/estoque/pdv', { modoCaixa: 'turnos', virada: '06:00',
+      turnos: [{ nome: 'Manhã', inicio: '06:00', fim: '14:00' }, { nome: 'Tarde', inicio: '14:00', fim: '22:00' }, { nome: 'Noite', inicio: '22:00', fim: '06:00' }] }, t);
+    assert.equal(r.status, 200, JSON.stringify(r.dados));
+    // abre sozinho no turno da manhã
+    assert.equal(await C.ajustarCaixaAutomatico(uid, br('2026-11-04T13:00:00')), true);
+    let sit = await C.situacaoCaixa(uid);
+    assert.equal(sit.aberto.caixa.turno, 'Manhã');
+    assert.equal(new Date(sit.aberto.caixa.previstoFim).toISOString(), br('2026-11-04T14:00:00').toISOString());
+    // não fecha sozinho depois do turno (só avisa)
+    assert.equal(await C.ajustarCaixaAutomatico(uid, br('2026-11-04T14:20:00')), false);
+    // passa o turno às 14:20: conta a gaveta (com 1 venda de 6 em dinheiro), tira 2 e abre o da tarde com 4
+    await E.registrarVenda(uid, { itens: [{ produtoId: prod.id, qtd: 1 }], meio: 'dinheiro' }, br('2026-11-04T13:30:00'));
+    r = await C.passarTurno(uid, { contado: { dinheiro: 6 }, retirado: 2 }, 'Carla', br('2026-11-04T14:20:00'));
+    assert.equal(r.fechado.caixa.status, 'fechado');
+    assert.equal(r.fechado.caixa.diferenca, 0);
+    assert.equal(r.aberto.caixa.turno, 'Tarde');
+    assert.equal(r.aberto.caixa.trocoInicial, 4);
+    assert.equal(r.aberto.caixa.abertoPor, 'Carla');
+    // passar um pouco antes da hora (21:50): o novo caixa já é o da noite, até 06:00
+    r = await C.passarTurno(uid, { contado: { dinheiro: 4 } }, 'Bruno', br('2026-11-04T21:50:00'));
+    assert.equal(r.aberto.caixa.turno, 'Noite');
+    assert.equal(new Date(r.aberto.caixa.previstoFim).toISOString(), br('2026-11-05T06:00:00').toISOString());
+    const noite = r.aberto.caixa.id;
+    // venda às 2h da manhã: conta no dia 4 (virada às 06:00) e entra no caixa da noite
+    const v = await E.registrarVenda(uid, { itens: [{ produtoId: prod.id, qtd: 1 }], meio: 'pix' }, br('2026-11-05T02:00:00'));
+    assert.equal(v.venda.data, '2026-11-04');
+    assert.equal(v.venda.caixaId, noite);
+    // o turno passou das 06:00 sem conferir: o caixa continua aberto (o aviso fica na tela)
+    assert.equal(await C.ajustarCaixaAutomatico(uid, br('2026-11-05T07:00:00')), false);
+    assert.equal((await C.situacaoCaixa(uid)).aberto.caixa.id, noite);
+  });
+
   test('PDV restaurante: mesas, comanda pelo garçom, cozinha, fechar a conta e planilha .xlsx', async () => {
     const t = (await api('POST', '/api/auth/register', { nome: 'Rest', email: 'mesas-pdv@teste.com', senha: 'senha123' })).dados.token;
     await api('PUT', '/api/estoque/negocio', { tipo: 'restaurante', nome: 'Cantina Teste', controlaEstoque: true }, t);

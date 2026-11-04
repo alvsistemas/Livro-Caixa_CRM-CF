@@ -157,6 +157,7 @@ const { sincronizarPendentes: conferirAssinaturas, cobrancaLigada } = require('.
 const { problemaNaConfiguracao } = require('./utils/asaas');
 const { enviarBackupsSemanais } = require('./utils/backupScheduler');
 const { enviarResumosDiarios } = require('./utils/resumoDiario');
+const { processarCaixasAutomaticos } = require('./utils/caixa');
 const UMA_HORA = 60 * 60 * 1000;
 const CINCO_MINUTOS = 5 * 60 * 1000;
 
@@ -192,6 +193,9 @@ async function start() {
     setTimeout(processarFluxos, 45 * 1000);
     setInterval(processarFluxos, UMA_HORA);
     // lembretes de tarefa por notificação push (a cada 2 min) e backup semanal por e-mail (confere de 6 em 6 horas)
+    // caixa do PDV com horário de funcionamento ou turnos: abre e fecha sozinho na hora (confere de minuto em minuto)
+    setTimeout(processarCaixasAutomaticos, 25 * 1000);
+    setInterval(processarCaixasAutomaticos, 60 * 1000);
     setTimeout(enviarLembretesDeTarefas, 20 * 1000);
     setInterval(enviarLembretesDeTarefas, 2 * 60 * 1000);
     // contas a pagar do Controle financeiro: um resumo por dia, a partir das 8h (confere de 30 em 30 min)

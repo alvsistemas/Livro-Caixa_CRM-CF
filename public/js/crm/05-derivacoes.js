@@ -343,6 +343,12 @@ function monthsList(){
   const set = new Set([currentMonthKey(), ...board.cards.map(mesInicioDoContato).filter(Boolean)]);
   return Array.from(set).sort((a,b)=> a<b?1:-1);
 }
+// quantos contatos (não arquivados) o funil aberto tem num mês (mes = 'AAAA-MM') ou em todos (mes vazio).
+// Não usa o filtro "Esfriando": é o total que aparece junto dos botões Geral / mês do Pipeline.
+function contarContatosDoFunil(mes){
+  const colsDoFunil = new Set(board.columns.filter(c=>c.funilId===funilAtualId).map(c=>c.id));
+  return board.cards.filter(c=> !c.arquivado && colsDoFunil.has(c.columnId) && (!mes || mesInicioDoContato(c)===mes)).length;
+}
 function visibleCards(){
   let cards = filterMonth ? board.cards.filter(c=> mesInicioDoContato(c)===filterMonth) : board.cards;
   cards = cards.filter(c=>!c.arquivado);

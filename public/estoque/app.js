@@ -260,7 +260,7 @@
   async function carregarDaAba(tab) {
     if (["pedidos", "mesas", "cozinha", "cardapio"].includes(tab) && !tem("restaurante")) return;
     try {
-      if (tab === "caixa") { const [r, c] = await Promise.all([api("GET", "/estoque/resumo"), api("GET", "/estoque/caixa")]); S.resumo = r; S.caixa = c.aberto; }
+      if (tab === "caixa") { const [r, c] = await Promise.all([api("GET", "/estoque/resumo"), api("GET", "/estoque/caixa")]); S.resumo = r; aplicarSituacao(c); }
       else if (tab === "relatorios") {
         if (S.relAba === "vendas") await carregarVendas();
         else if (S.relAba === "produtos" || S.relAba === "horarios") await carregarAnalise();
@@ -356,11 +356,88 @@
      ===================================================================== */
   const NOME_MOV_CX = { sangria: "Sangria", reforco: "Reforço de troco", despesa: "Despesa paga do caixa", fiado: "Fiado recebido" };
   const MEIOS_CAIXA = ["dinheiro", "pix", "debito", "credito", "transferencia", "boleto", "outro"];
+  // situação do caixa que vem do servidor (GET /estoque/caixa e as ações do caixa)
+  function aplicarSituacao(x) {
+    if (!x) return;
+    S.caixa = x.aberto || null;
+    S.caixaPend = x.pendentes || [];
+    S.proximaAbertura = x.proximaAbertura || null;
+  }
+  const modoCaixa = () => (S.pdv && S.pdv.modoCaixa) || "manual";
+  const horaCurta = (iso) => new Date(iso).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+  // "hoje às 18:00", "ontem às 18:00", "amanhã às 08:00" ou "em 02/11 às 18:00"
+  function quandoFoi(iso) {
+    const d = new Date(iso); const dia = (x) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
+    const dif = Math.round((dia(d) - dia(new Date())) / 86400000);
+    const q = dif === 0 ? "hoje" : dif === -1 ? "ontem" : dif === 1 ? "amanhã" : `em ${d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })}`;
+    return `${q} às ${horaCurta(iso)}`;
+  }
+  const nomeTurno = (cx) => (cx.turno ? `turno ${cx.turno.toLowerCase().startsWith("turno") ? cx.turno.slice(6).toLowerCase() : `da ${cx.turno.toLowerCase()}`}` : "turno");
+  const umTurno24h = () => modoCaixa() === "turnos" && (S.pdv.turnos || []).length === 1;
+  // Aviso de conferência do caixa aberto, conforme o modo. nivel: "" (nada), "info", "atencao" ou "alerta"
+  function avisoDoCaixa(cx) {
+    const agora = Date.now();
+    const fim = cx.previstoFim ? new Date(cx.previstoFim).getTime() : null;
+    const avisoMs = (Number(S.pdv.avisoMin ?? 15)) * 60000;
+    const faltaMin = fim ? Math.max(1, Math.ceil((fim - agora) / 60000)) : 0;
+    const quanto = faltaMin >= 60 ? `${Math.floor(faltaMin / 60)} h${faltaMin % 60 ? ` ${faltaMin % 60} min` : ""}` : `${faltaMin} ${faltaMin === 1 ? "minuto" : "minutos"}`;
+    if (modoCaixa() === "turnos" && fim) {
+      const nome = umTurno24h() ? "a virada do dia" : `o fim do ${nomeTurno(cx)}`;
+      if (agora >= fim) return { nivel: "alerta", texto: umTurno24h()
+        ? `⚠ <b>A virada do dia foi às ${horaCurta(cx.previstoFim)} e a gaveta das últimas 24 horas ainda não foi conferida.</b> As vendas do novo dia estão entrando neste caixa. Confira agora para cada dia ter a sua conta.`
+        : `⚠ <b>O ${nomeTurno(cx)} terminou às ${horaCurta(cx.previstoFim)} e a gaveta ainda não foi conferida.</b> As vendas do próximo turno estão entrando neste caixa. Confira agora para cada turno ter a sua conta.`, botao: true };
+      if (fim - agora <= avisoMs) return { nivel: "atencao", texto: `⏰ <b>Faltam ${quanto} para ${nome} (${horaCurta(cx.previstoFim)}).</b> ${umTurno24h() ? "Hora de conferir a gaveta das últimas 24 horas." : "Antes de passar o caixa, conte o dinheiro da gaveta."}`, botao: true };
+      return { nivel: "", texto: "" };
+    }
+    if (modoCaixa() === "horario" && fim) {
+      if (fim - agora <= avisoMs) return { nivel: "atencao", texto: `⏰ <b>Faltam ${quanto} para fechar (${horaCurta(cx.previstoFim)}).</b> Conte a gaveta e feche o caixa. Se ele fechar sozinho, fica como “falta conferir” até alguém contar.` };
+      return { nivel: "info", texto: `Fecha sozinho ${quandoFoi(cx.previstoFim)}.${S.pdv.avisoMin ? ` ${S.pdv.avisoMin} minutos antes aparece o aviso para contar a gaveta.` : ""}` };
+    }
+    // abrir e fechar na mão (ou aberto fora do horário): caixa esquecido aberto mistura os dias
+    const horas = (agora - new Date(cx.abertoEm).getTime()) / 3600000;
+    if (horas >= 12 && modoCaixa() !== "turnos") return { nivel: "alerta", texto: `⚠ Este caixa está aberto há ${horas >= 48 ? `${Math.floor(horas / 24)} dias` : `${Math.floor(horas)} horas`}. Feche e abra um novo no começo de cada dia, para as vendas e o dinheiro da gaveta de cada dia não se misturarem.` };
+    return { nivel: "", texto: "" };
+  }
+  // Caixas que fecharam sozinhos e falta conferir
+  function pendentesHtml() {
+    const lista = S.caixaPend || [];
+    if (!lista.length) return "";
+    const aberto = S.caixa && S.caixa.caixa;
+    const podeConferir = pode("caixa") && !(S.caixa && S.caixa.restrito);
+    return lista.slice(0, 3).map((p) => {
+      const encadeado = aberto && aberto.trocoConferir && aberto.trocoDe === p.id;
+      const texto = !podeConferir ? "Falta conferir o dinheiro da gaveta. Peça para quem cuida do caixa."
+        : encadeado ? "Falta conferir. Conte o dinheiro da gaveta antes da primeira venda em dinheiro: essa contagem confere este caixa e acerta o troco do caixa aberto."
+        : "Falta conferir. Conte o dinheiro da gaveta. A conta só fica certa se ninguém mexeu nela depois que o caixa fechou.";
+      return `<div class="cx-pendente" role="status">
+        <p class="cx-pendente-tit">Caixa #${p.numero}${p.turno ? ` · ${esc(p.turno)}` : ""} fechou sozinho ${quandoFoi(p.fechadoEm)}</p>
+        <p class="sub">${texto}</p>
+        ${podeConferir ? `<div class="linha" style="margin-top:10px"><button class="btn acento" data-a="cx-conferir" data-id="${p.id}">Conferir agora</button></div>` : ""}
+      </div>`;
+    }).join("") + (lista.length > 3 ? `<p class="sub" style="margin:-4px 0 12px">E mais ${lista.length - 3} em Relatórios › Caixas.</p>` : "");
+  }
+  // Faixa curta para a tela de vender (e o carrinho): conferência pendente ou fim de turno
+  function avisoCaixaFaixa() {
+    if (!S.pdv || !pode("caixa")) return "";
+    const pend = (S.caixaPend || []).length;
+    const cx = S.caixa && S.caixa.caixa;
+    const a = cx ? avisoDoCaixa(cx) : { nivel: "" };
+    if (a.nivel === "alerta" || a.nivel === "atencao") {
+      const curto = modoCaixa() === "turnos" ? (a.nivel === "alerta" ? `<b>${umTurno24h() ? "A virada do dia passou" : `O ${nomeTurno(cx)} terminou`} e a gaveta não foi conferida.</b>` : `<b>${umTurno24h() ? "A virada do dia" : `O fim do ${nomeTurno(cx)}`} está chegando (${horaCurta(cx.previstoFim)}).</b> Conte a gaveta.`)
+        : modoCaixa() === "horario" ? `<b>O caixa fecha às ${horaCurta(cx.previstoFim)}.</b> Conte a gaveta antes.` : `<b>O caixa está aberto há muito tempo.</b> Feche e abra um novo.`;
+      return `<div class="faixa ${a.nivel === "alerta" ? "faixa-alerta" : ""}"><span>${curto}</span><button class="btn mini acento" data-a="ir" data-tab="caixa">Ir para o caixa</button></div>`;
+    }
+    if (pend || (cx && cx.trocoConferir)) return `<div class="faixa"><span><b>${pend ? (pend === 1 ? "1 caixa fechou sozinho e falta conferir." : `${pend} caixas fecharam sozinhos e falta conferir.`) : "O troco do caixa ainda não foi contado."}</b> Conte a gaveta antes da primeira venda em dinheiro.</span><button class="btn mini acento" data-a="ir" data-tab="caixa">Conferir</button></div>`;
+    return "";
+  }
   function blocoCaixaHtml() {
     const c = S.caixa;
     if (!c) {
-      return `<div class="card caixa-card fechado">
-        <div class="caixa-status"><span class="caixa-luz"></span><div><h2 class="secao" style="margin:0">Caixa fechado</h2><p class="sub">Abra o caixa no começo do dia, com o dinheiro de troco que está na gaveta.</p></div></div>
+      const comoAbre = modoCaixa() === "horario" ? (S.proximaAbertura ? `Abre sozinho ${quandoFoi(S.proximaAbertura)}, com o troco que ficou na gaveta. Precisa vender antes? Abra agora.` : "Abre sozinho no horário de funcionamento. Precisa vender antes? Abra agora.")
+        : modoCaixa() === "turnos" ? "Abre sozinho no começo do próximo turno. Precisa vender antes? Abra agora."
+        : "Abra o caixa no começo do dia, com o dinheiro de troco que está na gaveta.";
+      return pendentesHtml() + `<div class="card caixa-card fechado">
+        <div class="caixa-status"><span class="caixa-luz"></span><div><h2 class="secao" style="margin:0">Caixa fechado</h2><p class="sub">${comoAbre}</p></div></div>
         <div class="caixa-abrir">
           <label class="campo"><span>Troco inicial (dinheiro na gaveta)</span><input id="cx-troco" inputmode="decimal" placeholder="0,00" value="${S.ultimoTroco ? br(S.ultimoTroco) : ""}" /></label>
           <button class="btn acento grande" data-a="cx-abrir">Abrir o caixa</button>
@@ -369,19 +446,26 @@
     }
     const cx = c.caixa;
     const horasAberto = (Date.now() - new Date(cx.abertoEm).getTime()) / 3600000;
-    // de um dia para o outro: mostra a data e avisa (caixa esquecido aberto mistura as vendas de dias diferentes)
-    const hora = horasAberto >= 12 ? new Date(cx.abertoEm).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }) : new Date(cx.abertoEm).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
-    const avisoEsquecido = horasAberto >= 12 ? `<p class="aviso alerta" role="alert">⚠ Este caixa está aberto há ${horasAberto >= 48 ? `${Math.floor(horasAberto / 24)} dias` : `${Math.floor(horasAberto)} horas`}. Feche e abra um novo no começo de cada dia, para as vendas e o dinheiro da gaveta de cada dia não se misturarem.</p>` : "";
+    // de um dia para o outro: mostra a data
+    const hora = horasAberto >= 12 ? new Date(cx.abertoEm).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }) : horaCurta(cx.abertoEm);
+    const titulo = `Caixa #${cx.numero} aberto${cx.turno ? ` · ${esc(cx.turno)}` : ""}`;
+    const desde = `${cx.abertoAuto ? `abriu sozinho ${horasAberto >= 12 ? `em ${hora}` : `às ${hora}`}` : `desde ${hora}`}${cx.abertoPor ? ` · por ${esc(cx.abertoPor)}` : ""}`;
+    const av = avisoDoCaixa(cx);
+    const turnos = modoCaixa() === "turnos";
+    const avisoHtml = av.nivel ? `<p class="aviso ${av.nivel === "alerta" ? "alerta" : av.nivel === "info" ? "info" : ""}" ${av.nivel === "alerta" ? 'role="alert"' : ""}>${av.texto}</p>` : "";
+    // troco de um caixa que abriu sozinho e ninguém contou (sem caixa pendente por trás: o pendente tem o cartão próprio)
+    const trocoAviso = cx.trocoConferir && !cx.trocoDe && !c.restrito && pode("caixa") ? `<p class="aviso">O caixa abriu sozinho com <b>${fmt(cx.trocoInicial)}</b> de troco (o que ficou no último fechamento). Se alguém tirou ou pôs dinheiro na gaveta depois, conte para acertar. <button class="link" data-a="cx-conferir">Contar a gaveta</button></p>` : "";
     // a função não cuida do caixa: o servidor não manda os valores (vendas, gaveta, movimentos)
-    if (c.restrito) return `<div class="card caixa-card aberto">
-      <div class="caixa-status"><span class="caixa-luz"></span><div><h2 class="secao" style="margin:0">Caixa #${cx.numero} aberto</h2><p class="sub">desde ${hora}${cx.abertoPor ? ` · por ${esc(cx.abertoPor)}` : ""}. Os valores do caixa ficam com quem cuida dele.</p></div></div>
-      ${avisoEsquecido}
+    if (c.restrito) return pendentesHtml() + `<div class="card caixa-card aberto">
+      <div class="caixa-status"><span class="caixa-luz"></span><div><h2 class="secao" style="margin:0">${titulo}</h2><p class="sub">${desde}. Os valores do caixa ficam com quem cuida dele.</p></div></div>
+      ${avisoHtml}
     </div>`;
     const outros = MEIOS_CAIXA.filter((m) => m !== "dinheiro" && c.esperado[m]).map((m) => `<li><span>${meioCurto(m)}</span><b class="num">${fmt(c.esperado[m])}</b></li>`).join("");
     const movs = c.movimentos.lista.slice().reverse().slice(0, 8);
-    return `<div class="card caixa-card aberto">
-      <div class="caixa-status"><span class="caixa-luz"></span><div><h2 class="secao" style="margin:0">Caixa #${cx.numero} aberto</h2><p class="sub">desde ${hora}${cx.abertoPor ? ` · por ${esc(cx.abertoPor)}` : ""} · troco inicial ${fmt(cx.trocoInicial)}</p></div></div>
-      ${avisoEsquecido}
+    return pendentesHtml() + `<div class="card caixa-card aberto">
+      <div class="caixa-status"><span class="caixa-luz"></span><div><h2 class="secao" style="margin:0">${titulo}</h2><p class="sub">${desde} · troco inicial ${fmt(cx.trocoInicial)}${cx.trocoConferir ? ` <span class="selo baixo">a conferir</span>` : ""}</p></div></div>
+      ${avisoHtml}${trocoAviso}
+      ${turnos && av.botao ? `<button class="btn acento grande" data-a="cx-turno" style="margin-top:12px">${umTurno24h() ? "Conferir a gaveta do dia" : "Conferir e passar o turno"}</button>` : ""}
       <div class="caixa-numeros">
         <div><p class="kpi-rotulo">Vendas</p><p class="kpi-valor">${fmt(c.vendas.total)}</p><p class="kpi-nota">${c.vendas.quantidade === 1 ? "1 venda" : `${c.vendas.quantidade} vendas`}${c.vendas.fiado ? ` · ${fmt(c.vendas.fiado)} no fiado` : ""}</p></div>
         <div><p class="kpi-rotulo">Dinheiro na gaveta</p><p class="kpi-valor">${fmt(c.esperado.dinheiro)}</p><p class="kpi-nota">deveria ter agora</p></div>
@@ -392,7 +476,7 @@
         <button class="btn claro" data-a="cx-mov" data-v="reforco"><span aria-hidden="true">↓</span> Reforço</button>
         <button class="btn claro" data-a="cx-mov" data-v="despesa"><span aria-hidden="true">−</span> Despesa</button>
         <button class="btn claro" data-a="cx-fiado"><span aria-hidden="true">✓</span> Receber fiado</button>
-        <button class="btn" data-a="cx-fechar">Fechar o caixa</button>
+        ${turnos ? `<button class="btn" data-a="cx-turno">${umTurno24h() ? "Conferir o dia" : "Passar o turno"}</button><button class="btn claro" data-a="cx-fechar">Fechar o caixa</button>` : `<button class="btn" data-a="cx-fechar">Fechar o caixa</button>`}
       </div>
       ${movs.length || c.ultimasVendas.length ? `<div class="grade grade-2" style="margin-top:16px">
         <div><p class="bloco-titulo">Últimas vendas</p>${c.ultimasVendas.length ? `<ul class="lista-simples">${c.ultimasVendas.map((v) => `<li class="${v.cancelada ? "riscado" : ""}"><span>#${v.numero} · ${new Date(v.em).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}${v.cliente ? ` · ${esc(v.cliente)}` : ""}<small class="sub" style="display:block">${(v.pagamentos || []).map((p) => meioCurto(p.meio)).join(" + ")}${v.operador ? ` · ${esc(v.operador)}` : ""}</small></span><b class="num">${fmt(v.total)}</b></li>`).join("")}</ul>` : `<p class="sub">Nenhuma venda ainda.</p>`}</div>
@@ -452,7 +536,8 @@
     if (tecla === "⌫") c = c.slice(0, -1);
     else c = (c === "0" ? "" : c) + tecla;
     c = c.replace(/^0+/, "").slice(0, 9);
-    return c ? textoDeCentavos(Number(c)) : "";
+    // tocar só no 0 (ou 00) vale R$ 0,00 — a gaveta pode estar vazia; só o ⌫ deixa o campo em branco
+    return c ? textoDeCentavos(Number(c)) : (tecla === "⌫" ? "" : "0,00");
   }
 
   let MV = null; // sangria / reforço / despesa
@@ -479,43 +564,95 @@
     m.salvando = true; corpoModal(movimentoHtml());
     try {
       const r = await api("POST", "/estoque/caixa/movimento", { tipo: m.tipo, valor: centavosDeTexto(m.valor) / 100, descricao: m.descricao, categoria: m.categoria });
-      S.caixa = r.aberto; fecharModal(); toast(`Registrado: ${NOME_MOV_CX[m.tipo].toLowerCase()} de ${fmt(centavosDeTexto(m.valor) / 100)}.`, "ok"); render();
+      aplicarSituacao(r); fecharModal(); toast(`Registrado: ${NOME_MOV_CX[m.tipo].toLowerCase()} de ${fmt(centavosDeTexto(m.valor) / 100)}.`, "ok"); render();
     } catch (e) { m.salvando = false; m.erro = e.message; corpoModal(movimentoHtml()); }
   }
 
   let FX = null; // fechamento
-  function abrirFechamento() {
+  // FX = modal de contar a gaveta. modo: "fechar" (fechar o caixa), "turno" (conferir e passar o
+  // turno) ou "conferir" (conferir depois um caixa que fechou sozinho / o troco de um que abriu sozinho)
+  function abrirFechamento(modo = "fechar") {
     const c = S.caixa; if (!c) return;
-    FX = { contado: { dinheiro: "" }, obs: "", erro: "", salvando: false, campo: "dinheiro" };
+    FX = { modo, esperado: c.esperado, contado: { dinheiro: "" }, obs: "", erro: "", salvando: false, campo: "dinheiro" };
     MEIOS_CAIXA.filter((m) => m !== "dinheiro" && c.esperado[m]).forEach((m) => { FX.contado[m] = textoDeCentavos(Math.round(c.esperado[m] * 100)); });
-    abrirModal(`Fechar o caixa #${c.caixa.numero}`, fechamentoHtml(), { aoFechar: () => { FX = null; } });
+    if (modo === "turno") FX.contado._retirado = "";
+    const tit = modo === "turno" ? `Passar o turno · caixa #${c.caixa.numero}` : `Fechar o caixa #${c.caixa.numero}`;
+    abrirModal(tit, fechamentoHtml(), { aoFechar: () => { FX = null; } });
+  }
+  // pend = caixa que fechou sozinho (ou null: só o troco do caixa aberto)
+  function abrirConferencia(pendId) {
+    const aberto = S.caixa && !S.caixa.restrito ? S.caixa : null;
+    const pend = (S.caixaPend || []).find((p) => p.id === pendId) || null;
+    // a contagem de agora vale para o caixa aberto quando o troco dele veio do pendente (ou não há pendente)
+    const encadeado = !!(aberto && aberto.caixa.trocoConferir && (!pend || aberto.caixa.trocoDe === pend.id));
+    const origem = encadeado ? (S.caixaPend || []).find((p) => p.id === aberto.caixa.trocoDe) || null : pend;
+    if (!encadeado && !pend) return;
+    FX = { modo: "conferir", encadeado, pend: origem, caixaId: encadeado ? null : pend.id, esperado: { dinheiro: encadeado ? aberto.esperado.dinheiro : pend.esperado.dinheiro || 0 },
+      contado: { dinheiro: "", ...(origem ? { _retirado: "" } : {}) }, obs: "", erro: "", salvando: false, campo: "dinheiro" };
+    abrirModal(origem ? `Conferir o caixa #${origem.numero}` : "Contar o troco da gaveta", fechamentoHtml(), { aoFechar: () => { FX = null; } });
   }
   function fechamentoHtml() {
-    const c = S.caixa; const f = FX;
+    const f = FX; const esp = f.esperado;
     const linhas = Object.keys(f.contado).map((m) => {
-      const esp = c.esperado[m] || 0; const cont = centavosDeTexto(f.contado[m]) / 100;
-      const dif = f.contado[m] === "" ? null : Math.round((cont - esp) * 100) / 100;
+      if (m === "_retirado") {
+        const rot = f.modo === "turno" ? "Tirar da gaveta agora" : "Levaram para o cofre ou banco";
+        const nota = f.modo === "turno" ? "opcional · o resto fica de troco" : "opcional · depois que o caixa fechou";
+        return `<button type="button" class="fx-linha ${f.campo === m ? "ativa" : ""}" data-a="fx-campo" data-v="${m}">
+          <span class="fx-meio">${rot}<small>${nota}</small></span>
+          <span class="fx-contado num">${f.contado[m] === "" ? `<span class="sub">R$ 0,00</span>` : `R$ ${f.contado[m]}`}</span><span class="fx-dif"></span></button>`;
+      }
+      const e = esp[m] || 0; const cont = centavosDeTexto(f.contado[m]) / 100;
+      const dif = f.contado[m] === "" || f.modo === "conferir" ? null : Math.round((cont - e) * 100) / 100;
       return `<button type="button" class="fx-linha ${f.campo === m ? "ativa" : ""}" data-a="fx-campo" data-v="${m}">
-        <span class="fx-meio">${meioCurto(m)}<small>deveria ter ${fmt(esp)}</small></span>
+        <span class="fx-meio">${f.modo === "conferir" ? "Dinheiro na gaveta agora" : meioCurto(m)}<small>deveria ter ${fmt(e)}</small></span>
         <span class="fx-contado num">${f.contado[m] === "" ? `<span class="sub">contar</span>` : `R$ ${f.contado[m]}`}</span>
         <span class="fx-dif num ${dif === null ? "" : dif < 0 ? "negativo" : dif > 0 ? "positivo" : ""}">${dif === null ? "" : dif === 0 ? "ok" : `${dif > 0 ? "+" : "−"} ${fmt(Math.abs(dif))}`}</span>
       </button>`;
     }).join("");
-    const difDin = f.contado.dinheiro === "" ? null : Math.round((centavosDeTexto(f.contado.dinheiro) / 100 - (c.esperado.dinheiro || 0)) * 100) / 100;
-    return `<p class="sub" style="margin-bottom:12px">Conte o dinheiro da gaveta e confira os outros valores com a maquininha e o extrato do Pix. Toque numa linha para digitar.</p>
+    const retC = f.contado._retirado ? centavosDeTexto(f.contado._retirado) : 0;
+    // diferença que vai para o financeiro: no conferir, a do caixa que fechou sozinho (o que foi levado embora não é quebra)
+    const difDin = f.contado.dinheiro === "" ? null : Math.round(centavosDeTexto(f.contado.dinheiro) + (f.modo === "conferir" ? retC : 0) - Math.round((esp.dinheiro || 0) * 100)) / 100;
+    let intro = "Conte o dinheiro da gaveta e confira os outros valores com a maquininha e o extrato do Pix. Toque numa linha para digitar.";
+    if (f.modo === "turno") intro = "Conte a gaveta para fechar a conta deste turno. O próximo turno começa com o dinheiro que ficar na gaveta como troco. Toque numa linha para digitar.";
+    if (f.modo === "conferir") intro = f.pend
+      ? (f.encadeado ? `O caixa #${f.pend.numero} fechou sozinho ${quandoFoi(f.pend.fechadoEm)} e ninguém contou a gaveta. Conte o dinheiro que está nela agora: essa contagem confere o caixa #${f.pend.numero} e acerta o troco do caixa aberto.`
+        : `O caixa #${f.pend.numero} fechou sozinho ${quandoFoi(f.pend.fechadoEm)}. Conte o dinheiro da gaveta. A conta só fica certa se ninguém mexeu na gaveta depois que ele fechou.`)
+      : "O caixa abriu sozinho com o troco que ficou no último fechamento. Conte a gaveta para confirmar quanto tem de troco.";
+    let avisoDif = "";
+    if (difDin !== null) {
+      if (f.modo === "conferir" && !f.pend) avisoDif = `<p class="aviso info">O troco deste caixa fica <b>${fmt(Math.max(0, (S.caixa.caixa.trocoInicial || 0) + difDin))}</b>.</p>`;
+      else if (difDin !== 0) avisoDif = `<p class="aviso">${difDin < 0 ? `Falta <b>${fmt(-difDin)}</b> no dinheiro${f.pend ? ` do caixa #${f.pend.numero}` : ""}. Vira despesa "Quebra de caixa" no Controle financeiro.` : `Sobra <b>${fmt(difDin)}</b> no dinheiro${f.pend ? ` do caixa #${f.pend.numero}` : ""}. Vira receita "Sobra de caixa" no Controle financeiro.`}</p>`;
+      else if (f.modo === "conferir") avisoDif = `<p class="aviso info">Tudo certo: a gaveta bate com o que deveria ter.</p>`;
+    }
+    const botao = { fechar: ["Fechar o caixa", "Fechando…"], turno: ["Conferir e passar o turno", "Passando…"], conferir: ["Conferir", "Conferindo…"] }[f.modo];
+    return `<p class="sub" style="margin-bottom:12px">${intro}</p>
       <div class="fx-lista">${linhas}</div>
       ${tecladoHtml("fx")}
-      ${difDin !== null && difDin !== 0 ? `<p class="aviso">${difDin < 0 ? `Falta <b>${fmt(-difDin)}</b> no dinheiro. Vira despesa "Quebra de caixa" no Controle financeiro.` : `Sobra <b>${fmt(difDin)}</b> no dinheiro. Vira receita "Sobra de caixa" no Controle financeiro.`}</p>` : ""}
+      ${avisoDif}
       <label class="campo" style="margin-top:12px"><span>Observação (opcional)</span><input id="fx-obs" value="${esc(f.obs)}" maxlength="300" /></label>
       ${f.erro ? `<p class="erro-form">${esc(f.erro)}</p>` : ""}
-      <div class="modal-rodape"><button class="btn claro" data-a="fechar-modal">Cancelar</button><button class="btn acento" data-a="fx-ok" ${f.salvando ? "disabled" : ""}>${f.salvando ? "Fechando…" : "Fechar o caixa"}</button></div>`;
+      <div class="modal-rodape"><button class="btn claro" data-a="fechar-modal">Cancelar</button><button class="btn acento" data-a="fx-ok" ${f.salvando ? "disabled" : ""}>${f.salvando ? botao[1] : botao[0]}</button></div>`;
   }
   async function confirmarFechamento() {
     const f = FX; f.erro = ""; const o = $("#fx-obs"); if (o) f.obs = o.value;
     if (f.contado.dinheiro === "") { f.erro = "Conte o dinheiro da gaveta e digite o valor (pode ser 0)."; f.campo = "dinheiro"; corpoModal(fechamentoHtml()); return; }
     f.salvando = true; corpoModal(fechamentoHtml());
-    const contado = {}; Object.keys(f.contado).forEach((m) => { if (f.contado[m] !== "") contado[m] = centavosDeTexto(f.contado[m]) / 100; });
+    const contado = {}; Object.keys(f.contado).forEach((m) => { if (m !== "_retirado" && f.contado[m] !== "") contado[m] = centavosDeTexto(f.contado[m]) / 100; });
+    const retirado = f.contado._retirado ? centavosDeTexto(f.contado._retirado) / 100 : 0;
     try {
+      if (f.modo === "conferir") {
+        const r = await api("POST", "/estoque/caixa/conferir", { caixaId: f.caixaId || undefined, contado: contado.dinheiro, retirado, obs: f.obs });
+        aplicarSituacao(r); FX = null; fecharModal();
+        toast(!f.pend ? "Troco conferido." : r.diferenca ? `Caixa #${f.pend.numero} conferido: ${r.diferenca < 0 ? "faltou" : "sobrou"} ${fmt(Math.abs(r.diferenca))}.` : `Caixa #${f.pend.numero} conferido, sem diferença.`, "ok");
+        render(); return;
+      }
+      if (f.modo === "turno") {
+        const r = await api("POST", "/estoque/caixa/passar-turno", { contado, retirado, obs: f.obs });
+        aplicarSituacao(r); FX = null; S.caixaDetalhe = r.fechado;
+        const novo = r.aberto && r.aberto.caixa;
+        abrirModal(`Caixa #${r.fechado.caixa.numero} conferido`, relatorioCaixaHtml(r.fechado) + `<p class="aviso info">${novo ? `Caixa #${novo.numero} aberto${novo.turno ? ` para o turno ${esc(novo.turno.toLowerCase())}` : ""}, com ${fmt(novo.trocoInicial)} de troco.` : ""}</p><div class="modal-rodape"><button class="btn claro" data-a="imprimir-caixa">Imprimir</button><button class="btn acento" data-a="fechar-modal">Pronto</button></div>`, { largo: true });
+        carregarDaAba("caixa"); return;
+      }
       const r = await api("POST", "/estoque/caixa/fechar", { contado, obs: f.obs });
       S.ultimoTroco = 0; S.caixa = null; FX = null;
       abrirModal(`Caixa #${r.caixa.numero} fechado`, relatorioCaixaHtml(r) + `<div class="modal-rodape"><button class="btn claro" data-a="imprimir-caixa">Imprimir</button><button class="btn acento" data-a="fechar-modal">Pronto</button></div>`, { largo: true });
@@ -529,7 +666,8 @@
     const meios = MEIOS_CAIXA.filter((m) => (r.esperado[m] || 0) || (cx.contado && cx.contado[m] !== undefined));
     const h = (iso) => (iso ? new Date(iso).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }) : "—");
     return `<div class="relatorio-caixa">
-      <p class="sub">Aberto em ${h(cx.abertoEm)}${cx.abertoPor ? ` por ${esc(cx.abertoPor)}` : ""} · ${cx.status === "fechado" ? `fechado em ${h(cx.fechadoEm)}${cx.fechadoPor ? ` por ${esc(cx.fechadoPor)}` : ""}` : "ainda aberto"}</p>
+      <p class="sub">${cx.turno ? `${esc(cx.turno)} · ` : ""}Aberto em ${h(cx.abertoEm)}${cx.abertoAuto ? " (sozinho)" : cx.abertoPor ? ` por ${esc(cx.abertoPor)}` : ""} · ${cx.status === "fechado" ? `fechado em ${h(cx.fechadoEm)}${cx.fechadoAuto ? " (sozinho)" : cx.fechadoPor ? ` por ${esc(cx.fechadoPor)}` : ""}` : "ainda aberto"}${cx.conferidoEm ? ` · conferido em ${h(cx.conferidoEm)}${cx.conferidoPor ? ` por ${esc(cx.conferidoPor)}` : ""}` : ""}</p>
+      ${cx.conferir ? `<p class="aviso">Este caixa fechou sozinho no fim do horário e <b>falta conferir</b>: ninguém contou a gaveta. A coluna “Contado” fica vazia até a conferência.${pode("caixa") ? ` <button class="link" data-a="cx-conferir-hist" data-id="${cx.id}">Conferir agora</button>` : ""}</p>` : ""}
       <div class="grade grade-4" style="margin:14px 0">
         <div class="card"><p class="kpi-rotulo">Vendas</p><p class="kpi-valor">${fmt(r.vendas.total)}</p><p class="kpi-nota">${r.vendas.quantidade} vendas</p></div>
         <div class="card"><p class="kpi-rotulo">Fiado vendido</p><p class="kpi-valor">${fmt(r.vendas.fiado)}</p></div>
@@ -851,7 +989,8 @@
     const cats = [...new Set(ativos().map((p) => p.categoria).filter(Boolean))].sort((a, b) => a.localeCompare(b, "pt-BR"));
     const t = totaisCarrinho();
     return topo("Vender", "Venda no balcão: dá baixa no estoque e entra como receita no Controle financeiro.") +
-      (caixaBloqueia() ? `<div class="faixa"><span><b>O caixa está fechado.</b> Abra o caixa para começar a vender.</span><button class="btn mini acento" data-a="ir" data-tab="caixa">Abrir o caixa</button></div>` : "") + `
+      (caixaBloqueia() ? `<div class="faixa"><span><b>O caixa está fechado.</b> Abra o caixa para começar a vender.</span><button class="btn mini acento" data-a="ir" data-tab="caixa">Abrir o caixa</button></div>` : "") +
+      `<div id="aviso-caixa-vender">${avisoCaixaFaixa()}</div>` + `
       <div class="pdv">
         <div>
           <div class="pdv-busca">
@@ -957,7 +1096,7 @@
         const tel = c.cli ? c.cli.telefone : ""; CB = null;
         vendaConcluida(r, tel, "Pronto");
         carregarMesas().catch(() => {}); recarregarProdutos().catch(() => {});
-        api("GET", "/estoque/caixa").then((x) => { S.caixa = x.aberto; }).catch(() => {});
+        api("GET", "/estoque/caixa").then(aplicarSituacao).catch(() => {});
       } catch (e) { if (CB) { c.salvando = false; c.erro = e.message; corpoModal(cobrancaHtml()); } }
       return;
     }
@@ -981,7 +1120,7 @@
       vendaConcluida(r, cliTel);
       if (r.venda.offline) { const g = $("#grade-pdv"); if (g) g.innerHTML = gradePdvHtml(); guardarCache(); }
       else recarregarProdutos().then(() => { if (S.tab === "vender") { const g = $("#grade-pdv"); if (g) g.innerHTML = gradePdvHtml(); } guardarCache(); }).catch(() => {});
-      api("GET", "/estoque/caixa").then((x) => { S.caixa = x.aberto; }).catch(() => {});
+      api("GET", "/estoque/caixa").then(aplicarSituacao).catch(() => {});
     } catch (e) { S.vendendo = false; c.salvando = false; c.erro = e.message; corpoModal(cobrancaHtml()); }
     if (S.tab === "vender") redesenharCarrinho();
   }
@@ -1387,9 +1526,9 @@
     if (!S.caixas.length) return html + `<div class="card vazio"><b>Nenhum caixa ainda</b>Abra o caixa na aba Caixa para começar.</div>`;
     const h = (iso) => (iso ? new Date(iso).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }) : "—");
     return html + `<div class="card" style="padding:6px 8px"><div class="tabela-wrap"><table class="tabela"><thead><tr><th>#</th><th>Abertura</th><th class="so-desk">Fechamento</th><th class="dir">Vendas</th><th class="dir">Diferença</th></tr></thead><tbody>
-      ${S.caixas.map((c) => `<tr class="clicavel" data-a="ver-caixa" data-id="${c.id}"><td class="num">${c.numero}</td><td>${h(c.abertoEm)}${c.abertoPor ? `<div class="prod-cat">${esc(c.abertoPor)}</div>` : ""}</td>
-        <td class="so-desk">${c.status === "aberto" ? `<span class="selo ok">aberto</span>` : h(c.fechadoEm)}</td><td class="dir num">${fmt(c.total)}<div class="prod-cat">${c.vendas} vendas</div></td>
-        <td class="dir num ${c.diferenca < 0 ? "negativo" : c.diferenca > 0 ? "positivo" : ""}">${c.status === "aberto" ? "—" : c.diferenca ? `${c.diferenca > 0 ? "+" : "−"} ${fmt(Math.abs(c.diferenca))}` : "ok"}</td></tr>`).join("")}
+      ${S.caixas.map((c) => `<tr class="clicavel" data-a="ver-caixa" data-id="${c.id}"><td class="num">${c.numero}</td><td>${h(c.abertoEm)}<div class="prod-cat">${[c.turno ? esc(c.turno) : "", c.abertoAuto ? "abriu sozinho" : esc(c.abertoPor)].filter(Boolean).join(" · ")}</div></td>
+        <td class="so-desk">${c.status === "aberto" ? `<span class="selo ok">aberto</span>` : `${h(c.fechadoEm)}${c.fechadoAuto ? `<div class="prod-cat">fechou sozinho</div>` : ""}`}</td><td class="dir num">${fmt(c.total)}<div class="prod-cat">${c.vendas} vendas</div></td>
+        <td class="dir num ${c.conferir ? "" : c.diferenca < 0 ? "negativo" : c.diferenca > 0 ? "positivo" : ""}">${c.status === "aberto" ? (c.trocoConferir ? `<span class="selo baixo">troco a conferir</span>` : "—") : c.conferir ? `<span class="selo baixo">falta conferir</span>` : c.diferenca ? `${c.diferenca > 0 ? "+" : "−"} ${fmt(Math.abs(c.diferenca))}` : "ok"}</td></tr>`).join("")}
     </tbody></table></div></div>`;
   }
   function imprimirHtml(titulo, html) {
@@ -1743,12 +1882,15 @@
   // Caixa e operadores (PIN)
   let PC = null;
   function caixaConfigHtml() {
-    if (!PC) PC = { exigirCaixa: S.pdv.exigirCaixa !== false, exigirOperador: !!S.pdv.exigirOperador, descontoMaxCaixa: String(S.pdv.descontoMaxCaixa ?? 10).replace(".", ","), reciboRodape: S.pdv.reciboRodape || "", erro: "" };
+    if (!PC) PC = { exigirOperador: !!S.pdv.exigirOperador, descontoMaxCaixa: String(S.pdv.descontoMaxCaixa ?? 10).replace(".", ","), reciboRodape: S.pdv.reciboRodape || "", erro: "",
+      modoCaixa: modoCaixa(), avisoMin: String(S.pdv.avisoMin ?? 15), virada: S.pdv.virada || "06:00",
+      horario: { abre: "08:00", fecha: "18:00", dias: [1, 2, 3, 4, 5, 6], ...(S.pdv.horario || {}) },
+      turnos: (S.pdv.turnos && S.pdv.turnos.length ? S.pdv.turnos : [{ nome: "Manhã", inicio: "06:00", fim: "14:00" }, { nome: "Tarde", inicio: "14:00", fim: "22:00" }, { nome: "Noite", inicio: "22:00", fim: "06:00" }]).map((t) => ({ ...t })) };
     const ops = S.operadores;
     return `<div class="card">
       <h2 class="secao">Caixa e operadores</h2>
-      <div class="campos" style="grid-template-columns:1fr">
-        <label class="check"><input type="checkbox" data-pc="exigirCaixa" ${PC.exigirCaixa ? "checked" : ""} /><span><b>Só vender com o caixa aberto</b><small>Garante que toda venda do balcão entre na conferência do fim do dia.</small></span></label>
+      ${modosCaixaHtml()}
+      <div class="campos" style="grid-template-columns:1fr;margin-top:16px">
         <label class="campo"><span>Mensagem no fim do recibo</span><input data-pc="reciboRodape" value="${esc(PC.reciboRodape)}" maxlength="140" placeholder="Obrigado pela preferência!" /></label>
       </div>
       <div class="bloco">
@@ -1763,11 +1905,52 @@
       <div class="modal-rodape"><button class="btn acento" data-a="salvar-pc">Salvar</button></div>
     </div>`;
   }
+  // Como o caixa funciona: os 4 modos e os campos de cada um
+  const DIAS_CX = ["D", "S", "T", "Q", "Q", "S", "S"];
+  const NOMES_DIAS = ["domingo", "segunda", "terça", "quarta", "quinta", "sexta", "sábado"];
+  function modosCaixaHtml() {
+    const m = PC.modoCaixa;
+    const op = (v, tit, sub, detalhe = "") => `<label class="modo-cx ${m === v ? "sel" : ""}"><input type="radio" name="modo-cx" data-pc-modo="${v}" ${m === v ? "checked" : ""} /><span><b>${tit}</b><small>${sub}</small></span></label>${m === v && detalhe ? `<div class="modo-cx-detalhe">${detalhe}</div>` : ""}`;
+    const aviso = `<label class="campo" style="max-width:220px"><span>${m === "turnos" ? "Avisar antes do fim do turno" : "Avisar antes de fechar"} (minutos)</span><input data-pc="avisoMin" value="${esc(PC.avisoMin)}" inputmode="numeric" maxlength="3" /></label>`;
+    const h = PC.horario;
+    const detHorario = `<div class="horas-cx">
+        <label class="campo"><span>Abre às</span><input type="time" data-pch="abre" value="${esc(h.abre)}" /></label>
+        <label class="campo"><span>Fecha às</span><input type="time" data-pch="fecha" value="${esc(h.fecha)}" /></label>
+      </div>
+      <div class="campo"><span>Dias que abre</span><div class="dias-cx">${DIAS_CX.map((d, i) => `<button type="button" data-a="pc-dia" data-v="${i}" aria-pressed="${h.dias.includes(i)}" aria-label="${NOMES_DIAS[i]}">${d}</button>`).join("")}</div></div>
+      ${aviso}
+      <p class="aviso">⚠ <b>Fechar sozinho não conta o dinheiro.</b> O caixa fica como <b>“falta conferir”</b> até alguém contar a gaveta. Sobra ou falta só vai para o Controle financeiro depois dessa conferência.</p>`;
+    const detTurnos = `<div class="campo"><span>Turnos</span></div>
+      ${PC.turnos.map((t, i) => `<div class="turno-cx">
+        <input class="inp" data-pct="${i}:nome" value="${esc(t.nome)}" maxlength="30" aria-label="Nome do turno ${i + 1}" placeholder="Nome" />
+        <input class="inp" type="time" data-pct="${i}:inicio" value="${esc(t.inicio)}" aria-label="Começa às" />
+        <i>–</i>
+        <input class="inp" type="time" data-pct="${i}:fim" value="${esc(t.fim)}" aria-label="Termina às" />
+        ${PC.turnos.length > 1 ? `<button type="button" class="btn mini claro" data-a="pc-turno-rem" data-v="${i}" aria-label="Tirar o turno ${esc(t.nome)}">✕</button>` : "<span></span>"}
+      </div>`).join("")}
+      ${PC.turnos.length < 6 ? `<button type="button" class="btn mini claro" data-a="pc-turno-add" style="align-self:flex-start">+ Adicionar turno</button>` : ""}
+      <p class="sub" style="font-size:12px">Quer conferir só uma vez por dia? Deixe um turno só, com o mesmo horário de começo e fim (ex.: 06:00 a 06:00).</p>
+      <label class="campo" style="max-width:220px"><span>Virada do dia</span><input type="time" data-pc="virada" value="${esc(PC.virada)}" /></label>
+      <p class="sub" style="font-size:12px;margin-top:-6px">Uma venda antes desse horário (ex.: às 2h da manhã) conta no dia que começou na noite anterior, no Controle financeiro e nos relatórios.</p>
+      ${aviso}
+      <p class="aviso">⚠ <b>No fim de cada turno, o PDV avisa para conferir a gaveta.</b> Se ninguém conferir, as vendas continuam entrando no mesmo caixa e o aviso fica na tela até a conferência.</p>`;
+    return `<p class="bloco-titulo" style="margin:0 0 8px">Como o caixa funciona</p>
+      <div class="modos-cx" role="radiogroup" aria-label="Como o caixa funciona">
+        ${op("manual", "Abro e fecho na mão", "Um caixa por dia. Avisamos se ficar aberto de um dia para o outro.")}
+        ${op("horario", "Horário de funcionamento", "O caixa abre e fecha sozinho no horário que você escolher.", detHorario)}
+        ${op("turnos", "24 horas, em turnos", "Um caixa por turno. Quem entra confere a gaveta de quem sai.", detTurnos)}
+        ${op("livre", "Sem caixa", "Vende sem abrir caixa e sem conferir a gaveta.", `<p class="aviso">Sem caixa, ninguém confere o dinheiro da gaveta. As vendas continuam entrando no Controle financeiro normalmente.</p>`)}
+      </div>`;
+  }
   async function salvarCaixaConfig() {
     const c = PC; c.erro = "";
     try {
-      S.pdv = (await api("PUT", "/estoque/pdv", { exigirCaixa: c.exigirCaixa, exigirOperador: c.exigirOperador, descontoMaxCaixa: numOu(c.descontoMaxCaixa, 10), reciboRodape: c.reciboRodape })).pdv;
+      const mudouModo = c.modoCaixa !== modoCaixa();
+      S.pdv = (await api("PUT", "/estoque/pdv", { modoCaixa: c.modoCaixa, horario: c.horario, turnos: c.turnos, virada: c.virada, avisoMin: numOu(c.avisoMin, 15),
+        exigirOperador: c.exigirOperador, descontoMaxCaixa: numOu(c.descontoMaxCaixa, 10), reciboRodape: c.reciboRodape })).pdv;
       PC = null; toast("Salvo.", "ok"); atualizarChipOperador();
+      // horário/turnos: o caixa pode abrir sozinho agora mesmo
+      if (mudouModo || ["horario", "turnos"].includes(modoCaixa())) api("GET", "/estoque/caixa").then(aplicarSituacao).catch(() => {});
       if (S.pdv.exigirOperador && !lerOperador()) mostrarTrava();
     } catch (e) { c.erro = e.message; }
     render();
@@ -2230,6 +2413,28 @@
     vivoRodando = false;
   }
   setInterval(atualizarAoVivo, 5000);
+
+  // Caixa com horário ou turnos: de minuto em minuto confere a situação (abriu/fechou sozinho) e
+  // atualiza os avisos de conferência sem atrapalhar quem está digitando
+  let cxRodando = false;
+  async function atualizarAvisosCaixa() {
+    if (cxRodando || document.hidden || !S.pdv || !S.negocio || !["caixa", "vender"].includes(S.tab)) return;
+    const auto = ["horario", "turnos"].includes(modoCaixa());
+    if (!auto && !(S.caixaPend || []).length && !S.caixa) return;
+    cxRodando = true;
+    try {
+      const antes = JSON.stringify([S.caixa && S.caixa.caixa, S.caixaPend]);
+      if (auto) aplicarSituacao(await api("GET", "/estoque/caixa"));
+      const mudou = antes !== JSON.stringify([S.caixa && S.caixa.caixa, S.caixaPend]);
+      const digitando = document.activeElement && document.activeElement.matches && document.activeElement.matches("input, textarea, select");
+      if (S.tab === "vender") {
+        const el = $("#aviso-caixa-vender"); if (el) el.innerHTML = avisoCaixaFaixa();
+        if (mudou && !modalAberto() && !digitando && !S.carrinho.length) render();
+      } else if (!modalAberto() && !digitando) render();
+    } catch (e) { /* sem internet: tenta no próximo minuto */ }
+    cxRodando = false;
+  }
+  setInterval(atualizarAvisosCaixa, 60000);
 
   /* ---------- cliques de mesas, comanda e cozinha ---------- */
   document.addEventListener("click", async (ev) => {
@@ -2878,7 +3083,7 @@
     if (enviadas) {
       toast(`${enviadas === 1 ? "1 venda feita sem internet foi enviada" : `${enviadas} vendas feitas sem internet foram enviadas`}: estoque e financeiro atualizados.`, "ok");
       recarregarProdutos().then(() => { if (S.tab === "vender") { const g = $("#grade-pdv"); if (g) g.innerHTML = gradePdvHtml(); } guardarCache(); }).catch(() => {});
-      api("GET", "/estoque/caixa").then((x) => { S.caixa = x.aberto; if (S.tab === "caixa" && !modalAberto()) carregarDaAba("caixa"); }).catch(() => {});
+      api("GET", "/estoque/caixa").then((x) => { aplicarSituacao(x); if (S.tab === "caixa" && !modalAberto()) carregarDaAba("caixa"); }).catch(() => {});
       for (const id of notas) { try { await api("POST", `/estoque/vendas/${id}/nfce`, {}); } catch (e) { /* fica para emitir no detalhe da venda */ } }
     }
   }
@@ -3141,13 +3346,21 @@
       case "cx-abrir": {
         const troco = numOu($("#cx-troco") && $("#cx-troco").value, 0);
         el.disabled = true;
-        try { const r = await api("POST", "/estoque/caixa/abrir", { trocoInicial: troco }); S.caixa = r.aberto; toast(`Caixa #${r.aberto.caixa.numero} aberto. Boas vendas!`, "ok"); render(); }
+        try { const r = await api("POST", "/estoque/caixa/abrir", { trocoInicial: troco }); aplicarSituacao(r); toast(`Caixa #${r.aberto.caixa.numero} aberto. Boas vendas!`, "ok"); render(); }
         catch (e) { el.disabled = false; toast(esc(e.message), "erro"); }
         break;
       }
       case "cx-mov": abrirMovimento(el.dataset.v); break;
       case "mv-ok": salvarMovimento(); break;
       case "cx-fechar": abrirFechamento(); break;
+      case "cx-turno": abrirFechamento("turno"); break;
+      case "cx-conferir": abrirConferencia(id || null); break;
+      case "cx-conferir-hist": {
+        // vindo do relatório: garante a lista de pendentes atualizada antes de abrir
+        fecharModal();
+        try { aplicarSituacao(await api("GET", "/estoque/caixa")); } catch (e) { /* usa o que já tem */ }
+        abrirConferencia(id); break;
+      }
       case "fx-campo": { const o = $("#fx-obs"); if (o) FX.obs = o.value; FX.campo = el.dataset.v; corpoModal(fechamentoHtml()); break; }
       case "fx-ok": confirmarFechamento(); break;
       case "imprimir-caixa": if (S.caixaDetalhe) imprimirHtml(`Caixa #${S.caixaDetalhe.caixa.numero}`, relatorioCaixaHtml(S.caixaDetalhe)); break;
@@ -3188,6 +3401,9 @@
         break;
       }
       case "salvar-pc": salvarCaixaConfig(); break;
+      case "pc-dia": { const d = Number(el.dataset.v); const l = PC.horario.dias; PC.horario.dias = l.includes(d) ? l.filter((x) => x !== d) : [...l, d].sort(); render(); break; }
+      case "pc-turno-add": { const u = PC.turnos[PC.turnos.length - 1]; PC.turnos.push({ nome: `Turno ${PC.turnos.length + 1}`, inicio: u ? u.fim : "06:00", fim: u ? u.inicio : "14:00" }); render(); break; }
+      case "pc-turno-rem": PC.turnos.splice(Number(el.dataset.v), 1); render(); break;
       case "nav-mais": abrirMais(); break;
       case "mais-fechar": { const fm = $(".mais-fundo"); if (fm) fm.remove(); break; }
       case "ver-carrinho": abrirCarrinhoCelular(); break;
@@ -3282,6 +3498,8 @@
     if (CF && t.matches("[data-cf]") && t.type !== "checkbox") { CF[t.dataset.cf] = t.value; return; }
     if (CFG && t.matches("[data-cfg]") && t.type !== "checkbox" && t.tagName !== "SELECT") { CFG[t.dataset.cfg] = t.value; return; }
     if (PC && t.matches("[data-pc]") && t.type !== "checkbox") { PC[t.dataset.pc] = t.value; return; }
+    if (PC && t.matches("[data-pch]")) { PC.horario[t.dataset.pch] = t.value; return; }
+    if (PC && t.matches("[data-pct]")) { const [i, k] = t.dataset.pct.split(":"); if (PC.turnos[i]) PC.turnos[i][k] = t.value; return; }
   });
   document.addEventListener("change", async (ev) => {
     const t = ev.target;
@@ -3327,6 +3545,7 @@
     if (CF && t.matches("[data-cf]") && t.type === "checkbox") { CF[t.dataset.cf] = t.checked; render(); return; }
     if (CFG && t.matches("[data-cfg]")) { CFG[t.dataset.cfg] = t.type === "checkbox" ? t.checked : t.value; return; }
     if (PC && t.matches("[data-pc]") && t.type === "checkbox") { PC[t.dataset.pc] = t.checked; return; }
+    if (PC && t.matches("[data-pc-modo]")) { PC.modoCaixa = t.dataset.pcModo; PC.erro = ""; render(); return; }
   });
   // Enter na busca do balcão: leitor de código de barras (ou um resultado só) cai direto no carrinho
   document.addEventListener("keydown", (ev) => {
@@ -3379,7 +3598,7 @@
     try {
       const [d] = await Promise.all([api("GET", "/estoque"), carregarAcesso()]);
       S.negocio = d.negocio; S.produtos = d.produtos; S.meios = d.meios; S.unidades = d.unidades;
-      S.pdv = d.pdv || {}; S.recursos = d.recursos || null; S.operadores = tem("equipe") ? (d.operadores || []) : []; S.caixa = d.caixa ? d.caixa.aberto : null;
+      S.pdv = d.pdv || {}; S.recursos = d.recursos || null; S.operadores = tem("equipe") ? (d.operadores || []) : []; S.caixa = null; if (d.caixa) aplicarSituacao(d.caixa);
       S.fiscal = d.fiscal || null;
       if (S.caixa) S.ultimoTroco = 0;
       guardarCache();

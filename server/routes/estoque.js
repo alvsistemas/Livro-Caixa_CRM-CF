@@ -10,6 +10,7 @@ const auth = require('../middleware/auth');
 const E = require('../utils/estoque');
 const F = require('../utils/fidelidade');
 const C = require('../utils/caixa');
+const H = require('../utils/caixaHorario');
 const M = require('../utils/comandas');
 const { gerarPlanilha } = require('../utils/exportarXlsx');
 const P = require('../utils/planilhasPdv');
@@ -91,7 +92,7 @@ router.get('/', rota(async (req) => ({
   recursos: (req.assinatura && req.assinatura.recursos) || {},
   operadores: await C.listarOperadores(req.userId),
   operador: req.op,
-  caixa: await C.situacaoCaixa(req.userId),
+  caixa: await (async () => { await C.ajustarCaixaAutomatico(req.userId).catch((e) => console.error('Caixa automático:', e.message)); return C.situacaoCaixa(req.userId); })(),
   fiscal: await NF.lerConfig(req.userId),
 }), 'Erro ao carregar o PDV'));
 
@@ -108,7 +109,7 @@ router.get('/resumo', rota(async (req) => {
   // totais da loja (dia, mês, valor do estoque, quanto rende cada produto) só com "Relatórios"
   if (!p.relatorios) {
     const nome = req.op ? req.op.nome : '';
-    const hoje = hojeBR();
+    const hoje = H.diaDeTrabalho(req.pdv);
     const minhas = nome ? (await query(`SELECT count(*)::int AS n, COALESCE(sum(total), 0)::float AS t FROM estoque_vendas WHERE user_id = $1::uuid AND NOT cancelada AND data = $2 AND operador = $3`, [req.userId, hoje, nome])).rows[0] : { n: 0, t: 0 };
     r.minhasHoje = { vendas: minhas.n, total: Math.round(minhas.t * 100) / 100 };
     r.maisVendidos = r.maisVendidos.map((m) => ({ nome: m.nome, qtd: m.qtd }));
@@ -139,10 +140,15 @@ router.post('/operadores/entrar', limitePin, rota((req) => C.entrarOperador(req.
 
 // Caixa do dia
 router.get('/caixa', rota(async (req) => {
+  await C.ajustarCaixaAutomatico(req.userId).catch((e) => console.error('Caixa automático:', e.message)); // horário/turnos: faz o que ficou para trás
   const sit = await C.situacaoCaixa(req.userId);
   const p = permsDoPedido(req);
   // os valores do caixa (vendas, gaveta, movimentos) ficam com quem cuida do caixa
-  if (p && !p.caixa && sit.aberto) sit.aberto = { caixa: { id: sit.aberto.caixa.id, numero: sit.aberto.caixa.numero, abertoEm: sit.aberto.caixa.abertoEm, abertoPor: sit.aberto.caixa.abertoPor }, restrito: true };
+  if (p && !p.caixa && sit.aberto) {
+    const c = sit.aberto.caixa;
+    sit.aberto = { caixa: { id: c.id, numero: c.numero, abertoEm: c.abertoEm, abertoPor: c.abertoPor, turno: c.turno, previstoFim: c.previstoFim, abertoAuto: c.abertoAuto, trocoConferir: c.trocoConferir }, restrito: true };
+  }
+  if (p && !p.caixa) sit.pendentes = sit.pendentes.map((c) => ({ id: c.id, numero: c.numero, fechadoEm: c.fechadoEm, turno: c.turno, conferir: true }));
   return sit;
 }, 'Erro ao carregar o caixa'));
 router.get('/caixa/historico', rota(async (req) => ({ caixas: await C.historicoCaixas(req.userId) }), 'Erro ao carregar os fechamentos'));
@@ -150,6 +156,8 @@ router.get('/caixa/:id', rota((req) => C.caixaPorId(req.userId, req.params.id), 
 router.post('/caixa/abrir', rota((req) => C.abrirCaixa(req.userId, req.body || {}, nomeDoOperador(req)), 'Erro ao abrir o caixa', 'caixa'));
 router.post('/caixa/movimento', rota((req) => C.movimentarCaixa(req.userId, req.body || {}, nomeDoOperador(req), new Date(), E.registrarGasto), 'Erro ao registrar o movimento', 'caixa'));
 router.post('/caixa/fechar', rota((req) => C.fecharCaixa(req.userId, req.body || {}, nomeDoOperador(req)), 'Erro ao fechar o caixa', 'caixa'));
+router.post('/caixa/passar-turno', rota((req) => C.passarTurno(req.userId, req.body || {}, nomeDoOperador(req)), 'Erro ao passar o turno', 'caixa'));
+router.post('/caixa/conferir', rota((req) => C.conferirCaixa(req.userId, req.body || {}, nomeDoOperador(req)), 'Erro ao conferir o caixa', 'caixa'));
 
 // Planilha do mês em Excel (.xlsx)
 router.get('/exportar.xlsx', async (req, res) => {

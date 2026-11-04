@@ -690,3 +690,24 @@ body.com-faixa-offline .main { padding-top: 64px; }
 /* lista de produtos no celular: o estoque vai embaixo do nome, sem rolar para o lado */
 .prod-est-cel { margin-top: 6px; align-items: center; gap: 6px; flex-wrap: wrap; font-size: 12.5px; }
 @media (max-width: 760px) { .prod-est-cel.so-cel { display: flex !important; } }
+
+/* Caixa automático: horário de funcionamento e turnos (24 horas) */
+.cx-pendente { border: 1px dashed var(--ouro); background: var(--ouro-soft); border-radius: 14px; padding: 14px 16px; margin-bottom: 12px; }
+.cx-pendente-tit { font-weight: 700; font-size: 14px; margin: 0 0 4px; }
+.faixa.faixa-alerta { background: var(--vermelho-soft); }
+.modos-cx { display: flex; flex-direction: column; gap: 8px; }
+.modo-cx { display: flex; gap: 10px; align-items: flex-start; border: 1px solid var(--rule); border-radius: 12px; padding: 11px 12px; font-size: 13.5px; line-height: 1.4; cursor: pointer; }
+.modo-cx input { accent-color: var(--acento); width: 17px; height: 17px; margin: 1px 0 0; flex-shrink: 0; }
+.modo-cx small { display: block; color: var(--muted); font-size: 12px; }
+.modo-cx.sel { border-color: var(--acento); background: var(--acento-soft); }
+.modo-cx-detalhe { margin: 2px 0 6px 27px; display: flex; flex-direction: column; gap: 12px; }
+.modo-cx-detalhe .aviso { margin: 0; }
+.horas-cx { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; max-width: 320px; }
+.dias-cx { display: flex; gap: 6px; flex-wrap: wrap; }
+.dias-cx button { width: 38px; height: 38px; border-radius: 999px; border: 1px solid var(--rule); background: var(--page); color: var(--ink); font-weight: 700; font-size: 12.5px; cursor: pointer; }
+.dias-cx button[aria-pressed="true"] { background: var(--acento); border-color: var(--acento); color: #fff; }
+.turno-cx { display: grid; grid-template-columns: minmax(0, 1fr) 92px 10px 92px 30px; gap: 6px; align-items: center; }
+.turno-cx input { width: 100%; min-width: 0; box-sizing: border-box; }
+.turno-cx i { color: var(--muted); font-style: normal; text-align: center; }
+.turno-cx-rotulos { font-size: 11.5px; color: var(--muted); font-weight: 600; }
+@media (max-width: 420px) { .turno-cx { grid-template-columns: minmax(0, 1fr) 76px 8px 76px 28px; gap: 4px; } }
