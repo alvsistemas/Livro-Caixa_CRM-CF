@@ -331,6 +331,7 @@
     $("#main").innerHTML = fn();
     if (window.Animar) Animar.trocar($("#main"), S.tab + "|" + (S.tab === "config" ? secAtual() || "" : S.relAba || ""), { grupo: S.tab, ordem: S.tab === "config" ? (secAtual() && telaCelular() ? 1 : 0) : ["vendas", "produtos", "horarios", "caixas", "despesas"].indexOf(S.relAba) });
     if (S.tab === "cardapio") desenharQr();
+    if (S.tab === "config") requestAnimationFrame(() => requestAnimationFrame(() => notarMudancaConfig()));
   }
   const topo = (titulo, sub, direita = "") => `<div class="topo"><div><h1 class="titulo">${titulo}</h1>${sub ? `<p class="sub">${sub}</p>` : ""}</div>${direita ? `<div class="linha">${direita}</div>` : ""}</div>`;
   const carregandoHtml = `<div class="card vazio">Carregando…</div>`;
@@ -1887,7 +1888,45 @@
   }
   const jsonEstado = (o) => { if (!o) return ""; const { erro, msg, salvando, ...r } = o; return JSON.stringify(r); };
   let CFG_BASE = { obj: null, json: "" };
-  function marcarBaseConfig() { const o = estadoSec(secAtual()); if (o && o !== CFG_BASE.obj) CFG_BASE = { obj: o, json: jsonEstado(o) }; }
+  // desfazer: cada mudança guarda como estava antes (digitar no mesmo campo vira um passo só)
+  let CFG_HIST = { lista: [], ult: "", campo: null, quando: 0 };
+  let CFG_BARRA = false; // a barra do Salvar estava à vista no último desenho
+  function marcarBaseConfig() {
+    const o = estadoSec(secAtual());
+    if (o && o !== CFG_BASE.obj) { CFG_BASE = { obj: o, json: jsonEstado(o) }; CFG_HIST = { lista: [], ult: CFG_BASE.json, campo: null, quando: 0 }; }
+  }
+  // depois de qualquer mudança: anota o passo para o desfazer e mostra/esconde o Salvar
+  function notarMudancaConfig(campo = null) {
+    if (S.tab !== "config") return;
+    const o = estadoSec(secAtual());
+    if (o && o === CFG_BASE.obj) {
+      const agora = jsonEstado(o);
+      if (agora !== CFG_HIST.ult) {
+        const junta = campo && campo === CFG_HIST.campo && Date.now() - CFG_HIST.quando < 1500 && CFG_HIST.lista.length;
+        if (!junta) CFG_HIST.lista.push(CFG_HIST.ult);
+        CFG_HIST.ult = agora; CFG_HIST.campo = campo; CFG_HIST.quando = Date.now();
+      }
+      if (agora === CFG_BASE.json) CFG_HIST = { lista: [], ult: agora, campo: null, quando: 0 }; // voltou ao que era
+    }
+    atualizarBarraConfig();
+  }
+  function atualizarBarraConfig() {
+    const b = $(".cfg-salvar"); if (!b) return;
+    const suja = configSuja();
+    b.classList.toggle("visivel", suja);
+    b.setAttribute("aria-hidden", suja ? "false" : "true");
+    b.querySelectorAll("button").forEach((x) => { x.tabIndex = suja ? 0 : -1; });
+    const d = b.querySelector('[data-a="cfg-desfazer"]'); if (d) d.disabled = !CFG_HIST.lista.length;
+    CFG_BARRA = suja;
+  }
+  function desfazerConfig() {
+    const o = estadoSec(secAtual());
+    if (!o || o !== CFG_BASE.obj || !CFG_HIST.lista.length) return;
+    const antes = CFG_HIST.lista.pop();
+    Object.assign(o, JSON.parse(antes)); o.erro = "";
+    CFG_HIST.ult = antes; CFG_HIST.campo = null;
+    render();
+  }
   // mudou algo e ainda não salvou?
   function configSuja() {
     if (S.tab !== "config") return false;
@@ -1910,7 +1949,7 @@
   }
   function sairDescartando() {
     const continuar = sairDaConfig.continuar; sairDaConfig.continuar = null;
-    descartarSec(secAtual()); CFG_BASE = { obj: null, json: "" };
+    descartarSec(secAtual()); CFG_BASE = { obj: null, json: "" }; CFG_BARRA = false;
     fecharModal(); if (continuar) continuar();
   }
   function abrirSecaoConfig(sec) {
@@ -1960,9 +1999,12 @@
       marcarBaseConfig();
       const temSalvar = BOTAO_SEC[k] && !(k === "fiscal" && !tem("nfce")) && !(k === "equipe" && (!tem("equipe") || !(S.operadores || []).length));
       const salvando = k === "fiscal" && FS && FS.salvando;
-      const extra = k === "fiscal" && tem("nfce") && S.fiscal && S.fiscal.temToken ? `<button class="btn claro" data-a="fs-testar">Testar conexão</button>` : "";
+      const vis = CFG_BARRA; // nasce como estava; logo depois anima para o estado certo
       conteudo = `<button type="button" class="cfg-voltar" data-a="cfg-voltar">‹ Configurações</button>${html}
-        ${temSalvar ? `<div class="cfg-salvar">${extra}<button class="btn acento" data-a="${BOTAO_SEC[k]}" ${salvando ? "disabled" : ""}>${salvando ? "Salvando…" : "Salvar"}</button></div>` : ""}`;
+        ${temSalvar ? `<div class="cfg-salvar ${vis ? "visivel" : ""}" aria-hidden="${vis ? "false" : "true"}">
+          <button type="button" class="btn claro cfg-desfazer" data-a="cfg-desfazer" ${vis ? "" : 'tabindex="-1"'}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg>Desfazer</button>
+          <button class="btn acento cfg-botao-salvar" data-a="${BOTAO_SEC[k]}" ${salvando ? "disabled" : ""} ${vis ? "" : 'tabindex="-1"'}>${salvando ? "Salvando…" : "Salvar"}</button>
+        </div>` : ""}`;
     }
     return `<div class="cfg-topo">${topo("Configurações", "O seu negócio e como o aplicativo funciona.")}</div>
       <div class="cfg-layout ${atual ? "mostrando-tela" : "mostrando-lista"}">
@@ -3125,6 +3167,7 @@
       <div class="campo" style="margin-top:10px"><span>Quando emitir</span><div class="chips"><button class="chip ${FS.emitir === "perguntar" ? "ativo" : ""}" data-a="fs-emitir" data-v="perguntar">Quando eu tocar em “Emitir”</button><button class="chip ${FS.emitir === "sempre" ? "ativo" : ""}" data-a="fs-emitir" data-v="sempre">Em toda venda</button></div></div>
       <label class="check" style="margin-top:12px"><input type="checkbox" data-fs="ativo" ${FS.ativo ? "checked" : ""} /><span><b>Emitir NFC-e pelo PDV</b><small>Aparece o botão “Emitir NFC-e” depois de cada venda e no detalhe da venda.</small></span></label>
       ${FS.erro ? `<p class="erro-form">${esc(FS.erro)}</p>` : ""}${FS.msg ? `<p class="aviso info">${esc(FS.msg)}</p>` : ""}
+      ${f.temToken ? `<div class="modal-rodape"><button class="btn claro" data-a="fs-testar">Testar conexão</button></div>` : ""}
     </div>`;
   }
   async function salvarFiscalTela() {
@@ -3266,6 +3309,11 @@
   });
   document.addEventListener("input", (ev) => { const t = ev.target; if (FS && t.matches("[data-fs]") && t.type !== "checkbox") FS[t.dataset.fs] = t.dataset.fs === "cnpj" ? t.value.replace(/\D/g, "") : t.value; });
   document.addEventListener("change", (ev) => { const t = ev.target; if (FS && t.matches('[data-fs="ativo"]')) FS.ativo = t.checked; });
+  ["input", "change"].forEach((tipo) => document.addEventListener(tipo, (ev) => {
+    if (S.tab !== "config" || !ev.target.closest || !ev.target.closest(".cfg-tela")) return;
+    const t = ev.target; const campo = t.type === "checkbox" || t.type === "radio" || t.tagName === "SELECT" ? null : Object.keys(t.dataset).map((k) => k + t.dataset[k]).join("|");
+    setTimeout(() => notarMudancaConfig(campo), 0);
+  }));
 
   /* ---------- teclados na tela ---------- */
   function teclar(alvo, k) {
@@ -3345,6 +3393,7 @@
       case "ir": fecharModal(); irPara(el.dataset.tab, el.dataset.sec || null); break;
       case "cfg-sec": abrirSecaoConfig(el.dataset.v); break;
       case "cfg-voltar": voltarListaConfig(); break;
+      case "cfg-desfazer": desfazerConfig(); break;
       case "cfg-sair-salvar": sairSalvando(); break;
       case "cfg-sair-descartar": sairDescartando(); break;
       case "esconder-passos": S.negocio.checklist = { ...(S.negocio.checklist || {}), escondido: true }; render(); api("PUT", "/estoque/negocio", { checklist: { escondido: true } }).catch(() => {}); break;
