@@ -710,4 +710,58 @@ body.com-faixa-offline .main { padding-top: 64px; }
 .turno-cx input { width: 100%; min-width: 0; box-sizing: border-box; }
 .turno-cx i { color: var(--muted); font-style: normal; text-align: center; }
 .turno-cx-rotulos { font-size: 11.5px; color: var(--muted); font-weight: 600; }
-@media (max-width: 420px) { .turno-cx { grid-template-columns: minmax(0, 1fr) 76px 8px 76px 28px; gap: 4px; } }
+.turno-cx .btn { width: 100%; min-width: 0; padding: 0; }
+/* celular estreito: nome e ✕ em cima, horários embaixo (sem passar da borda) */
+@media (max-width: 420px) {
+  .turno-cx { grid-template-columns: minmax(0, 1fr) 12px minmax(0, 1fr) 44px; gap: 6px; padding-bottom: 10px; border-bottom: 1px solid var(--rule-soft); }
+  .turno-cx > :nth-child(1) { grid-column: 1 / 4; grid-row: 1; }
+  .turno-cx > :nth-child(5) { grid-column: 4; grid-row: 1; align-self: stretch; }
+  .turno-cx > :nth-child(2) { grid-column: 1; grid-row: 2; }
+  .turno-cx > :nth-child(3) { grid-column: 2; grid-row: 2; }
+  .turno-cx > :nth-child(4) { grid-column: 3; grid-row: 2; }
+}
+
+/* ===================== Configurações em lista ===================== */
+/* computador: a lista fica ao lado e a tela escolhida à direita */
+.cfg-layout { display: flex; gap: 28px; align-items: flex-start; }
+.cfg-menu { width: 230px; flex-shrink: 0; position: sticky; top: 16px; display: flex; flex-direction: column; }
+.cfg-grupo { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); margin: 18px 10px 6px; }
+.cfg-grupo:first-child { margin-top: 0; }
+.cfg-lista { display: flex; flex-direction: column; }
+.cfg-item { display: flex; align-items: center; gap: 8px; width: 100%; padding: 9px 10px; border: none; border-radius: 8px; background: none; color: var(--ink); font: inherit; font-size: 13.5px; text-align: left; cursor: pointer; }
+.cfg-item:hover { background: var(--hover); }
+.cfg-item-texto { flex: 1; min-width: 0; }
+.cfg-item-texto b { font-weight: 500; }
+.cfg-item-texto small { display: none; }
+.cfg-item.ativo { background: var(--acento); color: #fff; }
+.cfg-item.ativo .selo-completo { background: rgba(255,255,255,.25); color: #fff; }
+.cfg-tela { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 16px; min-height: calc(100vh - 150px); }
+.cfg-voltar { display: none; }
+/* Salvar por cima da tela, embaixo e no meio, com um degradê: dá para ver que tem mais coisa e que precisa salvar */
+.cfg-salvar { position: sticky; bottom: 0; z-index: 5; display: flex; justify-content: center; gap: 10px; margin-top: auto; padding: 40px 12px 18px; background: linear-gradient(to bottom, transparent, var(--bg) 62%); pointer-events: none; }
+.cfg-salvar .btn { pointer-events: auto; min-width: 190px; border-radius: 999px; box-shadow: 0 8px 22px rgba(0,0,0,.16); }
+.cfg-salvar .btn.claro { min-width: 0; background: var(--page); }
+.cfg-pergunta { display: flex; flex-direction: column; gap: 8px; margin-top: 18px; }
+
+@media (max-width: 760px) {
+  /* celular: primeiro a lista; tocar num item abre só aquela tela */
+  .cfg-layout { display: block; }
+  .cfg-layout.mostrando-tela .cfg-menu, .cfg-layout.mostrando-lista .cfg-tela { display: none; }
+  .cfg-topo:has(+ .cfg-layout.mostrando-tela) { display: none; }
+  .cfg-menu { width: 100%; position: static; }
+  .cfg-grupo { margin: 20px 4px 8px; }
+  .cfg-lista { border: 1px solid var(--rule); border-radius: 16px; overflow: hidden; background: var(--page); }
+  .cfg-item { min-height: 60px; padding: 10px 16px; border-radius: 0; border-bottom: 1px solid var(--rule-soft); gap: 12px; }
+  .cfg-item:last-child { border-bottom: none; }
+  .cfg-item::after { content: '›'; font-size: 22px; color: var(--muted); }
+  .cfg-item.ativo { background: var(--page); color: var(--ink); }
+  .cfg-item.ativo .selo-completo { background: var(--acento-soft); color: var(--acento); }
+  .cfg-item-texto b { display: block; font-size: 15.5px; }
+  .cfg-item-texto small { display: block; font-size: 12.5px; color: var(--muted); margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .cfg-voltar { display: inline-flex; align-items: center; align-self: flex-start; min-height: 44px; margin: -6px 0 -6px; padding: 0 14px 0 2px; border: none; background: none; color: var(--ink); font: inherit; font-size: 15.5px; font-weight: 600; cursor: pointer; }
+  /* o Salvar fica logo acima da barra de abas */
+  .cfg-tela { min-height: 0; padding-bottom: 76px; }
+  .cfg-salvar { position: fixed; left: 0; right: 0; bottom: calc(65px + env(safe-area-inset-bottom)); margin: 0; padding: 34px 16px 12px; }
+  .cfg-salvar .btn { flex: 1; max-width: 300px; }
+  .cfg-salvar .btn.claro { flex: 0 1 auto; }
+}

@@ -234,7 +234,7 @@
     const alvo = ALIAS[doHash] || doHash;
     desenharNavCelular();
     atualizarChipOperador();
-    irPara(validas.includes(alvo) && podeAba(alvo) ? alvo : primeiraAba() || "vender");
+    irPara(validas.includes(alvo) && podeAba(alvo) ? alvo : primeiraAba() || "vender", alvo === "config" ? idDoHash : null);
     // link vindo do CRM (#clientes/<id>): abre a ficha desse cliente
     if (alvo === "clientes" && idDoHash && S.tab === "clientes") setTimeout(() => abrirFicha(idDoHash), 300);
     atualizarSelos();
@@ -244,11 +244,14 @@
     const ordem = ehGarcom() ? ["mesas", "cozinha", "pedidos"] : (S.pdv.exigirCaixa && !S.caixa ? ["caixa"] : []).concat(restaurante() && tem("restaurante") ? ["mesas", "vender"] : ["vender"]);
     return [...ordem, "caixa", "vender", "mesas", "produtos", "compras", "clientes", "relatorios", "config"].find((t) => podeAba(t) && (restaurante() || !["mesas", "cozinha", "pedidos", "cardapio"].includes(t))) || null;
   }
-  function irPara(tab) {
+  function irPara(tab, sec = null) {
     if (!tab || !podeAba(tab)) tab = primeiraAba();
     if (!tab) { semAcessoAoPdv(); return; }
+    if (S.tab === "config" && configSuja() && (tab !== "config" || sec !== CFG_SEC)) { sairDaConfig(() => irPara(tab, sec)); return; }
+    if (tab === "config") { CFG_SEC = sec || null; CFG_EMPILHOU = false; }
     S.tab = tab;
-    if (location.hash !== "#" + tab) history.replaceState(null, "", "#" + tab);
+    const hash = "#" + tab + (tab === "config" && CFG_SEC ? "/" + CFG_SEC : "");
+    if (location.hash !== hash) history.replaceState(null, "", hash);
     document.querySelectorAll(".nav-item[data-tab], .nav-cel button[data-tab]").forEach((b) => b.classList.toggle("active", b.dataset.tab === tab));
     const mais = document.querySelector('.nav-cel [data-a="nav-mais"]');
     if (mais) mais.classList.toggle("active", !abasCelular().includes(tab));
@@ -326,7 +329,7 @@
     const fn = { caixa: telaCaixa, vender: telaVender, pedidos: telaPedidos, mesas: telaMesas, cozinha: telaCozinha, produtos: telaProdutos, compras: telaCompras, relatorios: telaRelatorios, clientes: telaClientes, cardapio: telaCardapio, config: telaConfig }[S.tab] || telaCaixa;
     if (["pedidos", "mesas", "cozinha", "cardapio"].includes(S.tab) && !tem("restaurante")) { $("#main").innerHTML = completoHtml("restaurante"); return; }
     $("#main").innerHTML = fn();
-    if (window.Animar) Animar.trocar($("#main"), S.tab + "|" + (S.relAba || ""), { grupo: S.tab, ordem: ["vendas", "produtos", "horarios", "caixas", "despesas"].indexOf(S.relAba) });
+    if (window.Animar) Animar.trocar($("#main"), S.tab + "|" + (S.tab === "config" ? secAtual() || "" : S.relAba || ""), { grupo: S.tab, ordem: S.tab === "config" ? (secAtual() && telaCelular() ? 1 : 0) : ["vendas", "produtos", "horarios", "caixas", "despesas"].indexOf(S.relAba) });
     if (S.tab === "cardapio") desenharQr();
   }
   const topo = (titulo, sub, direita = "") => `<div class="topo"><div><h1 class="titulo">${titulo}</h1>${sub ? `<p class="sub">${sub}</p>` : ""}</div>${direita ? `<div class="linha">${direita}</div>` : ""}</div>`;
@@ -1609,7 +1612,7 @@
     const prog = programa();
     let html = topo("Clientes", "Quem compra com você, quanto já gastou e o que mais pede. O cliente é reconhecido pelo telefone, no balcão e no cardápio.",
       `<button class="btn claro so-desk" data-a="importar-cli">Importar planilha</button><button class="btn claro so-desk" data-a="exportar-cli">Exportar (.xlsx)</button><button class="btn acento" data-a="cli-novo">Novo cliente</button>`);
-    if (prog.modelo === "nenhum") html += `<div class="faixa"><span>Ligue um <b>programa de fidelidade</b> (cartão fidelidade ou cashback) para trazer o cliente de volta.</span><button class="btn mini acento" data-a="ir" data-tab="config">Configurar</button></div>`;
+    if (prog.modelo === "nenhum") html += `<div class="faixa"><span>Ligue um <b>programa de fidelidade</b> (cartão fidelidade ou cashback) para trazer o cliente de volta.</span><button class="btn mini acento" data-a="ir" data-tab="config" data-sec="fidelidade">Configurar</button></div>`;
     if (!S.clientes) return html + carregandoHtml;
     const todos = S.clientes;
     const limite = 30;
@@ -1838,11 +1841,139 @@
      Configurações
      ===================================================================== */
   let CFG = null;
+  /* Configurações em lista: no celular, a lista abre cada tela (com "‹ Configurações" para voltar);
+     no computador, a lista fica ao lado. Cada tela tem o botão Salvar por cima, embaixo, e
+     pergunta "Deseja salvar antes de sair?" se a pessoa mudou algo e vai embora sem salvar. */
+  let CFG_SEC = null; // tela aberta (null = a lista, no celular)
+  let CFG_EMPILHOU = false; // abriu a tela com um passo no histórico (o "voltar" do celular volta para a lista)
+  const telaCelular = () => window.matchMedia("(max-width: 760px)").matches;
+  const secAtual = () => CFG_SEC || (telaCelular() ? null : "negocio");
+  function gruposConfig() {
+    const n = S.negocio; const pdv = S.pdv; const f = S.fiscal || {}; const prog = programa();
+    const modo = modoCaixa(); const h = { abre: "08:00", fecha: "18:00", ...(pdv.horario || {}) };
+    const nTurnos = (pdv.turnos || []).length;
+    const resumoCaixa = modo === "horario" ? `Horário de funcionamento · ${h.abre} às ${h.fecha}` : modo === "turnos" ? (nTurnos === 1 ? "24 horas · um turno só" : `24 horas · ${nTurnos} turnos`) : modo === "livre" ? "Sem caixa" : "Abro e fecho na mão";
+    const ops = S.operadores || [];
+    const resumoEquipe = !ops.length ? "Ninguém cadastrado" : `${ops.length === 1 ? "1 pessoa" : `${ops.length} pessoas`}${pdv.exigirOperador ? " · pede o PIN" : ""}`;
+    const tipo = (TIPOS.find((t) => t[0] === n.tipo) || [])[2] || "";
+    const resumoFid = prog.modelo === "cashback" ? `Cashback · ${br(prog.cashbackPct || 5).replace(/,00$/, "")}%` : prog.modelo === "selos" ? `Cartão fidelidade · a cada ${prog.selosMeta || 10} compras` : "Desligado";
+    const resumoFiscal = f.ativo ? (f.ambiente === "producao" ? "Ligada · nota de verdade" : "Ligada · homologação (teste)") : "Desligada";
+    const mesas = S.mapa ? `${S.mapa.mesas.length} ${S.mapa.mesas.length === 1 ? "mesa" : "mesas"} · ` : "";
+    return [
+      ["Seu negócio", [
+        ["negocio", "Negócio", [n.nome, tipo.split(",")[0], n.controlaEstoque ? "controla estoque" : ""].filter(Boolean).join(" · ")],
+        ["acessibilidade", "Acessibilidade", "Tamanho da letra, contraste e animações"],
+      ]],
+      ["Caixa", [
+        ["caixa", "Como o caixa funciona", resumoCaixa],
+        ["equipe", "Equipe e PIN", tem("equipe") ? resumoEquipe : "", !tem("equipe")],
+        ["recibo", "Recibo", pdv.reciboRodape ? `“${pdv.reciboRodape}”` : "Sem mensagem no fim"],
+      ]],
+      ["Vendas", [
+        ["fidelidade", "Programa de fidelidade", resumoFid],
+        ["fiscal", "Nota fiscal (NFC-e)", tem("nfce") ? resumoFiscal : "", !tem("nfce")],
+        ["taxas", "Taxas de cartão e Pix", "Ficam no Controle financeiro"],
+        ...(restaurante() ? [["mesas", "Mesas e cozinha", `${mesas}taxa de serviço ${String(pdv.taxaServico ?? 10).replace(".", ",")}%`]] : []),
+      ]],
+    ];
+  }
+  // o que cada tela guarda enquanto a pessoa mexe, e como salva
+  const SALVAR_SEC = { negocio: () => salvarConfig(), caixa: () => salvarCaixaConfig(), equipe: () => salvarCaixaConfig(), recibo: () => salvarCaixaConfig(), fidelidade: () => salvarPrograma(), fiscal: () => salvarFiscalTela() };
+  const BOTAO_SEC = { negocio: "salvar-config", caixa: "salvar-pc", equipe: "salvar-pc", recibo: "salvar-pc", fidelidade: "salvar-programa", fiscal: "fs-salvar" };
+  function estadoSec(sec) { return { negocio: CFG, caixa: PC, equipe: PC, recibo: PC, fidelidade: FP, fiscal: FS }[sec] || null; }
+  function descartarSec(sec) {
+    if (sec === "negocio") CFG = null; else if (["caixa", "equipe", "recibo"].includes(sec)) PC = null;
+    else if (sec === "fidelidade") FP = null; else if (sec === "fiscal") FS = null;
+  }
+  const jsonEstado = (o) => { if (!o) return ""; const { erro, msg, salvando, ...r } = o; return JSON.stringify(r); };
+  let CFG_BASE = { obj: null, json: "" };
+  function marcarBaseConfig() { const o = estadoSec(secAtual()); if (o && o !== CFG_BASE.obj) CFG_BASE = { obj: o, json: jsonEstado(o) }; }
+  // mudou algo e ainda não salvou?
+  function configSuja() {
+    if (S.tab !== "config") return false;
+    const o = estadoSec(secAtual());
+    return !!o && o === CFG_BASE.obj && jsonEstado(o) !== CFG_BASE.json;
+  }
+  // sair da tela aberta: se tiver mudança sem salvar, pergunta antes
+  function sairDaConfig(continuar) {
+    if (!configSuja()) { continuar(); return; }
+    const sec = secAtual();
+    abrirModal("Deseja salvar antes de sair?", `<p class="sub" style="margin-top:0">Você mudou algo em <b>${esc((gruposConfig().flatMap((g) => g[1]).find((i) => i[0] === sec) || [])[1] || "Configurações")}</b> e ainda não salvou. Se sair sem salvar, a mudança se perde.</p>
+      <div class="cfg-pergunta"><button class="btn acento" data-a="cfg-sair-salvar">Salvar e sair</button><button class="btn claro" data-a="cfg-sair-descartar">Sair sem salvar</button><button class="btn claro" data-a="fechar-modal">Continuar editando</button></div>`);
+    sairDaConfig.continuar = continuar;
+  }
+  async function sairSalvando() {
+    const continuar = sairDaConfig.continuar; sairDaConfig.continuar = null;
+    fecharModal();
+    await SALVAR_SEC[secAtual()]();
+    if (!configSuja() && continuar) continuar(); // deu erro: fica na tela, com a mensagem
+  }
+  function sairDescartando() {
+    const continuar = sairDaConfig.continuar; sairDaConfig.continuar = null;
+    descartarSec(secAtual()); CFG_BASE = { obj: null, json: "" };
+    fecharModal(); if (continuar) continuar();
+  }
+  function abrirSecaoConfig(sec) {
+    if (sec === secAtual()) return;
+    sairDaConfig(() => {
+      CFG_SEC = sec;
+      if (telaCelular()) { history.pushState(null, "", `#config/${sec}`); CFG_EMPILHOU = true; }
+      else history.replaceState(null, "", `#config/${sec}`);
+      render(); window.scrollTo(0, 0);
+    });
+  }
+  function voltarListaConfig() {
+    sairDaConfig(() => {
+      if (CFG_EMPILHOU) { CFG_EMPILHOU = false; history.back(); return; } // o popstate desenha a lista
+      CFG_SEC = null; history.replaceState(null, "", "#config"); render(); window.scrollTo(0, 0);
+    });
+  }
+  // botão/gesto "voltar" do celular dentro das configurações
+  window.addEventListener("popstate", () => {
+    if (S.tab !== "config") return;
+    const [aba, sec] = (location.hash || "").replace("#", "").split("/");
+    if (aba !== "config" || (sec || null) === CFG_SEC) return;
+    if (configSuja()) {
+      history.pushState(null, "", `#config/${CFG_SEC}`); CFG_EMPILHOU = true; // continua na tela até a pessoa decidir
+      sairDaConfig(() => { CFG_EMPILHOU = false; history.back(); });
+      return;
+    }
+    CFG_EMPILHOU = false; CFG_SEC = sec || null; render(); window.scrollTo(0, 0);
+  });
+  // fechar a aba ou recarregar com mudança sem salvar: o navegador pergunta
+  window.addEventListener("beforeunload", (ev) => { if (configSuja()) { ev.preventDefault(); ev.returnValue = ""; } });
+
   function telaConfig() {
+    const sec = secAtual();
+    const itens = gruposConfig();
+    const todos = itens.flatMap((g) => g[1]);
+    const atual = todos.find((i) => i[0] === sec) || (sec ? todos[0] : null);
+    const lista = itens.map(([g, its]) => `<p class="cfg-grupo">${g}</p><div class="cfg-lista">${its.map(([k, t, sub, completo]) => `<button type="button" class="cfg-item ${atual && atual[0] === k ? "ativo" : ""}" data-a="cfg-sec" data-v="${k}"${atual && atual[0] === k ? ' aria-current="page"' : ""}>
+        <span class="cfg-item-texto"><b>${t}</b>${sub ? `<small>${esc(sub)}</small>` : ""}</span>${completo ? `<span class="selo-completo mini">Completo</span>` : ""}</button>`).join("")}</div>`).join("");
+    let conteudo = "";
+    if (atual) {
+      const k = atual[0];
+      const corpo = { negocio: negocioCardHtml, acessibilidade: () => `<div class="card"><h2 class="secao">Acessibilidade</h2><div data-a11y-painel></div></div>`,
+        caixa: () => caixaConfigHtml("caixa"), equipe: () => caixaConfigHtml("equipe"), recibo: () => caixaConfigHtml("recibo"),
+        fidelidade: programaCardHtml, fiscal: fiscalCardHtml, taxas: taxasCardHtml, mesas: mesasCardHtml }[k] || negocioCardHtml;
+      const html = corpo();
+      marcarBaseConfig();
+      const temSalvar = BOTAO_SEC[k] && !(k === "fiscal" && !tem("nfce")) && !(k === "equipe" && (!tem("equipe") || !(S.operadores || []).length));
+      const salvando = k === "fiscal" && FS && FS.salvando;
+      const extra = k === "fiscal" && tem("nfce") && S.fiscal && S.fiscal.temToken ? `<button class="btn claro" data-a="fs-testar">Testar conexão</button>` : "";
+      conteudo = `<button type="button" class="cfg-voltar" data-a="cfg-voltar">‹ Configurações</button>${html}
+        ${temSalvar ? `<div class="cfg-salvar">${extra}<button class="btn acento" data-a="${BOTAO_SEC[k]}" ${salvando ? "disabled" : ""}>${salvando ? "Salvando…" : "Salvar"}</button></div>` : ""}`;
+    }
+    return `<div class="cfg-topo">${topo("Configurações", "O seu negócio e como o aplicativo funciona.")}</div>
+      <div class="cfg-layout ${atual ? "mostrando-tela" : "mostrando-lista"}">
+        <nav class="cfg-menu" aria-label="Configurações">${lista}</nav>
+        ${atual ? `<div class="cfg-tela">${conteudo}</div>` : ""}
+      </div>`;
+  }
+  function negocioCardHtml() {
     const n = S.negocio;
     if (!CFG) CFG = { tipo: n.tipo, nome: n.nome, controlaEstoque: n.controlaEstoque, erro: "" };
-    return topo("Configurações", "O seu negócio e como o aplicativo funciona.") + `<div class="grade grade-2" style="align-items:start">
-      <div class="card">
+    return `<div class="card">
         <h2 class="secao">Seu negócio</h2>
         <div class="campos" style="grid-template-columns:1fr">
           <label class="campo"><span>Nome</span><input data-cfg="nome" value="${esc(CFG.nome)}" maxlength="80" /></label>
@@ -1850,21 +1981,17 @@
           <label class="check"><input type="checkbox" data-cfg="controlaEstoque" ${CFG.controlaEstoque ? "checked" : ""} /><span>Controlar estoque nos produtos novos<small>Cada produto pode ligar ou desligar o controle no próprio cadastro.</small></span></label>
         </div>
         ${CFG.erro ? `<p class="erro-form">${esc(CFG.erro)}</p>` : ""}
-        <div class="modal-rodape"><button class="btn acento" data-a="salvar-config">Salvar</button></div>
-      </div>
-      ${caixaConfigHtml()}
-      <div class="card">
-        <h2 class="secao">Acessibilidade</h2>
-        <div data-a11y-painel></div>
-      </div>
-      ${fiscalCardHtml()}
-      ${restaurante() ? `<div class="card">
+      </div>`;
+  }
+  function mesasCardHtml() {
+    return `<div class="card">
         <h2 class="secao">Mesas e cozinha</h2>
         <p class="sub">${S.mapa ? `${S.mapa.mesas.length} ${S.mapa.mesas.length === 1 ? "mesa" : "mesas"}. ` : ""}Taxa de serviço ${String(S.pdv.taxaServico ?? 10).replace(".", ",")}%. Os produtos marcados “vai para a cozinha” aparecem na tela da Cozinha quando o garçom manda o pedido.</p>
         <div class="linha" style="margin-top:14px"><button class="btn claro" data-a="ms-editar">Editar mesas e taxa de serviço</button><button class="btn claro" data-a="ir" data-tab="cozinha">Abrir a tela da cozinha</button></div>
-      </div>` : ""}
-      ${programaCardHtml()}
-      <div class="card">
+      </div>`;
+  }
+  function taxasCardHtml() {
+    return `<div class="card">
         <h2 class="secao">Taxas de cartão e Pix</h2>
         <p class="sub">As % que a maquininha cobra viram despesa “Taxas de pagamento” a cada venda. Elas ficam no Controle financeiro, aba Lucro → Taxas da venda (as mesmas do fechamento de venda do CRM).</p>
         <div style="margin-top:14px"><a class="btn claro" href="../financeiro/#lucro">Abrir as taxas no financeiro</a></div>
@@ -1877,33 +2004,36 @@
           </ul>
           <p class="bloco-sub" style="margin-top:8px">O custo da mercadoria vendida não vira despesa de novo (ela já entrou quando você comprou). Ele aparece no lucro de cada venda, aqui e na aba Lucro do financeiro.</p>
         </div>
-      </div></div>`;
+      </div>`;
   }
   // Caixa e operadores (PIN)
   let PC = null;
-  function caixaConfigHtml() {
+  function caixaConfigHtml(parte) {
     if (!PC) PC = { exigirOperador: !!S.pdv.exigirOperador, descontoMaxCaixa: String(S.pdv.descontoMaxCaixa ?? 10).replace(".", ","), reciboRodape: S.pdv.reciboRodape || "", erro: "",
       modoCaixa: modoCaixa(), avisoMin: String(S.pdv.avisoMin ?? 15), virada: S.pdv.virada || "06:00",
       horario: { abre: "08:00", fecha: "18:00", dias: [1, 2, 3, 4, 5, 6], ...(S.pdv.horario || {}) },
       turnos: (S.pdv.turnos && S.pdv.turnos.length ? S.pdv.turnos : [{ nome: "Manhã", inicio: "06:00", fim: "14:00" }, { nome: "Tarde", inicio: "14:00", fim: "22:00" }, { nome: "Noite", inicio: "22:00", fim: "06:00" }]).map((t) => ({ ...t })) };
-    const ops = S.operadores;
+    const erro = PC.erro ? `<p class="erro-form">${esc(PC.erro)}</p>` : "";
+    if (parte === "recibo") return `<div class="card">
+      <h2 class="secao">Recibo</h2>
+      <label class="campo"><span>Mensagem no fim do recibo</span><input data-pc="reciboRodape" value="${esc(PC.reciboRodape)}" maxlength="140" placeholder="Obrigado pela preferência!" /><small>Aparece embaixo do total, no recibo impresso e no que vai pelo WhatsApp.</small></label>
+      ${erro}</div>`;
+    if (parte === "equipe") {
+      const ops = S.operadores;
+      if (!tem("equipe")) return `<div class="card"><h2 class="secao">Equipe e PIN</h2><p class="sub">Cada funcionário entrar com o próprio PIN faz parte do <b>plano Completo</b>. <a href="../assinatura.html?de=estoque">Ver planos</a></p></div>`;
+      return `<div class="card">
+        <div class="linha entre"><h2 class="secao" style="margin:0">Equipe e PIN</h2><a class="btn mini claro" href="../painel.html">Abrir o Painel do dono</a></div>
+        <p class="sub" style="margin-top:6px">Cadastrar pessoas, trocar PIN, escolher a função de cada uma e o que pode ver fica no <b>Painel do dono</b>.</p>
+        <p class="sub" style="margin-top:4px">Cada pessoa entra no caixa com um PIN. O sistema guarda quem vendeu e quem abriu e fechou o caixa. Gerente cancela vendas e mexe em produtos e configurações; caixa vende e cuida do caixa${restaurante() ? "; garçom lança os pedidos nas mesas" : ""}.</p>
+        ${ops.length ? `<ul class="lista-simples" style="margin-top:8px">${ops.map((o) => `<li><span><b>${esc(o.nome)}</b> <span class="selo ${["gestor", "gerente"].includes(o.papel) ? "acento" : "neutro"}">${NOME_PAPEL[o.papel] || o.papel}</span>${o.ativo ? "" : ` <span class="selo neutro">inativo</span>`}</span></li>`).join("")}</ul>
+        <label class="check" style="margin-top:10px"><input type="checkbox" data-pc="exigirOperador" ${PC.exigirOperador ? "checked" : ""} /><span><b>Pedir o PIN para usar o caixa</b><small>Ninguém vende, cancela ou muda nada sem entrar com o PIN.</small></span></label>
+        <label class="campo" style="margin-top:10px;max-width:220px"><span>Desconto máximo do caixa (%)</span><input data-pc="descontoMaxCaixa" value="${esc(PC.descontoMaxCaixa)}" inputmode="decimal" /><small>Acima disso, só o gerente.</small></label>` : `<p class="sub">Ninguém cadastrado ainda. Sem equipe, quem está logado na conta usa o caixa.</p>`}
+        ${erro}</div>`;
+    }
     return `<div class="card">
-      <h2 class="secao">Caixa e operadores</h2>
+      <h2 class="secao">Como o caixa funciona</h2>
       ${modosCaixaHtml()}
-      <div class="campos" style="grid-template-columns:1fr;margin-top:16px">
-        <label class="campo"><span>Mensagem no fim do recibo</span><input data-pc="reciboRodape" value="${esc(PC.reciboRodape)}" maxlength="140" placeholder="Obrigado pela preferência!" /></label>
-      </div>
-      <div class="bloco">
-        ${!tem("equipe") ? `<p class="bloco-titulo" style="margin:0">Operadores (funcionários)</p><p class="bloco-sub" style="margin-top:4px">Cada funcionário entrar com o próprio PIN faz parte do <b>plano Completo</b>. <a href="../assinatura.html?de=estoque">Ver planos</a></p>` : `<div class="linha entre"><p class="bloco-titulo" style="margin:0">Equipe</p><a class="btn mini claro" href="../painel.html">Abrir o Painel do dono</a></div>
-        <p class="bloco-sub" style="margin-top:4px">Cadastrar pessoas, trocar PIN, escolher a função de cada uma e o que pode ver fica no <b>Painel do dono</b>.</p>
-        <p class="bloco-sub" style="margin-top:4px">Cada pessoa entra no caixa com um PIN. O sistema guarda quem vendeu e quem abriu e fechou o caixa. Gerente cancela vendas e mexe em produtos e configurações; caixa vende e cuida do caixa${restaurante() ? "; garçom lança os pedidos nas mesas" : ""}.</p>
-        ${ops.length ? `<ul class="lista-simples">${ops.map((o) => `<li><span><b>${esc(o.nome)}</b> <span class="selo ${["gestor", "gerente"].includes(o.papel) ? "acento" : "neutro"}">${NOME_PAPEL[o.papel] || o.papel}</span>${o.ativo ? "" : ` <span class="selo neutro">inativo</span>`}</span></li>`).join("")}</ul>` : `<p class="sub">Ninguém cadastrado ainda. Sem equipe, quem está logado na conta usa o caixa.</p>`}
-        ${ops.length ? `<label class="check" style="margin-top:10px"><input type="checkbox" data-pc="exigirOperador" ${PC.exigirOperador ? "checked" : ""} /><span><b>Pedir o PIN para usar o caixa</b><small>Ninguém vende, cancela ou muda nada sem entrar com o PIN.</small></span></label>
-        <label class="campo" style="margin-top:10px;max-width:220px"><span>Desconto máximo do caixa (%)</span><input data-pc="descontoMaxCaixa" value="${esc(PC.descontoMaxCaixa)}" inputmode="decimal" /><small>Acima disso, só o gerente.</small></label>` : ""}`}
-      </div>
-      ${PC.erro ? `<p class="erro-form">${esc(PC.erro)}</p>` : ""}
-      <div class="modal-rodape"><button class="btn acento" data-a="salvar-pc">Salvar</button></div>
-    </div>`;
+      ${erro}</div>`;
   }
   // Como o caixa funciona: os 4 modos e os campos de cada um
   const DIAS_CX = ["D", "S", "T", "Q", "Q", "S", "S"];
@@ -1934,8 +2064,7 @@
       <p class="sub" style="font-size:12px;margin-top:-6px">Uma venda antes desse horário (ex.: às 2h da manhã) conta no dia que começou na noite anterior, no Controle financeiro e nos relatórios.</p>
       ${aviso}
       <p class="aviso">⚠ <b>No fim de cada turno, o PDV avisa para conferir a gaveta.</b> Se ninguém conferir, as vendas continuam entrando no mesmo caixa e o aviso fica na tela até a conferência.</p>`;
-    return `<p class="bloco-titulo" style="margin:0 0 8px">Como o caixa funciona</p>
-      <div class="modos-cx" role="radiogroup" aria-label="Como o caixa funciona">
+    return `<div class="modos-cx" role="radiogroup" aria-label="Como o caixa funciona">
         ${op("manual", "Abro e fecho na mão", "Um caixa por dia. Avisamos se ficar aberto de um dia para o outro.")}
         ${op("horario", "Horário de funcionamento", "O caixa abre e fecha sozinho no horário que você escolher.", detHorario)}
         ${op("turnos", "24 horas, em turnos", "Um caixa por turno. Quem entra confere a gaveta de quem sai.", detTurnos)}
@@ -2006,7 +2135,6 @@
       ${exemplo ? `<p class="aviso info" id="fp-exemplo">${esc(exemplo)}</p>` : ""}
       ${m === "cashback" ? `<p class="bloco-sub" style="margin-top:10px">No financeiro, o cashback usado entra como desconto da venda. O que os clientes ainda podem usar aparece em Clientes, como “cashback em aberto”.</p>` : ""}
       ${FP.erro ? `<p class="erro-form">${esc(FP.erro)}</p>` : ""}
-      <div class="modal-rodape"><button class="btn acento" data-a="salvar-programa">Salvar programa</button></div>
     </div>`;
   }
   async function salvarPrograma() {
@@ -2997,7 +3125,6 @@
       <div class="campo" style="margin-top:10px"><span>Quando emitir</span><div class="chips"><button class="chip ${FS.emitir === "perguntar" ? "ativo" : ""}" data-a="fs-emitir" data-v="perguntar">Quando eu tocar em “Emitir”</button><button class="chip ${FS.emitir === "sempre" ? "ativo" : ""}" data-a="fs-emitir" data-v="sempre">Em toda venda</button></div></div>
       <label class="check" style="margin-top:12px"><input type="checkbox" data-fs="ativo" ${FS.ativo ? "checked" : ""} /><span><b>Emitir NFC-e pelo PDV</b><small>Aparece o botão “Emitir NFC-e” depois de cada venda e no detalhe da venda.</small></span></label>
       ${FS.erro ? `<p class="erro-form">${esc(FS.erro)}</p>` : ""}${FS.msg ? `<p class="aviso info">${esc(FS.msg)}</p>` : ""}
-      <div class="modal-rodape">${f.temToken ? `<button class="btn claro" data-a="fs-testar">Testar conexão</button>` : ""}<button class="btn acento" data-a="fs-salvar" ${FS.salvando ? "disabled" : ""}>${FS.salvando ? "Salvando…" : "Salvar"}</button></div>
     </div>`;
   }
   async function salvarFiscalTela() {
@@ -3215,7 +3342,11 @@
       case "bv-voltar": BV.passo -= 1; BV.erro = ""; telaBoasVindas(); break;
       case "bv-avancar": if (BV.passo < 3) { BV.passo += 1; telaBoasVindas(); } else concluirBoasVindas(); break;
       // geral
-      case "ir": fecharModal(); irPara(el.dataset.tab); break;
+      case "ir": fecharModal(); irPara(el.dataset.tab, el.dataset.sec || null); break;
+      case "cfg-sec": abrirSecaoConfig(el.dataset.v); break;
+      case "cfg-voltar": voltarListaConfig(); break;
+      case "cfg-sair-salvar": sairSalvando(); break;
+      case "cfg-sair-descartar": sairDescartando(); break;
       case "esconder-passos": S.negocio.checklist = { ...(S.negocio.checklist || {}), escondido: true }; render(); api("PUT", "/estoque/negocio", { checklist: { escondido: true } }).catch(() => {}); break;
       // vender
       case "cat-pdv": S.catPdv = el.dataset.v; render(); break;
