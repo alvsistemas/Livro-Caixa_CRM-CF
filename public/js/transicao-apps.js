@@ -88,6 +88,61 @@
     raiz.classList.add('transicao-cobrindo');
   }
 
+  /* ---------- 1b) "Avançar" do navegador: da escolha de volta para o aplicativo ----------
+     A tela de escolha guarda, ao sair, onde estava cada cartão e a cor do fundo.
+     Se o aplicativo abre pelo avançar logo em seguida, repetimos a animação de abrir. */
+  const ESCOLHA = 'transicao-escolha';
+  function lerEscolha() {
+    try {
+      const e = JSON.parse(sessionStorage.getItem(ESCOLHA) || 'null');
+      sessionStorage.removeItem(ESCOLHA);
+      return e && Date.now() - e.em < 4000 && e.cartoes && e.cartoes[appDaPagina] ? e : null;
+    } catch (err) { return null; }
+  }
+  const tipoNavegacao = () => { try { const n = performance.getEntriesByType('navigation')[0]; return n ? n.type : ''; } catch (e) { return ''; } };
+  function cobrirComEscolha(e) {
+    raiz.style.setProperty('--transicao-fundo', e.fundo);
+    raiz.classList.add('transicao-cobrindo');
+  }
+  let avanco = null;
+  if (!chegada && appDaPagina && tipoNavegacao() === 'back_forward' && !reduzMovimento()) {
+    avanco = lerEscolha();
+    if (avanco) cobrirComEscolha(avanco);
+  }
+  // o cartão cresce até a tela cheia e o aplicativo aparece por baixo
+  function chegarAvancando(e) {
+    const c = e.cartoes[appDaPagina];
+    const caixa = criarCaixa(appDaPagina);
+    const de = { ...doRetangulo(c, '16px'), background: c.fundo };
+    Object.assign(caixa.style, de);
+    caixa.querySelector('.transicao-conteudo').animate([{ opacity: 0, transform: 'scale(.9)' }, { opacity: 1, transform: 'scale(1)' }], { duration: DURACAO_ABRIR * 0.7, delay: DURACAO_ABRIR * 0.2, easing: 'ease-out', fill: 'both' });
+    const revelar = () => {
+      raiz.classList.remove('transicao-cobrindo', 'transicao-revelando');
+      caixa.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 380, delay: 60, easing: 'ease-out', fill: 'forwards' })
+        .finished.then(() => caixa.remove()).catch(() => caixa.remove());
+    };
+    caixa.animate([de, { ...telaCheia(), background: APPS[appDaPagina].fundo() }], { duration: DURACAO_ABRIR, easing: 'cubic-bezier(.2,.8,.2,1)', fill: 'forwards' })
+      .finished.then(revelar).catch(revelar);
+  }
+  if (naTelaDeEscolha) {
+    window.addEventListener('pagehide', () => {
+      try {
+        const cartoes = {};
+        Object.keys(CARTAO).forEach((app) => {
+          const el = document.querySelector(CARTAO[app]);
+          if (!el) return;
+          const r = el.getBoundingClientRect();
+          cartoes[app] = { top: r.top, left: r.left, width: r.width, height: r.height, fundo: getComputedStyle(el).backgroundColor };
+        });
+        const transparente = (c) => !c || c === 'transparent' || /rgba\(.*,\s*0\)$/.test(c);
+        let fundo = getComputedStyle(document.body).backgroundColor;
+        if (transparente(fundo)) fundo = getComputedStyle(raiz).backgroundColor;
+        if (transparente(fundo)) fundo = escuro() ? '#0F0F0F' : '#FFFFFF';
+        sessionStorage.setItem(ESCOLHA, JSON.stringify({ em: Date.now(), fundo, cartoes }));
+      } catch (e) { /* sem armazenamento: só não anima */ }
+    });
+  }
+
 
   function descobrir() {
     raiz.classList.add('transicao-revelando');
@@ -124,6 +179,8 @@
       });
     } else if (chegada && chegada.tipo === 'fechar' && naTelaDeEscolha) {
       chegarFechando(chegada.app);
+    } else if (avanco) {
+      chegarAvancando(avanco);
     } else if (chegada) {
       descobrir();
     }
@@ -344,5 +401,12 @@
     // voltou de um aplicativo pela memória do navegador: a caixa encolhe do mesmo jeito
     const t = lerTransicao();
     if (t && t.tipo === 'fechar' && naTelaDeEscolha && !reduzMovimento()) chegarFechando(t.app);
+    // voltou para o aplicativo pelo "avançar": o cartão cresce de novo
+    if (appDaPagina && !reduzMovimento()) {
+      const e = lerEscolha();
+      if (e) { cobrirComEscolha(e); chegarAvancando(e); }
+    }
+    // página restaurada já conta como "tocada": a guarda do voltar pode voltar na hora
+    if (naBase(H.state)) armar();
   });
 })();
