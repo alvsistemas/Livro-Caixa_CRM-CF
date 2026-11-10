@@ -20,7 +20,21 @@ html.transicao-revelando::after{ opacity:0; }
 .transicao-icone svg{ width:32px; height:32px; }
 .transicao-nome{ font-family:'Fraunces', Georgia, serif; font-size:24px; font-weight:600; letter-spacing:-.01em; }
 
+/* "Toque de novo em voltar para sair" (tela de escolha, no celular) */
+.voltar-aviso{
+  position:fixed; left:50%; bottom:calc(28px + env(safe-area-inset-bottom, 0px)); z-index:10001;
+  width:max-content; max-width:calc(100vw - 32px); box-sizing:border-box; padding:11px 18px; border-radius:999px;
+  background:rgba(30,30,30,.95); color:#fff; border:1px solid rgba(255,255,255,.14);
+  font:500 14px/1.35 'Inter', system-ui, -apple-system, sans-serif; text-align:center;
+  box-shadow:0 8px 28px rgba(0,0,0,.28);
+  opacity:0; transform:translate(-50%, 14px); pointer-events:none;
+  transition:opacity .2s ease, transform .22s ease;
+}
+.voltar-aviso.visivel{ opacity:1; transform:translate(-50%, 0); }
+html.a11y-sem-movimento .voltar-aviso{ transform:translate(-50%, 0); transition:opacity .15s linear; }
+
 @media (prefers-reduced-motion: reduce){
+  .voltar-aviso{ transform:translate(-50%, 0); transition:opacity .15s linear; }
   html.transicao-cobrindo::after{ display:none; }
   .transicao-caixa{ display:none; }
 }

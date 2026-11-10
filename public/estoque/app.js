@@ -1923,7 +1923,10 @@
     const o = estadoSec(secAtual());
     if (!o || o !== CFG_BASE.obj || !CFG_HIST.lista.length) return;
     const antes = CFG_HIST.lista.pop();
-    Object.assign(o, JSON.parse(antes)); o.erro = "";
+    const volta = JSON.parse(antes);
+    // campo que não existia no passo anterior sai também (não fica "sobrando")
+    Object.keys(o).forEach((k) => { if (!(k in volta) && !["erro", "msg", "salvando"].includes(k)) delete o[k]; });
+    Object.assign(o, volta); o.erro = "";
     CFG_HIST.ult = antes; CFG_HIST.campo = null;
     render();
   }
@@ -1981,6 +1984,12 @@
   });
   // fechar a aba ou recarregar com mudança sem salvar: o navegador pergunta
   window.addEventListener("beforeunload", (ev) => { if (configSuja()) { ev.preventDefault(); ev.returnValue = ""; } });
+  // voltar/"Trocar de aplicativo" com mudança sem salvar: pergunta antes de sair do PDV
+  if (window.LCVoltar) window.LCVoltar.aoVoltar(() => {
+    if (modalAberto() || !configSuja()) return false;
+    sairDaConfig(() => window.LCVoltar.sairDoApp());
+    return true;
+  });
 
   function telaConfig() {
     const sec = secAtual();
